@@ -4,7 +4,7 @@
 //! Ported from `game_board.rs` of the stand-alone client (McM1k/hanabii,
 //! Leptos 0.6). What changed: the state comes from the shared `App` (see
 //! `crate::state`) instead of a context of its own, moves go out as
-//! `ClientMsg::Hanabi`, and the bookkeeping that used `Rc<RefCell<..>>` now
+//! `GameMove::Hanabi`, and the bookkeeping that used `Rc<RefCell<..>>` now
 //! rides on the effects' own return values or on `StoredValue`s, because
 //! Leptos 0.8 wants every closure that ends up in a view to be `Send + Sync`.
 //! The looks and the animations are the original's.
@@ -18,7 +18,7 @@ use hanabi_core::{
 };
 use leptos::html::Div;
 use leptos::prelude::*;
-use protocol::ClientMsg;
+use protocol::{ClientMsg, GameMove};
 
 use super::look::{
     clue_button_style, clue_image_parts, clue_touch_tooltip, color_class, color_initial,
@@ -639,7 +639,7 @@ fn table_view(
                 ev.prevent_default();
                 ui.is_dragging.set(false);
                 if let Some(card_id) = dragged_card_id(&ev) {
-                    send(app, &ClientMsg::Hanabi(Action::Play { card_id }));
+                    send(app, &ClientMsg::Move(GameMove::Hanabi(Action::Play { card_id })));
                 }
             }
         >
@@ -659,7 +659,7 @@ fn table_view(
                 ev.prevent_default();
                 ui.is_dragging.set(false);
                 if let Some(card_id) = dragged_card_id(&ev) {
-                    send(app, &ClientMsg::Hanabi(Action::Discard { card_id }));
+                    send(app, &ClientMsg::Move(GameMove::Hanabi(Action::Discard { card_id })));
                 }
             }
         >
@@ -1115,10 +1115,10 @@ fn clue_buttons(
                     on:click=move |_| {
                         send(
                             app,
-                            &ClientMsg::Hanabi(Action::Clue {
+                            &ClientMsg::Move(GameMove::Hanabi(Action::Clue {
                                 target: pid,
                                 clue: Clue::Color(color),
-                            }),
+                            })),
                         );
                     }
                 >
@@ -1139,10 +1139,10 @@ fn clue_buttons(
                     on:click=move |_| {
                         send(
                             app,
-                            &ClientMsg::Hanabi(Action::Clue {
+                            &ClientMsg::Move(GameMove::Hanabi(Action::Clue {
                                 target: pid,
                                 clue: Clue::Number(number),
-                            }),
+                            })),
                         );
                     }
                 >

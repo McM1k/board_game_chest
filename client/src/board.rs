@@ -1,6 +1,6 @@
 use crate::art::{gradient_id, tile_art, DEFS};
 use crate::state::{now_ms, send, App, FreshKind, Mode, EMBER_MS};
-use protocol::ClientMsg;
+use protocol::{ClientMsg, GameMove};
 use catan_core::{Action, GameView, Phase, Resource};
 use leptos::prelude::*;
 
@@ -252,7 +252,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                             if victims.len() > 1 {
                                 app.ui.robber_tile.set(Some(ti));
                             } else {
-                                send(app, &ClientMsg::Catan(Action::MoveRobber { tile: ti, victim: victims.first().copied() }));
+                                send(app, &ClientMsg::Move(GameMove::Catan(Action::MoveRobber { tile: ti, victim: victims.first().copied() })));
                             }
                         } />
                 }
@@ -267,7 +267,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                 view! {
                     <line x1=f(a.0) y1=f(a.1) x2=f(b.0) y2=f(b.1) class="target edge-target"
                         on:click=move |_| {
-                            send(app, &ClientMsg::Catan(Action::BuildRoad { edge: ei }));
+                            send(app, &ClientMsg::Move(GameMove::Catan(Action::BuildRoad { edge: ei })));
                             app.ui.mode.set(Mode::None);
                         } />
                 }
@@ -288,7 +288,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                             } else {
                                 Action::BuildSettlement { vertex: vi }
                             };
-                            send(app, &ClientMsg::Catan(a));
+                            send(app, &ClientMsg::Move(GameMove::Catan(a)));
                             app.ui.mode.set(Mode::None);
                         } />
                 }

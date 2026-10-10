@@ -1,11 +1,11 @@
 use crate::board::{board_svg, robber_victims, PLAYER_COLORS};
 use crate::state::{leave, send, App, Mode, Picker};
-use protocol::ClientMsg;
+use protocol::{ClientMsg, GameMove};
 use catan_core::{Action, DevCard, GameView, Hand, Phase, Resource, SetupExpect};
 use leptos::prelude::*;
 
 fn act(app: App, a: Action) {
-    send(app, &ClientMsg::Catan(a));
+    send(app, &ClientMsg::Move(GameMove::Catan(a)));
 }
 
 fn sum(h: [u8; 5]) -> u32 {

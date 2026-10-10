@@ -1,7 +1,10 @@
 //! Web server for the games: serves the client and runs every room over a
 //! WebSocket. All room logic lives in `rooms`; this file is only plumbing.
 
+mod games;
 mod rooms;
+#[cfg(test)]
+mod testing;
 
 use axum::{
     extract::{

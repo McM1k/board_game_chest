@@ -1,7 +1,7 @@
 use crate::{hanabi, wonderful};
 use catan_core::{Building, GameView};
 use leptos::prelude::*;
-use protocol::{ClientMsg, GameKind, LobbyPlayer, ServerMsg};
+use protocol::{ClientMsg, GameKind, GameOptions, LobbyPlayer, ServerMsg};
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -314,11 +314,11 @@ fn handle(app: App, msg: ServerMsg) {
             players,
             you,
             is_host,
-            rules,
+            options,
         } => {
             app.snap.set_value(None);
             app.hanabi.room.set(room.clone());
-            if let Some(rules) = rules {
+            if let Some(GameOptions::Hanabi(rules)) = options {
                 app.hanabi.rules.set(rules);
             }
             // The lobby is sent again whenever somebody joins, leaves or the
@@ -339,7 +339,7 @@ fn handle(app: App, msg: ServerMsg) {
                 });
             }
         }
-        ServerMsg::CatanState { view, connected } => {
+        ServerMsg::Game { view: protocol::GameView::Catan(view), connected, .. } => {
             note_changes(app, &view);
             let room = load(KEY_ROOM).unwrap_or_default();
             app.screen.set(Screen::Game {
@@ -348,8 +348,8 @@ fn handle(app: App, msg: ServerMsg) {
                 room,
             })
         }
-        ServerMsg::HanabiState {
-            view,
+        ServerMsg::Game {
+            view: protocol::GameView::Hanabi(view),
             names,
             connected,
         } => {
@@ -361,8 +361,8 @@ fn handle(app: App, msg: ServerMsg) {
                 app.screen.set(Screen::HanabiGame);
             }
         }
-        ServerMsg::WonderfulState {
-            view,
+        ServerMsg::Game {
+            view: protocol::GameView::Wonderful(view),
             names,
             connected,
         } => {

@@ -4,7 +4,11 @@
 //! Rooms work the same way for all games: one player creates a room and gets
 //! a 4-letter code, the others join with that code, the host starts the game,
 //! and a per-seat token lets a player come back after a dropped connection.
-//! Only the moves and the views differ per game.
+//! The rest differs per game and travels in four enums with one variant per
+//! game: [`GameKind`] (which game), [`GameOptions`] (what the host picks in
+//! the lobby), [`GameMove`] (a move) and [`GameView`] (the running game as
+//! one seat sees it). Adding a game adds a variant to each of them (see
+//! `docs/adding-a-game.md`).
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +17,7 @@ use serde::{Deserialize, Serialize};
 pub enum GameKind {
     Catan,
     Hanabi,
-    /// A draft-and-build card game (original card set; see `wonderful-core`).
+    /// It's a Wonderful World, base game.
     Wonderful,
 }
 
@@ -41,6 +45,60 @@ impl GameKind {
     }
 }
 
+/// What the host picked in the lobby, for a game that has options.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum GameOptions {
+    /// Hanabi's variant rules. The server normalizes them: the "hanabii"
+    /// mode replaces every other option.
+    Hanabi(hanabi_core::GameRules),
+}
+
+impl GameOptions {
+    pub fn game(&self) -> GameKind {
+        match self {
+            GameOptions::Hanabi(_) => GameKind::Hanabi,
+        }
+    }
+}
+
+/// A move in a running game.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum GameMove {
+    Catan(catan_core::Action),
+    Hanabi(hanabi_core::Action),
+    /// Everybody moves at the same time, so the server checks a move against
+    /// the rules only, never against a turn.
+    Wonderful(wonderful_core::Action),
+}
+
+impl GameMove {
+    pub fn game(&self) -> GameKind {
+        match self {
+            GameMove::Catan(_) => GameKind::Catan,
+            GameMove::Hanabi(_) => GameKind::Hanabi,
+            GameMove::Wonderful(_) => GameKind::Wonderful,
+        }
+    }
+}
+
+/// A running game as one seat sees it: what the others hide stays hidden.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum GameView {
+    Catan(Box<catan_core::GameView>),
+    Hanabi(Box<hanabi_core::PlayerView>),
+    Wonderful(Box<wonderful_core::View>),
+}
+
+impl GameView {
+    pub fn game(&self) -> GameKind {
+        match self {
+            GameView::Catan(_) => GameKind::Catan,
+            GameView::Hanabi(_) => GameKind::Hanabi,
+            GameView::Wonderful(_) => GameKind::Wonderful,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ClientMsg {
     /// Open a new room for `game` and sit down in it.
@@ -52,21 +110,15 @@ pub enum ClientMsg {
         name: String,
         token: Option<String>,
     },
-    /// Host only, in a Hanabi lobby: choose the variant rules. The server
-    /// normalizes them (the "hanabii" mode replaces every other option) and
-    /// echoes the result back to everyone.
-    SetRules(hanabi_core::GameRules),
+    /// Host only, in a lobby: choose the game's options. The server checks
+    /// them and echoes what will actually be played back to everyone.
+    SetOptions(GameOptions),
     /// Host only: start the game once enough players are seated.
     Start,
     /// Leave the room for good (in a lobby this frees the seat).
     Leave,
-    /// A Catan move.
-    Catan(catan_core::Action),
-    /// A Hanabi move.
-    Hanabi(hanabi_core::Action),
-    /// A Wonderful World move. Every player moves at the same time, so the
-    /// server only checks the move against the rules, never against a turn.
-    Wonderful(wonderful_core::Action),
+    /// A move in the running game.
+    Move(GameMove),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,25 +138,13 @@ pub enum ServerMsg {
         players: Vec<LobbyPlayer>,
         you: usize,
         is_host: bool,
-        /// The Hanabi variant rules picked so far (`None` for other games).
-        rules: Option<hanabi_core::GameRules>,
+        /// The options picked so far (`None` for a game that has none).
+        options: Option<GameOptions>,
     },
-    /// A running Catan game, personalised for the receiving seat.
-    CatanState {
-        view: Box<catan_core::GameView>,
-        connected: Vec<bool>,
-    },
-    /// A running Hanabi game, personalised for the receiving seat. `names`
-    /// and `connected` are indexed by seat (the Hanabi `PlayerId`).
-    HanabiState {
-        view: Box<hanabi_core::PlayerView>,
-        names: Vec<String>,
-        connected: Vec<bool>,
-    },
-    /// A running Wonderful World game, personalised for the receiving seat.
-    /// `names` and `connected` are indexed by seat.
-    WonderfulState {
-        view: Box<wonderful_core::View>,
+    /// The running game, personalised for the receiving seat. `names` and
+    /// `connected` are indexed by seat.
+    Game {
+        view: GameView,
         names: Vec<String>,
         connected: Vec<bool>,
     },
@@ -134,26 +174,26 @@ mod tests {
         let msgs = vec![
             ClientMsg::Create { game: GameKind::Hanabi, name: "Ann".into() },
             ClientMsg::Join { room: "ABCD".into(), name: "Bob".into(), token: Some("t".into()) },
-            ClientMsg::SetRules(GameRules { hanabii: true, ..Default::default() }),
+            ClientMsg::SetOptions(GameOptions::Hanabi(GameRules { hanabii: true, ..Default::default() })),
             ClientMsg::Start,
             ClientMsg::Leave,
-            ClientMsg::Catan(catan_core::Action::EndTurn),
-            ClientMsg::Hanabi(hanabi_core::Action::Play { card_id: hanabi_core::CardId(3) }),
-            ClientMsg::Hanabi(hanabi_core::Action::Clue {
+            ClientMsg::Move(GameMove::Catan(catan_core::Action::EndTurn)),
+            ClientMsg::Move(GameMove::Hanabi(hanabi_core::Action::Play { card_id: hanabi_core::CardId(3) })),
+            ClientMsg::Move(GameMove::Hanabi(hanabi_core::Action::Clue {
                 target: PlayerId(1),
                 clue: hanabi_core::Clue::Color(hanabi_core::Color::Red),
-            }),
+            })),
             ClientMsg::Create { game: GameKind::Wonderful, name: "Cy".into() },
-            ClientMsg::Wonderful(wonderful_core::Action::Draft { card: wonderful_core::CardId(7) }),
-            ClientMsg::Wonderful(wonderful_core::Action::Recycle {
+            ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Draft { card: wonderful_core::CardId(7) })),
+            ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Recycle {
                 card: wonderful_core::CardId(8),
                 to: wonderful_core::Target::Empire,
-            }),
-            ClientMsg::Wonderful(wonderful_core::Action::Place {
+            })),
+            ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Place {
                 piece: wonderful_core::Piece::Krystallium(Some(wonderful_core::Res::Gold)),
                 target: wonderful_core::Target::Card(wonderful_core::CardId(9)),
-            }),
-            ClientMsg::Wonderful(wonderful_core::Action::Ready),
+            })),
+            ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Ready)),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -163,17 +203,48 @@ mod tests {
     }
 
     #[test]
+    fn every_move_view_and_option_knows_its_game() {
+        let mut rng = StdRng::seed_from_u64(3);
+        let catan = catan_core::Game::new(catan_core::Rules::default(), vec!["A".into(), "B".into()], &mut rng);
+        let hanabi = GameState::new(2, 1, GameRules::default());
+        let wonderful = wonderful_core::State::new(2, 1);
+        let views = [
+            GameView::Catan(Box::new(catan.view_for(Some(0)))),
+            GameView::Hanabi(Box::new(hanabi.view_for(PlayerId(0)))),
+            GameView::Wonderful(Box::new(wonderful.view_for(0))),
+        ];
+        let moves = [
+            GameMove::Catan(catan_core::Action::EndTurn),
+            GameMove::Hanabi(hanabi_core::Action::Discard { card_id: hanabi_core::CardId(0) }),
+            GameMove::Wonderful(wonderful_core::Action::Ready),
+        ];
+        for ((view, mv), kind) in views.iter().zip(&moves).zip(GameKind::ALL) {
+            assert_eq!((view.game(), mv.game()), (kind, kind));
+        }
+        assert_eq!(GameOptions::Hanabi(GameRules::default()).game(), GameKind::Hanabi);
+    }
+
+    /// Unwraps a `ServerMsg::Game` that went through JSON.
+    fn game_through_json(msg: &ServerMsg) -> (GameView, Vec<String>, Vec<bool>) {
+        let json = serde_json::to_string(msg).unwrap();
+        let ServerMsg::Game { view, names, connected } = serde_json::from_str(&json).unwrap() else {
+            panic!("wrong variant: {json}");
+        };
+        (view, names, connected)
+    }
+
+    #[test]
     fn catan_state_survives_json() {
         let mut rng = StdRng::seed_from_u64(3);
         let names = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        let game = catan_core::Game::new(catan_core::Rules::default(), names, &mut rng);
-        let msg = ServerMsg::CatanState {
-            view: Box::new(game.view_for(Some(1))),
+        let game = catan_core::Game::new(catan_core::Rules::default(), names.clone(), &mut rng);
+        let msg = ServerMsg::Game {
+            view: GameView::Catan(Box::new(game.view_for(Some(1)))),
+            names,
             connected: vec![true, false, true],
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        let ServerMsg::CatanState { view, connected } = serde_json::from_str(&json).unwrap() else {
-            panic!("wrong variant: {json}");
+        let (GameView::Catan(view), _, connected) = game_through_json(&msg) else {
+            panic!("not a Catan view");
         };
         assert_eq!(view.seat, Some(1));
         assert_eq!(view.players.len(), 3);
@@ -186,14 +257,13 @@ mod tests {
     fn hanabi_state_survives_json() {
         let rules = GameRules { multicolor: true, black: true, ..Default::default() };
         let game = GameState::new(3, 11, rules);
-        let msg = ServerMsg::HanabiState {
-            view: Box::new(game.view_for(PlayerId(1))),
+        let msg = ServerMsg::Game {
+            view: GameView::Hanabi(Box::new(game.view_for(PlayerId(1)))),
             names: vec!["A".into(), "B".into(), "C".into()],
             connected: vec![true, true, false],
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        let ServerMsg::HanabiState { view, names, connected } = serde_json::from_str(&json).unwrap() else {
-            panic!("wrong variant: {json}");
+        let (GameView::Hanabi(view), names, connected) = game_through_json(&msg) else {
+            panic!("not a Hanabi view");
         };
         assert_eq!(view.you, PlayerId(1));
         assert_eq!(view.hands.len(), 3);
@@ -212,14 +282,13 @@ mod tests {
         let mut game = wonderful_core::State::new(3, 5);
         let card = game.players[1].hand[0];
         game.apply(1, wonderful_core::Action::Draft { card }).unwrap();
-        let msg = ServerMsg::WonderfulState {
-            view: Box::new(game.view_for(2)),
+        let msg = ServerMsg::Game {
+            view: GameView::Wonderful(Box::new(game.view_for(2))),
             names: vec!["A".into(), "B".into(), "C".into()],
             connected: vec![true, false, true],
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        let ServerMsg::WonderfulState { view, names, connected } = serde_json::from_str(&json).unwrap() else {
-            panic!("wrong variant: {json}");
+        let (GameView::Wonderful(view), names, connected) = game_through_json(&msg) else {
+            panic!("not a Wonderful World view");
         };
         assert_eq!(*view, game.view_for(2));
         assert_eq!(view.you, 2);
@@ -231,21 +300,22 @@ mod tests {
     }
 
     #[test]
-    fn lobby_message_carries_the_game_and_rules() {
+    fn lobby_message_carries_the_game_and_its_options() {
         let msg = ServerMsg::Lobby {
             room: "WXYZ".into(),
             game: GameKind::Hanabi,
             players: vec![LobbyPlayer { name: "Ann".into(), connected: true }],
             you: 0,
             is_host: true,
-            rules: Some(GameRules { six_cards: true, ..Default::default() }),
+            options: Some(GameOptions::Hanabi(GameRules { six_cards: true, ..Default::default() })),
         };
         let json = serde_json::to_string(&msg).unwrap();
-        let ServerMsg::Lobby { game, rules, players, .. } = serde_json::from_str(&json).unwrap() else {
+        let ServerMsg::Lobby { game, options, players, .. } = serde_json::from_str(&json).unwrap() else {
             panic!("wrong variant: {json}");
         };
         assert_eq!(game, GameKind::Hanabi);
-        assert!(rules.unwrap().six_cards);
+        let Some(GameOptions::Hanabi(rules)) = options else { panic!("no Hanabi options") };
+        assert!(rules.six_cards);
         assert_eq!(players[0].name, "Ann");
     }
 

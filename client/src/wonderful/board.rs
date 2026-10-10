@@ -2,7 +2,7 @@
 //! produce at, and the final standings.
 //!
 //! Everything here is drawn from the `View` the server sent for our seat, and
-//! every click asks the server for a move (`ClientMsg::Wonderful`); the
+//! every click asks the server for a move (`GameMove::Wonderful`); the
 //! server's answer is the next state, which rebuilds the screen. What a click
 //! means is decided in `look`, so it can be tested natively.
 //!
@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use leptos::prelude::*;
-use protocol::ClientMsg;
+use protocol::{ClientMsg, GameMove};
 use wonderful_core::{
     Action, Bonus, Building, Card, CardId, Cost, Kind, Phase, PlayerView, Res, Token, View, DRAFT_PICKS, ROUNDS,
     WRAP_UP,
@@ -41,7 +41,7 @@ impl Ctx {
     }
 
     fn act(&self, action: Action) {
-        send(self.app, &ClientMsg::Wonderful(action));
+        send(self.app, &ClientMsg::Move(GameMove::Wonderful(action)));
     }
 
     /// A seat's name, "You" for ourselves.

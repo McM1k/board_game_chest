@@ -8,7 +8,7 @@
 use crate::state::{create_room, join_room, leave, send, App, Screen};
 use hanabi_core::GameRules;
 use leptos::prelude::*;
-use protocol::{ClientMsg, GameKind, LobbyPlayer};
+use protocol::{ClientMsg, GameKind, GameOptions, LobbyPlayer};
 
 /// The rules of the hanabii mode as shown in the box that appears when the
 /// page title is hovered: the clue rule first, then how your own cards show
@@ -108,7 +108,7 @@ pub fn home_screen(app: App) -> impl IntoView {
 }
 
 fn set_rules(app: App, rules: GameRules) {
-    send(app, &ClientMsg::SetRules(rules));
+    send(app, &ClientMsg::SetOptions(GameOptions::Hanabi(rules)));
 }
 
 /// The class for one of the ordinary option blocks below: dimmed and
