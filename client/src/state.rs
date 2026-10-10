@@ -1,5 +1,5 @@
 use crate::{hanabi, wonderful};
-use engine::{Building, GameView};
+use catan_core::{Building, GameView};
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameKind, LobbyPlayer, ServerMsg};
 use std::time::Duration;
@@ -452,7 +452,7 @@ pub fn leave(app: App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::{Action, Game, Hand, Phase, Rules, SetupExpect};
+    use catan_core::{Action, Game, Hand, Phase, Rules, SetupExpect};
     use rand::{rngs::StdRng, SeedableRng};
 
     fn game_after_setup() -> (Game, StdRng) {

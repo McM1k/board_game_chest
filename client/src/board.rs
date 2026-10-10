@@ -1,7 +1,7 @@
 use crate::art::{gradient_id, tile_art, DEFS};
 use crate::state::{now_ms, send, App, FreshKind, Mode, EMBER_MS};
 use protocol::ClientMsg;
-use engine::{Action, GameView, Phase, Resource};
+use catan_core::{Action, GameView, Phase, Resource};
 use leptos::prelude::*;
 
 pub const PLAYER_COLORS: [&str; 4] = ["#e63946", "#3a86ff", "#f4a261", "#2ec4b6"];

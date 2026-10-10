@@ -1,7 +1,8 @@
 [package]
-name = "engine"
+name = "catan-core"
 version = "0.1.0"
 edition = "2021"
+description = "Catan rules: board, game, actions, per-player views"
 
 [dependencies]
 serde = { workspace = true }

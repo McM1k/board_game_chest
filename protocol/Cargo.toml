@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-engine = { path = "../engine" }
-hanabi-core = { path = "../hanabi-core" }
-wonderful-core = { path = "../wonderful-core" }
+catan-core = { workspace = true }
+hanabi-core = { workspace = true }
+wonderful-core = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

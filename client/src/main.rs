@@ -114,7 +114,7 @@ fn main() {
 #[cfg(test)]
 mod render_tests {
     use super::*;
-    use engine::{Action, Game, Phase, Rules, SetupExpect};
+    use catan_core::{Action, Game, Phase, Rules, SetupExpect};
     use hanabi_core::{GameRules, GameState, PlayerId};
     use leptos::tachys::view::RenderHtml;
     use protocol::LobbyPlayer;
@@ -153,8 +153,8 @@ mod render_tests {
             assert!(html.contains("Roll dice") == (seat == Some(0)));
         }
         g.do_roll(2, 3, &mut rng).unwrap();
-        g.players[0].hand = engine::Hand([4, 4, 4, 4, 4]);
-        g.players[0].dev = vec![engine::DevCard::Knight, engine::DevCard::Monopoly];
+        g.players[0].hand = catan_core::Hand([4, 4, 4, 4, 4]);
+        g.players[0].dev = vec![catan_core::DevCard::Knight, catan_core::DevCard::Monopoly];
         for seat in [Some(0), Some(1), None] {
             let html = render(&g, seat);
             assert!(html.contains("<svg"));
@@ -165,7 +165,7 @@ mod render_tests {
         assert!(html.contains("Knight"));
 
         // Robber, discard and open-trade states.
-        g.players[1].hand = engine::Hand([3, 3, 3, 0, 0]);
+        g.players[1].hand = catan_core::Hand([3, 3, 3, 0, 0]);
         g.phase = Phase::Roll;
         g.do_roll(3, 4, &mut rng).unwrap();
         for seat in [Some(0), Some(1), Some(2)] {
@@ -178,7 +178,7 @@ mod render_tests {
         g.phase = Phase::Main;
         g.apply(
             0,
-            Action::ProposeTrade { give: engine::Hand([1, 0, 0, 0, 0]), want: engine::Hand([0, 0, 1, 0, 0]) },
+            Action::ProposeTrade { give: catan_core::Hand([1, 0, 0, 0, 0]), want: catan_core::Hand([0, 0, 1, 0, 0]) },
             &mut rng,
         )
         .unwrap();
@@ -196,7 +196,7 @@ mod render_tests {
             let app = App::new();
             let view = g.view_for(Some(0));
             let n = view.players.len();
-            let render = |app: App, view: engine::GameView| {
+            let render = |app: App, view: catan_core::GameView| {
                 game::game_screen(app, view, vec![true; n], "ABCD".into()).to_html()
             };
 

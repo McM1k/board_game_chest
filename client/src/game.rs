@@ -1,7 +1,7 @@
 use crate::board::{board_svg, robber_victims, PLAYER_COLORS};
 use crate::state::{leave, send, App, Mode, Picker};
 use protocol::ClientMsg;
-use engine::{Action, DevCard, GameView, Hand, Phase, Resource, SetupExpect};
+use catan_core::{Action, DevCard, GameView, Hand, Phase, Resource, SetupExpect};
 use leptos::prelude::*;
 
 fn act(app: App, a: Action) {

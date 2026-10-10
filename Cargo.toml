@@ -1,9 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["engine", "hanabi-core", "wonderful-core", "protocol", "server", "client"]
+# Every game's rules crate lives in games/<name>/ and is picked up here.
+members = ["games/*", "protocol", "server", "client"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
+# The games' rules crates, for protocol, server and client.
+catan-core = { path = "games/catan" }
+hanabi-core = { path = "games/hanabi" }
+wonderful-core = { path = "games/wonderful" }

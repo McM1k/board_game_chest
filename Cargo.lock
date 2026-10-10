@@ -192,6 +192,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
 
 [[package]]
+name = "catan-core"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "rand 0.8.8",
+ "serde",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -202,8 +211,8 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "any_spawner",
+ "catan-core",
  "console_error_panic_hook",
- "engine",
  "hanabi-core",
  "js-sys",
  "leptos",
@@ -392,15 +401,6 @@ checksum = "5060e0a4cbf26a87550792688ade88e6b8aec9208613631a7a363bda7bc2d4cd"
 dependencies = [
  "paste",
  "pin-project-lite",
-]
-
-[[package]]
-name = "engine"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "rand 0.8.8",
- "serde",
 ]
 
 [[package]]
@@ -1302,7 +1302,7 @@ dependencies = [
 name = "protocol"
 version = "0.1.0"
 dependencies = [
- "engine",
+ "catan-core",
  "hanabi-core",
  "rand 0.8.8",
  "serde",
@@ -1665,7 +1665,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "axum",
- "engine",
+ "catan-core",
  "futures-util",
  "hanabi-core",
  "protocol",

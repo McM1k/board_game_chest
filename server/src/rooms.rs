@@ -10,7 +10,7 @@
 //! Everything here is synchronous and holds the lock only briefly, so it
 //! can be tested without sockets: a "connection" is just a channel.
 
-use engine::{Game, Rules};
+use catan_core::{Game, Rules};
 use hanabi_core::{ActionError, GameRules, GameState, PlayerId};
 use protocol::{ClientMsg, GameKind, LobbyPlayer, ServerMsg};
 use rand::{seq::SliceRandom, Rng};
@@ -798,7 +798,7 @@ mod tests {
     fn a_move_for_the_wrong_game_or_before_the_start_is_refused() {
         let state = new_state();
         let (_code, mut clients) = lobby(&state, GameKind::Hanabi, 2);
-        let catan_move = ClientMsg::Catan(engine::Action::EndTurn);
+        let catan_move = ClientMsg::Catan(catan_core::Action::EndTurn);
         assert_eq!(clients[0].send(&state, catan_move.clone()).as_deref(), Some("That move belongs to a different game."));
         let hanabi_move = ClientMsg::Hanabi(Action::Play { card_id: hanabi_core::CardId(0) });
         assert_eq!(clients[0].send(&state, hanabi_move.clone()).as_deref(), Some("The game hasn't started yet."));
@@ -818,7 +818,7 @@ mod tests {
         assert_eq!(wonderful[0].send(&state, wonderful_move.clone()).as_deref(), Some("The game hasn't started yet."));
         wonderful[0].send(&state, ClientMsg::Start);
         assert_eq!(wonderful[0].send(&state, hanabi_move).as_deref(), Some("That move belongs to a different game."));
-        assert_eq!(wonderful[0].send(&state, ClientMsg::Catan(engine::Action::EndTurn)).as_deref(), Some("That move belongs to a different game."));
+        assert_eq!(wonderful[0].send(&state, ClientMsg::Catan(catan_core::Action::EndTurn)).as_deref(), Some("That move belongs to a different game."));
     }
 
     #[test]
@@ -862,7 +862,7 @@ mod tests {
         let (mine, other): (Vec<usize>, Vec<usize>) = (0..3).partition(|&i| views[i].seat == Some(current));
         let (cur, oth) = (mine[0], other[0]);
         let vertex = views[cur].legal.settlements[0];
-        let act = ClientMsg::Catan(engine::Action::BuildSettlement { vertex });
+        let act = ClientMsg::Catan(catan_core::Action::BuildSettlement { vertex });
         assert!(clients[oth].send(&state, act.clone()).is_some());
         assert_eq!(clients[cur].send(&state, act), None);
         for c in &mut clients {

@@ -5,7 +5,7 @@
 //! They are original drawings, kept as markup strings and injected with
 //! `inner_html`, so no image files have to be loaded or shipped.
 
-use engine::Terrain;
+use catan_core::Terrain;
 use leptos::prelude::*;
 
 /// Gradients used as tile backgrounds plus the hexagon clip path.

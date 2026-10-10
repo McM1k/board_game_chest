@@ -61,7 +61,7 @@ pub enum ClientMsg {
     /// Leave the room for good (in a lobby this frees the seat).
     Leave,
     /// A Catan move.
-    Catan(engine::Action),
+    Catan(catan_core::Action),
     /// A Hanabi move.
     Hanabi(hanabi_core::Action),
     /// A Wonderful World move. Every player moves at the same time, so the
@@ -91,7 +91,7 @@ pub enum ServerMsg {
     },
     /// A running Catan game, personalised for the receiving seat.
     CatanState {
-        view: Box<engine::GameView>,
+        view: Box<catan_core::GameView>,
         connected: Vec<bool>,
     },
     /// A running Hanabi game, personalised for the receiving seat. `names`
@@ -137,7 +137,7 @@ mod tests {
             ClientMsg::SetRules(GameRules { hanabii: true, ..Default::default() }),
             ClientMsg::Start,
             ClientMsg::Leave,
-            ClientMsg::Catan(engine::Action::EndTurn),
+            ClientMsg::Catan(catan_core::Action::EndTurn),
             ClientMsg::Hanabi(hanabi_core::Action::Play { card_id: hanabi_core::CardId(3) }),
             ClientMsg::Hanabi(hanabi_core::Action::Clue {
                 target: PlayerId(1),
@@ -166,7 +166,7 @@ mod tests {
     fn catan_state_survives_json() {
         let mut rng = StdRng::seed_from_u64(3);
         let names = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        let game = engine::Game::new(engine::Rules::default(), names, &mut rng);
+        let game = catan_core::Game::new(catan_core::Rules::default(), names, &mut rng);
         let msg = ServerMsg::CatanState {
             view: Box::new(game.view_for(Some(1))),
             connected: vec![true, false, true],
