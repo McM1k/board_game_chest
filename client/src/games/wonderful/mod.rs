@@ -13,8 +13,8 @@ pub mod screens;
 
 use crate::app::{App, Lobby};
 use leptos::prelude::*;
-use protocol::{GameKind, GameView};
-use wonderful_core::View;
+use protocol::{GameKind, GameOptions, GameView};
+use wonderful_core::{Options, View};
 
 /// Interface state that survives the screen being rebuilt.
 #[derive(Clone, Copy)]
@@ -54,6 +54,8 @@ pub struct Signals {
     pub names: RwSignal<Vec<String>>,
     /// Who is connected, indexed by seat.
     pub connected: RwSignal<Vec<bool>>,
+    /// What the host picked in the lobby (the server's echo).
+    pub options: RwSignal<Options>,
     pub ui: Ui,
 }
 
@@ -63,6 +65,7 @@ impl Signals {
             view: RwSignal::new(None),
             names: RwSignal::new(Vec::new()),
             connected: RwSignal::new(Vec::new()),
+            options: RwSignal::new(Options::default()),
             ui: Ui::new(),
         }
     }
@@ -72,6 +75,7 @@ impl Signals {
         self.view.set(None);
         self.names.set(Vec::new());
         self.connected.set(Vec::new());
+        self.options.set(Options::default());
         self.ui.reset();
     }
 }
@@ -107,6 +111,11 @@ impl crate::games::Game for Wonderful {
 
     fn lobby(&self, app: App, lobby: &Lobby) -> AnyView {
         screens::lobby_screen(app, lobby.room.clone(), lobby.players.clone(), lobby.you, lobby.is_host).into_any()
+    }
+
+    fn options(&self, app: App, options: GameOptions) {
+        let GameOptions::Wonderful(options) = options else { return };
+        app.games.wonderful.options.set(options);
     }
 
     fn board(&self, app: App) -> AnyView {

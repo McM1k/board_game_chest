@@ -3,12 +3,12 @@
 //! A game is four rounds. Every round has three phases in which **all
 //! players act at the same time**:
 //!
-//! 1. **Draft.** Everybody is dealt a hand (7 cards, 10 with two players),
+//! 1. **Draft.** Everybody is dealt a hand (7 cards, 10 with two players;
+//!    with Corruption & Ascension, cards from both decks, see [`hand_sizes`]),
 //!    secretly picks one card, then passes the rest on: to the next seat in
 //!    rounds 1 and 3, to the previous one in rounds 2 and 4. Once every pick
 //!    is in, the new hands are looked at and the next pick starts, until
-//!    each player holds 7 cards. With two players the 3 cards left over are
-//!    discarded.
+//!    each player holds 7 cards. Whatever is left over is discarded.
 //! 2. **Planning.** Each drafted card is either put under construction or
 //!    recycled: it is discarded and its recycling bonus, a cube, goes onto a
 //!    building or onto the Empire straight away. A building whose spaces are
@@ -16,22 +16,25 @@
 //!    (characters or Krystallium, which are kept until used).
 //! 3. **Production.** Five steps, one per resource (Materials, Energy,
 //!    Science, Gold, Exploration). In each, everybody produces as many cubes
-//!    as they have icons for that resource, the player who produced the most
-//!    (and strictly more than everyone else) takes the matching character,
-//!    and the cubes are placed on buildings or the Empire; cubes that are
-//!    not placed are lost. A sixth, **wrap-up** step follows, in which
+//!    as they have icons for that resource, less the corrupted ones, the
+//!    player who produced the most (and strictly more than everyone else;
+//!    the two best from six players on, see [`supremacy`]) takes the
+//!    matching character, and the cubes are placed on buildings or the
+//!    Empire; cubes that are not placed are lost. A sixth, **wrap-up** step follows, in which
 //!    Krystallium and characters that are still held can be placed.
 //!
 //! After the fourth round the victory points are counted.
 //!
-//! The rules are pure: no networking, no randomness except the seed that
-//! shuffles the deck.
+//! The Empires are dealt at random. The rules are pure: no networking, no
+//! randomness except the seed that shuffles the decks and the Empires.
 
-use crate::cards::{Bonus, CardId, Cost, Kind, Res, Token, DECK_SIZE, EMPIRES};
+use crate::cards::{self, Bonus, CardId, Cost, Kind, Per, Res, Token, EMPIRES};
 use serde::{Deserialize, Serialize};
 
 pub const MIN_PLAYERS: usize = 2;
-pub const MAX_PLAYERS: usize = 5;
+/// The most players a game seats, with Corruption & Ascension (see
+/// [`Options::max_players`]).
+pub const MAX_PLAYERS: usize = 7;
 pub const ROUNDS: u8 = 4;
 /// Cards each player ends the draft with.
 pub const DRAFT_PICKS: usize = 7;
@@ -41,6 +44,26 @@ pub const WRAP_UP: u8 = 5;
 const LOG_LEN: usize = 24;
 /// Empire cubes that turn into one Krystallium.
 const CUBES_PER_KRYSTALLIUM: u8 = 5;
+
+/// What the host picked in the lobby.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Options {
+    /// The Corruption & Ascension expansion: its deck of 56 cards, dealt
+    /// beside the base one, and two more Empires, for up to 7 players.
+    #[serde(default)]
+    pub ascension: bool,
+}
+
+impl Options {
+    /// The most players a game with these options seats.
+    pub fn max_players(self) -> usize {
+        if self.ascension {
+            7
+        } else {
+            5
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Phase {
@@ -133,8 +156,9 @@ pub enum Event {
     RoundStarted(u8),
     /// A building was finished.
     Completed { seat: usize, card: CardId },
-    /// Somebody produced the most of `res` (`Some`), or the best were tied (`None`).
-    Supremacy { res: Res, seat: Option<usize> },
+    /// Who produced the most of `res` and takes its character (nobody when
+    /// the best were tied, see [`supremacy`]).
+    Supremacy { res: Res, seats: Vec<usize> },
     Chose { seat: usize, token: Token },
 }
 
@@ -197,7 +221,12 @@ pub struct Score {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State {
     pub players: Vec<PlayerState>,
+    pub options: Options,
+    /// The Empire each seat plays, as an index into [`EMPIRES`].
+    pub empires: Vec<usize>,
     pub deck: Vec<CardId>,
+    /// The Corruption & Ascension deck (empty without the expansion).
+    pub ascension_deck: Vec<CardId>,
     pub discard: Vec<CardId>,
     /// 1 to [`ROUNDS`].
     pub round: u8,
@@ -208,13 +237,43 @@ pub struct State {
     pub scores: Vec<Score>,
 }
 
-/// Cards in each hand at the start of a round.
-pub fn hand_size(players: usize) -> usize {
-    if players == 2 {
-        10
-    } else {
-        DRAFT_PICKS
+/// The cards dealt to each hand at the start of a round: from the base deck,
+/// and from the Corruption & Ascension deck.
+pub fn hand_sizes(players: usize, options: Options) -> (usize, usize) {
+    match (options.ascension, players) {
+        (false, 2) => (10, 0),
+        (false, _) => (DRAFT_PICKS, 0),
+        (true, 2) => (8, 4),
+        (true, 3 | 4) => (6, 3),
+        (true, 5 | 6) => (6, 2),
+        (true, _) => (5, 2),
     }
+}
+
+/// Who takes the character for producing the most of a resource: the seat
+/// that produced strictly more than everyone else, or with six or more
+/// players the two best. Two tied for first share both places; a tie for
+/// second leaves the second place empty; three or more tied for first, or
+/// nobody producing anything, gives it to nobody.
+pub fn supremacy(made: &[u8]) -> Vec<usize> {
+    let places = if made.len() >= 6 { 2 } else { 1 };
+    let at = |score: u8| (0..made.len()).filter(|&i| made[i] == score).collect::<Vec<usize>>();
+    let most = made.iter().copied().max().unwrap_or(0);
+    if most == 0 {
+        return Vec::new();
+    }
+    let mut winners = at(most);
+    if winners.len() > places {
+        return Vec::new();
+    }
+    if winners.len() < places {
+        let next = made.iter().copied().filter(|&n| n < most).max().unwrap_or(0);
+        let second = at(next);
+        if next > 0 && second.len() <= places - winners.len() {
+            winners.extend(second);
+        }
+    }
+    winners
 }
 
 /// SplitMix64: a tiny seeded generator, so the rules need no `rand`.
@@ -230,26 +289,39 @@ impl SplitMix {
     }
 }
 
-fn shuffle(cards: &mut [CardId], seed: u64) {
+fn shuffle<T>(items: &mut [T], seed: u64) {
     let mut rng = SplitMix(seed);
-    for i in (1..cards.len()).rev() {
+    for i in (1..items.len()).rev() {
         let j = (rng.next() % (i as u64 + 1)) as usize;
-        cards.swap(i, j);
+        items.swap(i, j);
     }
 }
 
 impl State {
-    /// A new game for 2 to 5 players. The same seed gives the same deck.
+    /// A new base game for 2 to 5 players. The same seed gives the same deal.
     pub fn new(players: usize, seed: u64) -> State {
-        assert!(
-            (MIN_PLAYERS..=MAX_PLAYERS).contains(&players),
-            "the game is for {MIN_PLAYERS} to {MAX_PLAYERS} players"
-        );
-        let mut deck: Vec<CardId> = (0..DECK_SIZE as u16).map(CardId).collect();
+        State::with_options(players, seed, Options::default())
+    }
+
+    /// A new game with the lobby's options: 2 to 5 players, or 2 to 7 with
+    /// Corruption & Ascension. The same seed gives the same deal.
+    pub fn with_options(players: usize, seed: u64, options: Options) -> State {
+        let max = options.max_players();
+        assert!((MIN_PLAYERS..=max).contains(&players), "the game is for {MIN_PLAYERS} to {max} players");
+        let mut deck = cards::deck(false);
         shuffle(&mut deck, seed);
+        let mut ascension_deck = if options.ascension { cards::deck(true) } else { Vec::new() };
+        shuffle(&mut ascension_deck, seed ^ 0xA5CE_0510_0000_0001);
+        // The Empires in the box, dealt one per seat.
+        let mut empires: Vec<usize> = (0..EMPIRES.len()).filter(|&e| options.ascension || !EMPIRES[e].ascension).collect();
+        shuffle(&mut empires, seed ^ 0xE3B1_2E00_0000_0002);
+        empires.truncate(players);
         let mut state = State {
             players: vec![PlayerState::default(); players],
+            options,
+            empires,
             deck,
+            ascension_deck,
             discard: Vec::new(),
             round: 1,
             phase: Phase::Draft,
@@ -271,20 +343,21 @@ impl State {
     }
 
     /// How many cubes of `res` the seat produces right now: the Empire's own
-    /// icons plus those of every finished card.
+    /// icons plus those of every finished card, less the corrupted ones (but
+    /// never below zero).
     pub fn production(&self, seat: usize, res: Res) -> u8 {
         let p = &self.players[seat];
-        let mut total = EMPIRES[seat % EMPIRES.len()].base[res.index()] as u32;
+        let mut total = EMPIRES[self.empires[seat]].base[res.index()] as i32;
         for id in &p.empire {
             let card = id.def();
-            total += card.produces[res.index()] as u32;
+            total += card.produces[res.index()] as i32 - card.corruption[res.index()] as i32;
             if let Some((r, kind)) = card.scaled {
                 if r == res {
-                    total += count_kind(&p.empire, kind);
+                    total += count_kind(&p.empire, kind) as i32;
                 }
             }
         }
-        total.min(u8::MAX as u32) as u8
+        total.clamp(0, u8::MAX as i32) as u8
     }
 
     /// The seat's points as things stand.
@@ -294,8 +367,12 @@ impl State {
             Token::General => p.generals as u32,
             Token::Financier => p.financiers as u32,
         };
+        let count = |per: Per| match per {
+            Per::Kind(kind) => count_kind(&p.empire, kind),
+            Per::Token(token) => held(token),
+        };
         let mut score = Score { cards: p.empire.len() as u32, ..Score::default() };
-        let empire = &EMPIRES[seat % EMPIRES.len()];
+        let empire = &EMPIRES[self.empires[seat]];
         let combos = p.empire.iter().map(|id| (id.def().combo, id.def().per_token));
         for (combo, per_token) in combos.chain([(empire.combo, empire.per_token)]) {
             if let Some((kind, points)) = combo {
@@ -303,6 +380,12 @@ impl State {
             }
             if let Some((token, points)) = per_token {
                 score.combo += points as u32 * held(token);
+            }
+        }
+        // Duos: one of each of the two, as many times as both can be paired.
+        for id in &p.empire {
+            if let Some((a, b, points)) = id.def().duo {
+                score.combo += points as u32 * count(a).min(count(b));
             }
         }
         for id in &p.empire {
@@ -355,11 +438,13 @@ impl State {
     // ----- draft -----------------------------------------------------
 
     fn start_round(&mut self) {
-        let size = hand_size(self.seats());
+        let (base, ascension) = hand_sizes(self.seats(), self.options);
         self.phase = Phase::Draft;
         for p in &mut self.players {
-            let at = self.deck.len() - size;
+            let at = self.deck.len() - base;
             p.hand = self.deck.split_off(at);
+            let at = self.ascension_deck.len() - ascension;
+            p.hand.append(&mut self.ascension_deck.split_off(at));
             p.picked = None;
             p.drafted.clear();
             p.pool = 0;
@@ -402,7 +487,8 @@ impl State {
             p.hand = hand;
         }
         if self.players.iter().all(|p| p.drafted.len() >= DRAFT_PICKS) {
-            // Whatever is left (3 cards each with two players) is discarded
+            // Whatever is left (3 cards each with two players, more with
+            // Corruption & Ascension) is discarded
             // without its recycling bonus.
             for p in &mut self.players {
                 self.discard.append(&mut p.hand);
@@ -675,24 +761,22 @@ impl State {
         if (step as usize) < Res::ALL.len() {
             let res = Res::ALL[step as usize];
             let made: Vec<u8> = (0..n).map(|i| self.production(i, res)).collect();
-            let most = made.iter().copied().max().unwrap_or(0);
-            let best: Vec<usize> = (0..n).filter(|&i| made[i] == most).collect();
             for (p, &amount) in self.players.iter_mut().zip(&made) {
                 p.produced = amount;
                 p.pool = amount;
                 p.choose = false;
             }
-            if most > 0 {
-                // Tied for the most: nobody gets the character.
-                let winner = (best.len() == 1).then(|| best[0]);
-                if let Some(w) = winner {
+            if made.iter().any(|&m| m > 0) {
+                let winners = supremacy(&made);
+                // For Science, each winner chooses their own character.
+                for &w in &winners {
                     match res.supremacy_token() {
                         Some(Token::General) => self.players[w].generals += 1,
                         Some(Token::Financier) => self.players[w].financiers += 1,
                         None => self.players[w].choose = true,
                     }
                 }
-                self.push_event(Event::Supremacy { res, seat: winner });
+                self.push_event(Event::Supremacy { res, seats: winners });
             }
             for p in &mut self.players {
                 p.ready = p.pool == 0 && !p.choose;

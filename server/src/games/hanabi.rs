@@ -19,7 +19,9 @@ impl Game for Hanabi {
     }
 
     fn check_options(&self, options: GameOptions) -> Result<GameOptions, String> {
-        let GameOptions::Hanabi(rules) = options;
+        let GameOptions::Hanabi(rules) = options else {
+            return Err("Those options are for another game.".into());
+        };
         // The hanabii mode is a fixed preset that replaces every other
         // option. Resolve it here, so the room stores - and every client is
         // shown - the concrete rules that will actually be played, and a

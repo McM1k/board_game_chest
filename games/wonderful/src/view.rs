@@ -6,12 +6,14 @@
 //! The view has no maps, so it survives JSON.
 
 use crate::cards::{CardId, Res};
-use crate::state::{Building, Event, Phase, Score, State};
+use crate::state::{Building, Event, Options, Phase, Score, State};
 use serde::{Deserialize, Serialize};
 
 /// What everybody can see about one player.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerView {
+    /// The Empire card this seat plays, as an index into `EMPIRES`.
+    pub empire_card: usize,
     /// Cards in the hand being drafted from.
     pub hand_size: usize,
     /// Has picked a card in this draft step (which one stays secret).
@@ -37,6 +39,8 @@ pub struct PlayerView {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct View {
     pub you: usize,
+    /// What the host picked in the lobby.
+    pub options: Options,
     pub round: u8,
     pub phase: Phase,
     /// Whether hands go to the next seat this round (otherwise the previous one).
@@ -49,6 +53,8 @@ pub struct View {
     /// Your draft area.
     pub drafted: Vec<CardId>,
     pub deck: usize,
+    /// Cards left in the Corruption & Ascension deck.
+    pub ascension_deck: usize,
     pub discard: usize,
     pub log: Vec<Event>,
     /// Once the game is over: every seat's points.
@@ -63,6 +69,7 @@ impl State {
             .iter()
             .enumerate()
             .map(|(i, p)| PlayerView {
+                empire_card: self.empires[i],
                 hand_size: p.hand.len(),
                 picked: p.picked.is_some(),
                 drafted: p.drafted.len(),
@@ -83,6 +90,7 @@ impl State {
         let me = &self.players[seat];
         View {
             you: seat,
+            options: self.options,
             round: self.round,
             phase: self.phase,
             passes_to_next: self.passes_to_next(),
@@ -91,6 +99,7 @@ impl State {
             picked: me.picked,
             drafted: me.drafted.clone(),
             deck: self.deck.len(),
+            ascension_deck: self.ascension_deck.len(),
             discard: self.discard.len(),
             log: self.log.clone(),
             scores: self.scores.clone(),

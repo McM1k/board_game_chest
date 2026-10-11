@@ -1,11 +1,11 @@
-//! It's a Wonderful World on the server. Everybody moves at the same time,
-//! so a move is checked against the rules and the seat that sent it, never
-//! against a turn.
+//! It's a Wonderful World on the server: its expansion picked in the lobby,
+//! and moves checked against the rules and the seat that sent them, never
+//! against a turn (everybody moves at the same time).
 
 use super::{Game, Running, WRONG_GAME};
 use protocol::{GameMove, GameOptions, GameView};
 use rand::{Rng, RngCore};
-use wonderful_core::State;
+use wonderful_core::{Options, State};
 
 pub struct Wonderful;
 
@@ -16,8 +16,17 @@ impl Game for Wonderful {
         true
     }
 
-    fn start(&self, names: Vec<String>, _options: Option<&GameOptions>, rng: &mut dyn RngCore) -> Box<dyn Running> {
-        Box::new(State::new(names.len(), rng.gen()))
+    /// Corruption & Ascension off, until the host ticks it.
+    fn default_options(&self) -> Option<GameOptions> {
+        Some(GameOptions::Wonderful(Options::default()))
+    }
+
+    fn start(&self, names: Vec<String>, options: Option<&GameOptions>, rng: &mut dyn RngCore) -> Box<dyn Running> {
+        let options = match options {
+            Some(GameOptions::Wonderful(options)) => *options,
+            _ => Options::default(),
+        };
+        Box::new(State::with_options(names.len(), rng.gen(), options))
     }
 }
 
@@ -36,13 +45,42 @@ impl Running for State {
 
 #[cfg(test)]
 mod tests {
-    use crate::rooms::disconnect;
+    use crate::rooms::{disconnect, Shared};
     use crate::testing::*;
     use protocol::{ClientMsg, GameKind, GameMove, GameOptions, GameView, ServerMsg};
-    use wonderful_core::{Action, Phase, Piece, Res, State, Target, Token, View};
+    use wonderful_core::{Action, Options, Phase, Piece, Res, State, Target, Token, View};
 
     fn play(action: Action) -> ClientMsg {
         ClientMsg::Move(GameMove::Wonderful(action))
+    }
+
+    /// The host's message turning Corruption & Ascension on or off.
+    fn expansion(on: bool) -> ClientMsg {
+        ClientMsg::SetOptions(GameOptions::Wonderful(Options { ascension: on }))
+    }
+
+    /// Every seat plays `next_move` until the game is over; the final views.
+    fn play_to_the_end(state: &Shared, clients: &mut [Client]) -> Vec<View> {
+        let n = clients.len();
+        let mut views: Vec<Option<Box<View>>> = vec![None; n];
+        latest_views(clients, &mut views);
+        for _ in 0..5000 {
+            if views.iter().all(|v| v.as_ref().is_some_and(|v| v.phase == Phase::Over)) {
+                break;
+            }
+            let mut moved = false;
+            for i in 0..n {
+                let view = views[i].clone().expect("every seat has a view");
+                if let Some(action) = next_move(&view) {
+                    let r = clients[i].send(state, play(action.clone()));
+                    assert_eq!(r, None, "seat {i} {action:?} in {:?}", view.phase);
+                    latest_views(clients, &mut views);
+                    moved = true;
+                }
+            }
+            assert!(moved, "the game got stuck");
+        }
+        views.into_iter().map(|v| *v.expect("a view")).collect()
     }
 
     /// The latest Wonderful World view each client has been sent.
@@ -195,49 +233,72 @@ mod tests {
     }
 
     #[test]
-    fn wonderful_lobbies_have_no_options() {
+    fn the_host_turns_the_expansion_on_for_up_to_seven_players() {
         let state = new_state();
-        let (_code, mut clients) = lobby(&state, GameKind::Wonderful, 2);
-        let hanabi_rules = GameOptions::Hanabi(hanabi_core::GameRules::default());
-        let r = clients[0].send(&state, ClientMsg::SetOptions(hanabi_rules));
-        assert_eq!(r.as_deref(), Some("This game has no options to set."));
-        // The lobby message says so too.
-        clients[0].send(&state, ClientMsg::Leave);
-        let msgs = clients[1].drain();
-        assert!(matches!(msgs.last(), Some(ServerMsg::Lobby { game: GameKind::Wonderful, options: None, .. })));
+        let (code, mut clients) = lobby(&state, GameKind::Wonderful, 5);
+        // Off at first: five seats, and the lobby says so.
+        assert_eq!(join(&state, &code, "P5").err().as_deref(), Some("That room is full."));
+        let off = Some(GameOptions::Wonderful(Options::default()));
+        assert_eq!(state.lock().unwrap().map[&code].options, off);
+        assert_eq!(clients[1].send(&state, expansion(true)).as_deref(), Some("Only the host can change the options."));
+        assert_eq!(clients[0].send(&state, expansion(true)), None);
+        let on = Some(GameOptions::Wonderful(Options { ascension: true }));
+        for c in &mut clients {
+            assert!(matches!(c.drain().last(), Some(ServerMsg::Lobby { options, .. }) if *options == on));
+        }
+        // Now up to seven.
+        clients.push(join(&state, &code, "P5").unwrap());
+        clients.push(join(&state, &code, "P6").unwrap());
+        assert_eq!(join(&state, &code, "P7").err().as_deref(), Some("That room is full."));
+        // With seven seated it can't be turned off any more.
+        let r = clients[0].send(&state, expansion(false));
+        assert_eq!(r.as_deref(), Some("There are too many players here for that."));
+
+        // The game deals from both decks to all seven: 5 + 2 cards each.
+        assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+        for c in &mut clients {
+            let Some((GameView::Wonderful(view), names, _)) = c.latest_game() else {
+                panic!("expected a Wonderful World state");
+            };
+            assert!(view.options.ascension);
+            assert_eq!(names.len(), 7);
+            assert_eq!(view.hand.len(), 7);
+            assert_eq!(view.hand.iter().filter(|c| c.def().ascension).count(), 2);
+        }
+        with_game(&state, &code, |g: &mut State| assert!(g.options.ascension));
+    }
+
+    #[test]
+    fn a_game_without_the_expansion_never_sees_its_cards() {
+        let state = new_state();
+        let (code, mut clients) = lobby(&state, GameKind::Wonderful, 3);
+        assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+        with_game(&state, &code, |g: &mut State| {
+            assert!(!g.options.ascension && g.ascension_deck.is_empty());
+            assert!(g.players.iter().flat_map(|p| &p.hand).all(|c| !c.def().ascension));
+        });
     }
 
     #[test]
     fn a_whole_wonderful_game_can_be_played_to_the_end_through_the_server() {
-        for n in [2, 3, 5] {
+        // Three games without the expansion, one with it at a full table.
+        for (n, ascension) in [(2, false), (3, false), (5, false), (7, true)] {
             let state = new_state();
-            let (code, mut clients) = lobby(&state, GameKind::Wonderful, n);
-            assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
-            let mut views: Vec<Option<Box<View>>> = vec![None; n];
-            latest_views(&mut clients, &mut views);
-
-            for _ in 0..5000 {
-                if views.iter().all(|v| v.as_ref().is_some_and(|v| v.phase == Phase::Over)) {
-                    break;
-                }
-                let mut moved = false;
-                for i in 0..n {
-                    let view = views[i].clone().expect("every seat has a view");
-                    if let Some(action) = next_move(&view) {
-                        let r = clients[i].send(&state, play(action.clone()));
-                        assert_eq!(r, None, "seat {i} {action:?} in {:?}", view.phase);
-                        latest_views(&mut clients, &mut views);
-                        moved = true;
-                    }
-                }
-                assert!(moved, "the game got stuck");
+            let (code, mut clients) = lobby(&state, GameKind::Wonderful, 2);
+            assert_eq!(clients[0].send(&state, expansion(ascension)), None);
+            for i in 2..n {
+                clients.push(join(&state, &code, &format!("P{i}")).unwrap());
             }
+            assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+            let views = play_to_the_end(&state, &mut clients);
 
             for v in &views {
-                let v = v.as_ref().unwrap();
+                assert_eq!(v.options.ascension, ascension);
                 assert_eq!((v.phase, v.round), (Phase::Over, wonderful_core::ROUNDS));
                 assert_eq!(v.scores.len(), n);
                 assert!(!v.winners.is_empty());
+                // No expansion deck, or seven players used all of it.
+                assert_eq!(v.ascension_deck, 0);
             }
             // Once it is over, further moves are refused politely.
             let r = clients[0].send(&state, play(Action::Ready));

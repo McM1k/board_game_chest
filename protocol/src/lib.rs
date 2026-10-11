@@ -36,12 +36,18 @@ impl GameKind {
         2
     }
 
+    /// The most players the game ever seats, with every option on.
     pub fn max_players(self) -> usize {
         match self {
             GameKind::Catan => 4,
             GameKind::Hanabi => 5,
-            GameKind::Wonderful => 5,
+            GameKind::Wonderful => 7,
         }
+    }
+
+    /// The most players a game with these lobby options seats.
+    pub fn max_players_with(self, options: Option<&GameOptions>) -> usize {
+        options.and_then(GameOptions::max_players).unwrap_or(self.max_players())
     }
 }
 
@@ -51,12 +57,24 @@ pub enum GameOptions {
     /// Hanabi's variant rules. The server normalizes them: the "hanabii"
     /// mode replaces every other option.
     Hanabi(hanabi_core::GameRules),
+    /// It's a Wonderful World's expansion.
+    Wonderful(wonderful_core::Options),
 }
 
 impl GameOptions {
     pub fn game(&self) -> GameKind {
         match self {
             GameOptions::Hanabi(_) => GameKind::Hanabi,
+            GameOptions::Wonderful(_) => GameKind::Wonderful,
+        }
+    }
+
+    /// The most players these options allow, when fewer than the game's
+    /// maximum (It's a Wonderful World seats 7 only with its expansion).
+    pub fn max_players(&self) -> Option<usize> {
+        match self {
+            GameOptions::Hanabi(_) => None,
+            GameOptions::Wonderful(options) => Some(options.max_players()),
         }
     }
 }
@@ -161,7 +179,16 @@ mod tests {
     fn game_limits() {
         assert_eq!(GameKind::Catan.max_players(), 4);
         assert_eq!(GameKind::Hanabi.max_players(), 5);
-        assert_eq!(GameKind::Wonderful.max_players(), 5);
+        assert_eq!(GameKind::Wonderful.max_players(), 7);
+        // Lobby options can lower it: It's a Wonderful World seats 7 only
+        // with its expansion.
+        let base = GameOptions::Wonderful(wonderful_core::Options::default());
+        let expanded = GameOptions::Wonderful(wonderful_core::Options { ascension: true });
+        assert_eq!(GameKind::Wonderful.max_players_with(Some(&base)), 5);
+        assert_eq!(GameKind::Wonderful.max_players_with(Some(&expanded)), 7);
+        let hanabi = GameOptions::Hanabi(GameRules::default());
+        assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabi)), 5);
+        assert_eq!(GameKind::Catan.max_players_with(None), 4);
         assert_eq!(GameKind::ALL.len(), 3);
         for g in GameKind::ALL {
             assert_eq!(g.min_players(), 2);
@@ -194,6 +221,7 @@ mod tests {
                 target: wonderful_core::Target::Card(wonderful_core::CardId(9)),
             })),
             ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Ready)),
+            ClientMsg::SetOptions(GameOptions::Wonderful(wonderful_core::Options { ascension: true })),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -222,6 +250,7 @@ mod tests {
             assert_eq!((view.game(), mv.game()), (kind, kind));
         }
         assert_eq!(GameOptions::Hanabi(GameRules::default()).game(), GameKind::Hanabi);
+        assert_eq!(GameOptions::Wonderful(wonderful_core::Options::default()).game(), GameKind::Wonderful);
     }
 
     /// Unwraps a `ServerMsg::Game` that went through JSON.

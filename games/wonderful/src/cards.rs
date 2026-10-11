@@ -1,10 +1,12 @@
 //! The pieces of the game and the card catalogue.
 //!
-//! The catalogue is the published base game: 78 designs, 150 cards, and the
-//! five Empires (side A). The numbers were taken from Game Park's online
-//! implementation (github.com/gamepark/its-a-wonderful-world, `Developments.ts`
-//! and `Empires.ts`). The whole catalogue is the one table in [`designs`],
-//! with each design's number of copies, and [`EMPIRES`] below it.
+//! The catalogue is the published base game (78 designs, 150 cards) and its
+//! Corruption & Ascension expansion (38 designs, 56 cards, in a deck of
+//! their own), with all seven Empires on side A. The numbers were taken from
+//! Game Park's online implementation (github.com/gamepark/its-a-wonderful-world,
+//! `Developments.ts`, `AscensionDevelopments.ts` and `Empires.ts`). The whole
+//! catalogue is the two tables in [`designs`], with each design's number of
+//! copies, and [`EMPIRES`] above them.
 
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -125,6 +127,35 @@ impl Cost {
     }
 }
 
+/// What a card's points can count: the cards of a type you own, or the
+/// characters of a kind you hold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Per {
+    Kind(Kind),
+    Token(Token),
+}
+
+impl Per {
+    pub fn name(self) -> &'static str {
+        match self {
+            Per::Kind(kind) => kind.name(),
+            Per::Token(token) => token.name(),
+        }
+    }
+}
+
+impl From<Kind> for Per {
+    fn from(kind: Kind) -> Per {
+        Per::Kind(kind)
+    }
+}
+
+impl From<Token> for Per {
+    fn from(token: Token) -> Per {
+        Per::Token(token)
+    }
+}
+
 /// One thing a card hands over the moment it is finished. It is kept, like
 /// the characters and Krystallium won any other way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,14 +164,14 @@ pub enum Bonus {
     Token(Token),
 }
 
-/// Identifies one physical card of the deck. The first [`DESIGNS`] ids are
-/// one card of each design, in catalogue order; the extra copies follow.
+/// Identifies one physical card, of either deck. The first ids are one card
+/// of each design, in catalogue order; the extra copies follow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CardId(pub u16);
 
 impl CardId {
     pub fn def(self) -> &'static Card {
-        &catalogue()[deck_designs()[self.0 as usize % DECK_SIZE]]
+        &catalogue()[deck_designs()[self.0 as usize % CARDS]]
     }
 }
 
@@ -151,6 +182,9 @@ pub struct Card {
     pub cost: Cost,
     /// Resource icons produced every round once finished.
     pub produces: [u8; 5],
+    /// Corrupted resource icons (Corruption & Ascension): each takes one off
+    /// that resource's production.
+    pub corruption: [u8; 5],
     /// One more icon of this resource for every card of that type you own.
     pub scaled: Option<(Res, Kind)>,
     /// The cube you take when you recycle the card.
@@ -164,8 +198,13 @@ pub struct Card {
     pub combo: Option<(Kind, u8)>,
     /// Extra points for each character token of this type you hold.
     pub per_token: Option<(Token, u8)>,
-    /// How many cards of this design are in the deck.
+    /// Points for each duo, one of each of the two (Corruption & Ascension's
+    /// duo scoring).
+    pub duo: Option<(Per, Per, u8)>,
+    /// How many cards of this design are in its deck.
     pub copies: u8,
+    /// A card of the Corruption & Ascension deck.
+    pub ascension: bool,
 }
 
 impl Card {
@@ -175,14 +214,22 @@ impl Card {
             kind,
             cost: Cost { res: cost, ..Cost::default() },
             produces,
+            corruption: [0; 5],
             scaled: None,
             recycle,
             bonus: &[],
             vp,
             combo: None,
             per_token: None,
+            duo: None,
             copies: 1,
+            ascension: false,
         }
+    }
+
+    fn corruption(mut self, corrupted: [u8; 5]) -> Card {
+        self.corruption = corrupted;
+        self
     }
 
     /// Spaces in the cost that only Krystallium fills.
@@ -218,27 +265,43 @@ impl Card {
         self
     }
 
+    fn duo(mut self, a: impl Into<Per>, b: impl Into<Per>, points: u8) -> Card {
+        self.duo = Some((a.into(), b.into(), points));
+        self
+    }
+
     fn copies(mut self, n: u8) -> Card {
         self.copies = n;
         self
     }
 }
 
-/// How many designs the catalogue has, and how many cards the deck holds
-/// once every design's copies are counted.
+/// The base game's designs, and its deck once every design's copies are
+/// counted.
 pub const DESIGNS: usize = 78;
 pub const DECK_SIZE: usize = 150;
+/// The Corruption & Ascension deck's designs and cards.
+pub const ASCENSION_DESIGNS: usize = 38;
+pub const ASCENSION_DECK_SIZE: usize = 56;
+/// Every card of both decks: their ids run from 0 to `CARDS - 1`.
+pub const CARDS: usize = DECK_SIZE + ASCENSION_DECK_SIZE;
 
 static CATALOGUE: OnceLock<Vec<Card>> = OnceLock::new();
 static DECK_DESIGNS: OnceLock<Vec<usize>> = OnceLock::new();
 
-/// Every design, in catalogue order.
+/// Every design, in catalogue order: the base game's, then Corruption &
+/// Ascension's.
 pub fn catalogue() -> &'static [Card] {
     CATALOGUE.get_or_init(designs)
 }
 
-/// The design of every card of the deck, indexed by `CardId.0`: one of each
-/// design first, then each design's extra copies.
+/// Every card of the base deck, or of the Corruption & Ascension deck.
+pub fn deck(ascension: bool) -> Vec<CardId> {
+    (0..CARDS as u16).map(CardId).filter(|c| c.def().ascension == ascension).collect()
+}
+
+/// The design of every card, indexed by `CardId.0`: one of each design
+/// first, then each design's extra copies.
 fn deck_designs() -> &'static [usize] {
     DECK_DESIGNS.get_or_init(|| {
         let all = catalogue();
@@ -246,13 +309,13 @@ fn deck_designs() -> &'static [usize] {
         for (design, card) in all.iter().enumerate() {
             deck.extend(std::iter::repeat_n(design, card.copies as usize - 1));
         }
-        debug_assert_eq!(deck.len(), DECK_SIZE);
+        debug_assert_eq!(deck.len(), CARDS);
         deck
     })
 }
 
 /// An Empire card (side A): the production every seat starts with, and the
-/// points it scores at the end. Seat `i` plays Empire `i`.
+/// points it scores at the end. They are dealt at random to the seats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Empire {
     pub name: &'static str,
@@ -261,14 +324,22 @@ pub struct Empire {
     pub combo: Option<(Kind, u8)>,
     /// Points for each character token of this type you hold.
     pub per_token: Option<(Token, u8)>,
+    /// One of the two Empires that come with Corruption & Ascension.
+    pub ascension: bool,
 }
 
-pub const EMPIRES: [Empire; 5] = [
-    Empire { name: "Noram States", base: [3, 0, 0, 1, 0], combo: None, per_token: Some((Token::Financier, 1)) },
-    Empire { name: "Republic of Europe", base: [2, 1, 1, 0, 0], combo: None, per_token: Some((Token::General, 1)) },
-    Empire { name: "Federation of Asia", base: [1, 0, 0, 2, 0], combo: Some((Kind::Project, 2)), per_token: None },
-    Empire { name: "Panafrican Union", base: [2, 0, 2, 0, 0], combo: Some((Kind::Research, 2)), per_token: None },
-    Empire { name: "Aztec Empire", base: [0, 2, 0, 0, 1], combo: Some((Kind::Discovery, 3)), per_token: None },
+const fn empire(name: &'static str, base: [u8; 5], combo: Option<(Kind, u8)>, per_token: Option<(Token, u8)>) -> Empire {
+    Empire { name, base, combo, per_token, ascension: false }
+}
+
+pub const EMPIRES: [Empire; 7] = [
+    empire("Noram States", [3, 0, 0, 1, 0], None, Some((Token::Financier, 1))),
+    empire("Republic of Europe", [2, 1, 1, 0, 0], None, Some((Token::General, 1))),
+    empire("Federation of Asia", [1, 0, 0, 2, 0], Some((Kind::Project, 2)), None),
+    empire("Panafrican Union", [2, 0, 2, 0, 0], Some((Kind::Research, 2)), None),
+    empire("Aztec Empire", [0, 2, 0, 0, 1], Some((Kind::Discovery, 3)), None),
+    Empire { ascension: true, ..empire("Nations of Oceania", [3, 1, 0, 0, 0], Some((Kind::Structure, 1)), None) },
+    Empire { ascension: true, ..empire("North Hegemony", [0, 3, 0, 0, 0], Some((Kind::Vehicle, 2)), None) },
 ];
 
 fn designs() -> Vec<Card> {
@@ -370,5 +441,60 @@ fn designs() -> Vec<Card> {
     ];
     debug_assert_eq!(v.len(), DESIGNS);
     debug_assert_eq!(v.iter().map(|c| c.copies as usize).sum::<usize>(), DECK_SIZE);
+
+    // Corruption & Ascension: a deck of its own, dealt beside the base one.
+    let ascension = vec![
+        // Structures (8 designs, 19 cards).
+        c("Border Patrol", Structure, [2, 0, 0, 0, 0], [0, 0, 0, 1, 0], X, 0).corruption([0, 0, 0, 0, 1]).bonus(&[GENERAL]).copies(3),
+        c("Krystallium Power Plant", Structure, [1, 0, 2, 0, 0], [3, 3, 0, 0, 0], S, 0).krystallium(1),
+        c("Robot Factory", Structure, [2, 0, 2, 0, 0], [0, 2, 2, 0, 0], M, 0).corruption([1, 0, 0, 0, 0]).copies(2),
+        c("Gold Mine", Structure, [3, 1, 0, 0, 1], [0, 0, 0, 3, 0], G, 0).copies(2),
+        c("Secret Base", Structure, [4, 1, 1, 0, 0], [0, 0, 0, 0, 3], X, 0).corruption([0, 1, 0, 0, 0]).bonus(&[GENERAL]).copies(2),
+        c("Lawless Zone", Structure, [2, 0, 0, 0, 0], [1, 1, 0, 0, 0], M, 0).corruption([0, 0, 0, 1, 0]).copies(3),
+        c("Occult District", Structure, [1, 0, 0, 0, 0], [1, 0, 0, 0, 0], M, 0).corruption([0, 0, 1, 0, 0]).bonus(&[KRYSTALLIUM]).copies(3),
+        c("Offshore Laboratory", Structure, [2, 0, 0, 1, 0], [0, 0, 1, 1, 0], E, 0).corruption([0, 1, 0, 0, 0]).bonus(&[FINANCIER]).copies(3),
+
+        // Vehicles (6 designs, 12 cards).
+        c("Floating Palace", Vehicle, [0, 2, 1, 2, 0], [0, 2, 0, 0, 0], E, 0).chars(1, 0).combo(Vehicle, 2),
+        c("Giant Robot", Vehicle, [3, 5, 2, 0, 0], [0; 5], M, 0).krystallium(1).bonus(&[GENERAL, GENERAL]).duo(Structure, Vehicle, 6),
+        c("Armored Convoy", Vehicle, [1, 2, 0, 0, 0], [0, 0, 0, 2, 0], G, 0).corruption([1, 0, 0, 0, 0]).copies(2),
+        c("Mobile Base", Vehicle, [2, 3, 1, 0, 0], [0, 0, 2, 0, 2], S, 0).corruption([1, 0, 0, 0, 0]).bonus(&[GENERAL]).copies(2),
+        c("Inquisitors", Vehicle, [1, 2, 0, 0, 0], [0, 0, 0, 1, 1], S, 0).corruption([0, 0, 1, 0, 0]).copies(3),
+        c("Raiders", Vehicle, [0, 1, 0, 1, 0], [0, 0, 0, 0, 2], G, 0).corruption([0, 0, 0, 1, 0]).copies(3),
+
+        // Research (8 designs, 8 cards).
+        c("Planetary Archives", Research, [0, 0, 4, 0, 2], [0, 0, 2, 0, 0], X, 0).combo(Discovery, 3),
+        c("Telekinesis", Research, [0, 0, 5, 0, 0], [0; 5], S, 0).krystallium(1).duo(Vehicle, Token::Financier, 6),
+        c("Artificial Intelligence", Research, [0, 0, 3, 0, 0], [0; 5], S, 1).scaled(S, Vehicle),
+        c("Dark Matter", Research, [5, 0, 5, 0, 0], [0; 5], M, 0).krystallium(2).duo(Structure, Research, 6),
+        c("Artificial Sun", Research, [0, 4, 7, 2, 0], [0; 5], E, 25).krystallium(1),
+        c("Immortality", Research, [0, 3, 8, 0, 0], [0; 5], S, 0).chars(1, 1).duo(Research, Project, 9),
+        c("Utopia", Research, [2, 2, 2, 2, 2], [0; 5], G, 0).chars(0, 2).duo(Project, Discovery, 12),
+        c("Tax Haven", Research, [0, 0, 2, 2, 0], [0, 0, 0, 2, 0], G, 1).corruption([0, 1, 0, 0, 0]).bonus(&[FINANCIER, FINANCIER]),
+
+        // Projects (9 designs, 10 cards).
+        c("Celestial Cathedral", Project, [4, 0, 0, 5, 2], [0; 5], G, 0).duo(Vehicle, Project, 8),
+        c("Intercontinental Network", Project, [2, 2, 0, 3, 0], [0; 5], M, 0).duo(Discovery, Token::Financier, 6),
+        c("High-Security Prison", Project, [2, 0, 0, 4, 0], [0; 5], M, 0).chars(0, 1).duo(Structure, Token::General, 5),
+        c("Orbital Station", Project, [0, 3, 3, 5, 0], [0; 5], S, 0).duo(Token::Financier, Token::General, 6),
+        c("World Bank", Project, [0, 0, 0, 7, 5], [0; 5], G, 0).chars(1, 0).duo(Structure, Project, 7),
+        c("Luxury Clinic", Project, [0, 0, 1, 2, 0], [0, 0, 2, 0, 0], E, 3).corruption([0, 1, 0, 0, 0]).copies(2),
+        c("The Wall", Project, [9, 0, 0, 4, 0], [0; 5], M, 25).chars(2, 0),
+        c("Consortium", Project, [0, 3, 0, 3, 0], [0, 0, 0, 3, 2], G, 1).bonus(&[FINANCIER]),
+        c("Mining Asteroid", Project, [0, 2, 2, 2, 0], [4, 0, 0, 0, 0], M, 3).bonus(&[KRYSTALLIUM, KRYSTALLIUM]),
+
+        // Discoveries (7 designs, 7 cards).
+        c("Hyperborea", Discovery, [0, 0, 4, 0, 5], [0; 5], S, 0).chars(2, 0).duo(Research, Discovery, 10),
+        c("Valhalla", Discovery, [0, 0, 0, 2, 5], [0; 5], G, 0).krystallium(1).duo(Project, Token::General, 6),
+        c("Mysterious Vessel", Discovery, [0, 0, 2, 0, 6], [0; 5], X, 0).duo(Vehicle, Research, 6),
+        c("Pandemonium", Discovery, [0, 0, 0, 0, 4], [0; 5], E, 0).chars(0, 2).combo(Structure, 2),
+        c("Pandora's Box", Discovery, [0, 0, 0, 0, 4], [1, 1, 1, 1, 0], X, 1).bonus(&[KRYSTALLIUM]),
+        c("Alpha Centauri", Discovery, [0, 3, 3, 0, 8], [0; 5], X, 25),
+        c("Shambhala", Discovery, [0, 0, 0, 0, 4], [0; 5], X, 4).scaled(X, Project),
+    ];
+    debug_assert_eq!(ascension.len(), ASCENSION_DESIGNS);
+    debug_assert_eq!(ascension.iter().map(|c| c.copies as usize).sum::<usize>(), ASCENSION_DECK_SIZE);
+    let mut v = v;
+    v.extend(ascension.into_iter().map(|c| Card { ascension: true, ..c }));
     v
 }

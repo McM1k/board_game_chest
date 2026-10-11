@@ -187,11 +187,26 @@ fn row(class: &'static str, label: &'static str, body: AnyView) -> AnyView {
     .into_any()
 }
 
+/// A corrupted resource (Corruption & Ascension): its cube, struck out.
+fn corrupt_cube(res: Res) -> AnyView {
+    view! {
+        <span class=format!("cube corrupt {}", look::res_class(res)) title=format!("{} corrupted", res.name()) aria-hidden="true">
+            {look::res_letter(res)}
+        </span>
+    }
+    .into_any()
+}
+
 fn makes_row(card: &'static Card) -> Option<AnyView> {
     let mut icons: Vec<AnyView> = Vec::new();
     for res in Res::ALL {
         for _ in 0..card.produces[res.index()] {
             icons.push(res_cube(res));
+        }
+    }
+    for res in Res::ALL {
+        for _ in 0..card.corruption[res.index()] {
+            icons.push(corrupt_cube(res));
         }
     }
     let per = card.scaled.map(|(res, kind)| {
@@ -246,6 +261,7 @@ fn card_body(card: &'static Card, cost: Option<AnyView>, foot: bool) -> AnyView 
         <span class="card-head">
             {kind_icon(card.kind)}
             <span class="card-kind">{card.kind.name()}</span>
+            {card.ascension.then(|| view! { <span class="card-deck" title="Corruption & Ascension">"C&A"</span> })}
         </span>
         <span class="card-name">{card.name}</span>
         {cost}
@@ -520,7 +536,7 @@ fn race(ctx: &Ctx, step: u8) -> Option<AnyView> {
     if most == 0 {
         return None;
     }
-    let leader = look::supremacy(view);
+    let leaders = look::supremacy(view);
     let prize = match res.supremacy_token() {
         Some(token) => format!("takes a {}", token.name()),
         None => "chooses a character".to_string(),
@@ -530,7 +546,7 @@ fn race(ctx: &Ctx, step: u8) -> Option<AnyView> {
         .iter()
         .enumerate()
         .map(|(seat, p)| {
-            let lead = leader == Some(seat);
+            let lead = leaders.contains(&seat);
             let width = u32::from(p.produced) * 100 / u32::from(most);
             view! {
                 <li class={if lead { "race-row lead" } else { "race-row" }}>
@@ -542,7 +558,7 @@ fn race(ctx: &Ctx, step: u8) -> Option<AnyView> {
             }
         })
         .collect_view();
-    let tied = leader.is_none();
+    let tied = leaders.is_empty();
     Some(
         view! {
             <div class="race">
@@ -824,8 +840,8 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
             <div class="empire-head">
                 <div>
                     <h2>"Your Empire"</h2>
-                    <p class="empire-name">{look::empire_name(ctx.view.you)}</p>
-                    <p class="empire-points">{look::empire_points(ctx.view.you)}</p>
+                    <p class="empire-name">{look::empire_name(me.empire_card)}</p>
+                    <p class="empire-points">{look::empire_points(me.empire_card)}</p>
                 </div>
                 {points(me)}
             </div>
@@ -895,7 +911,7 @@ fn rival(ctx: &Ctx, seat: usize) -> AnyView {
                         {ctx.name(seat)}
                         {offline.then(|| view! { <span class="tag tag-off">"offline"</span> })}
                     </h3>
-                    <p class="empire-name" title=look::empire_points(seat)>{look::empire_name(seat)}</p>
+                    <p class="empire-name" title=look::empire_points(p.empire_card)>{look::empire_name(p.empire_card)}</p>
                 </div>
                 {points(p)}
             </div>
@@ -1078,7 +1094,7 @@ mod tests {
     use leptos::tachys::view::RenderHtml;
     use wonderful_core::{catalogue, State};
 
-    const NAMES: [&str; 5] = ["Ann", "Bob", "Cy", "Di", "Ed"];
+    const NAMES: [&str; 7] = ["Ann", "Bob", "Cy", "Di", "Ed", "Flo", "Gus"];
 
     /// Runs `f` inside a fresh reactive owner, with an executor registered so
     /// that creating effects doesn't panic (the tasks are never polled).
@@ -1178,7 +1194,7 @@ mod tests {
                 assert!(html.contains("ABCD") && html.contains("Leave game"), "{:?}", state.phase);
                 assert!(html.contains("It&#39;s a Wonderful World") || html.contains("It's a Wonderful World"));
                 assert!(html.contains(&format!("{}", state.round)));
-                assert!(html.contains("Your Empire") && html.contains(look::empire_name(seat)));
+                assert!(html.contains("Your Empire") && html.contains(look::empire_name(state.empires[seat])));
                 // Every other player is on the table; you are "You", not a name.
                 for (other, name) in NAMES.iter().enumerate().take(state.seats()) {
                     let listed = html.contains(&format!("<h3>{name}"));
@@ -1297,8 +1313,10 @@ mod tests {
 
     /// Seat 0 in the production phase of a game in which everybody has
     /// built what was drafted.
+    /// Seat `i` plays Empire `i` (Noram States first).
     fn production_state() -> State {
         let mut state = State::new(3, 11);
+        state.empires = vec![0, 1, 2];
         for _ in 0..2000 {
             if matches!(state.phase, Phase::Production { .. }) {
                 break;
@@ -1499,6 +1517,7 @@ mod tests {
     #[test]
     fn the_empire_groups_finished_cards_by_type() {
         let mut state = State::new(3, 12);
+        state.empires = vec![0, 1, 2]; // Noram States for seat 0
         state.players[0].empire =
             vec![id("Recycling Plant"), id("Nuclear Plant"), id("Zeppelin"), id("Wind Turbines"), id("Neuroscience")];
         let html = render(&state, 0);
@@ -1518,7 +1537,7 @@ mod tests {
         state.log = vec![
             wonderful_core::Event::RoundStarted(1),
             wonderful_core::Event::Completed { seat: 1, card: id("Zeppelin") },
-            wonderful_core::Event::Supremacy { res: Res::Gold, seat: Some(0) },
+            wonderful_core::Event::Supremacy { res: Res::Gold, seats: vec![0] },
         ];
         let html = render(&state, 0);
         let newest = html.find("You produced the most Gold").unwrap();
@@ -1557,5 +1576,51 @@ mod tests {
         });
         assert!(!html.contains("<b>Ann</b>"), "an unescaped name");
         assert!(html.contains("Bob &amp; co"));
+    }
+
+    // ----- Corruption & Ascension ---------------------------------------------------
+
+    #[test]
+    fn the_expansions_cards_carry_its_tag_and_their_corruption() {
+        let mut state = State::with_options(3, 1, wonderful_core::Options { ascension: true });
+        state.players[0].hand = vec![id("Border Patrol"), id("Immortality"), id("Zeppelin")];
+        let html = render(&state, 0);
+        // Two of the three are the expansion's.
+        assert_eq!(html.matches("class=\"card-deck\"").count(), 2, "{html}");
+        // Border Patrol makes a Gold and corrupts an Exploration.
+        assert!(html.contains("cube corrupt res-exploration"));
+        assert!(html.contains("9 VP per Research + Project"));
+    }
+
+    #[test]
+    fn from_six_players_the_race_has_two_winners() {
+        let ascension = wonderful_core::Options { ascension: true };
+        let mut state = State::with_options(6, 3, ascension);
+        // Straight to a production step, with made-up numbers.
+        state.phase = Phase::Production { step: 0 };
+        for (p, made) in state.players.iter_mut().zip([4, 1, 3, 0, 2, 0]) {
+            p.produced = made;
+            p.pool = made;
+        }
+        let html = render(&state, 0);
+        assert_eq!(html.matches("race-row lead").count(), 2, "seats 0 and 2");
+        assert_eq!(html.matches("class=\"race-prize\"").count(), 2);
+        assert!(!html.contains("tied: no character"));
+    }
+
+    #[test]
+    fn whole_games_with_the_expansion_can_be_drawn_for_six_and_seven() {
+        let ascension = wonderful_core::Options { ascension: true };
+        for players in [6, 7] {
+            let mut state = State::with_options(players, 50 + players as u64, ascension);
+            let moves = play_and_draw(&mut state, true, |state, seat, html| {
+                assert!(html.contains("Your Empire") && html.contains(look::empire_name(state.empires[seat])));
+                if state.phase == Phase::Over {
+                    assert!(html.contains("standings"));
+                }
+            });
+            assert!(moves > 100, "{players} players: only {moves} moves");
+            assert_eq!(state.phase, Phase::Over, "{players} players");
+        }
     }
 }

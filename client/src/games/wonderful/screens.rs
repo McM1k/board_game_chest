@@ -4,8 +4,8 @@
 use super::look;
 use crate::app::{create_room, join_room, leave, send, App, Screen};
 use leptos::prelude::*;
-use protocol::{ClientMsg, GameKind, LobbyPlayer};
-use wonderful_core::Res;
+use protocol::{ClientMsg, GameKind, GameOptions, LobbyPlayer};
+use wonderful_core::{Options, Res};
 
 /// The frame every screen of the game sits in: its own look (see
 /// `wonderful.css`, everything in it is scoped under `.wonderful`).
@@ -38,7 +38,7 @@ pub fn home_screen(app: App) -> impl IntoView {
             {mark()}
             <h1 class="game-title">"It's a Wonderful World"</h1>
             <p class="lede">
-                "Draft cards, build an empire and out-produce your rivals over four rounds. For 2 to 5 players, and everybody plays at once."
+                "Draft cards, build an empire and out-produce your rivals over four rounds. For 2 to 5 players (7 with the Corruption & Ascension expansion), and everybody plays at once."
             </p>
             <div class="panel join-form">
                 <label>
@@ -76,8 +76,37 @@ pub fn home_screen(app: App) -> impl IntoView {
     }
 }
 
-/// The waiting room: who is here, and the host's start button. The game has
-/// no options to pick.
+/// The expansion's switch. The host ticks it, everybody sees it (locked for
+/// the others). As with Hanabi's rules, a click only asks the server, whose
+/// echo is what moves the checkbox. With more than five seated it can't be
+/// turned off.
+fn expansion_option(app: App, is_host: bool, seated: usize) -> impl IntoView {
+    let options = app.games.wonderful.options;
+    let toggle = move |_| {
+        let ascension = !options.get_untracked().ascension;
+        send(app, &ClientMsg::SetOptions(GameOptions::Wonderful(Options { ascension })));
+    };
+    let locked = move || !is_host || (options.get().ascension && seated > Options::default().max_players());
+    view! {
+        <div class="option">
+            <label class="option-toggle">
+                <input
+                    type="checkbox"
+                    prop:checked=move || options.get().ascension
+                    disabled=locked
+                    on:change=toggle
+                />
+                <span>"Corruption & Ascension"</span>
+            </label>
+            <p class="hint">
+                "The expansion: a second deck of 56 cards dealt beside the first, with corruption that eats into your production and points for duos, and two more Empires, for up to 7 players."
+            </p>
+        </div>
+    }
+}
+
+/// The waiting room: who is here, the expansion's switch, and the host's
+/// start button.
 pub fn lobby_screen(
     app: App,
     room: String,
@@ -127,6 +156,7 @@ pub fn lobby_screen(
                 <p class="hint">"Share this code with everyone you're playing with:"</p>
                 <div class="room-code">{room}</div>
                 <ul class="roster">{rows}</ul>
+                {expansion_option(app, is_host, players.len())}
                 {start}
                 <button class="link" on:click=move |_| leave(app)>
                     "Leave room"
@@ -194,6 +224,26 @@ mod tests {
             seats[1].connected = false;
             let html = lobby_screen(app, "WXYZ".into(), seats, 0, true).to_html();
             assert!(html.contains("offline"));
+        });
+    }
+
+    #[test]
+    fn the_host_switches_the_expansion_on_and_everyone_sees_it() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let seats = players(&["Ann", "Bob", "Cy"]);
+            let host = lobby_screen(app, "WXYZ".into(), seats.clone(), 0, true).to_html();
+            assert!(host.contains("Corruption &amp; Ascension"), "{host}");
+            assert!(host.contains("type=\"checkbox\"") && !host.contains("disabled"), "the host can tick it");
+            // The others see it, locked.
+            let guest = lobby_screen(app, "WXYZ".into(), seats, 1, false).to_html();
+            assert!(guest.contains("type=\"checkbox\"") && guest.contains("disabled"), "{guest}");
+            // Once on with six seated, it can't be turned off.
+            app.games.wonderful.options.set(Options { ascension: true });
+            let six = players(&["A", "B", "C", "D", "E", "F"]);
+            let full = lobby_screen(app, "WXYZ".into(), six, 0, true).to_html();
+            assert_eq!(full.matches("disabled").count(), 1, "the switch, not the start button: {full}");
         });
     }
 }

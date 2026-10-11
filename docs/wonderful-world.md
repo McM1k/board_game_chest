@@ -4,11 +4,12 @@ What the README doesn't say: the rule calls that were made without the rulebook,
 code is shaped the way it is, what is known to be wrong, and what is left. The README's
 "It's a Wonderful World" section has the rules as played and where the code lives.
 
-Status (2026-10-10): the base game runs end to end in tests, from the lobby to the final
-standings, for 2 to 5 players. **It has never been played in a browser.** The cards and the
-Empires are the published base game's (side A of the Empires), taken from Game Park's online
-version ([gamepark/its-a-wonderful-world](https://github.com/gamepark/its-a-wonderful-world),
-`rules/src/material/Developments.ts` and `Empires.ts`).
+Status (2026-10-11): the base game and its Corruption & Ascension expansion run end to end in
+tests, from the lobby to the final standings, for 2 to 5 players (2 to 7 with the expansion),
+and the start of a game of each has been played in a browser by script. The cards and the
+Empires are the published ones (side A of the Empires), taken from Game Park's online version
+([gamepark/its-a-wonderful-world](https://github.com/gamepark/its-a-wonderful-world),
+`rules/src/material/Developments.ts`, `AscensionDevelopments.ts` and `Empires.ts`).
 
 ## Rules: what is confirmed and what was chosen
 
@@ -29,13 +30,22 @@ construction bonuses are only characters and Krystallium, kept until used; some 
 take Krystallium and nothing else; Krystallium and characters can be placed in Planning and in
 any production step; a scrapped building's recycling cube goes on the Empire.
 
+Corruption & Ascension follows its official rulebook
+([corruptionascension_rules_EN.pdf](https://www.laboitedejeu.fr/wp-content/uploads/2021/02/corruptionascension_rules_EN.pdf)):
+the hand sizes per player count, corruption subtracted from production (never below zero,
+for the supremacy too), duo scoring, and the supremacy for six and seven players (two
+places; two tied for first share them, a tie for second leaves the second place empty, three
+tied for first give nothing; each Science winner chooses). Its two Empires are dealt with the
+others: the box's Empires are now dealt at random, where seat *i* used to always play Empire
+*i*, which left the last Empires out of smaller games.
+
 Where the engine fills a gap or picks a convenience:
 
 | Topic | What the engine does | Status |
 |---|---|---|
 | Wrap-up step | A sixth production step after Exploration to place Krystallium and characters still held. Skipped when nobody holds one that fits a free space. | Not in the published game, where these can be placed during any step before you end it. Needed here because a player whose cubes are all placed is done with a step at once. |
 | Scrap | Allowed in Planning or any production step. Everything on the building is lost, Krystallium and characters included; its recycling cube goes on the Empire. | Follows the rules summaries (Ultraboardgames, BGA). Game Park gives Krystallium and characters back, and treats a card drafted this round as if it were being recycled. |
-| Empires | Side A of the five base Empires, each with its production and its end-game bonus. Seat *i* plays Empire *i*; seats are shuffled at Start. | Side B (the same production for everybody, no bonus) would need a per-game lobby option. |
+| Empires | Side A of the five base Empires (seven with the expansion), each with its production and its end-game bonus, dealt at random. | Side B (the same production for everybody, no bonus) would be another `Options` field beside `ascension`. |
 | New cards producing | Production is counted at the start of each step: a card finished in step *k* first produces in step *k+1*; one finished in Planning produces in Materials the same round. | Confirmed (Game Park). |
 | Ending a step | A player is done when their pool is empty and no choice is pending, or when they press Done (which drops unplaced cubes). A step where nobody has anything to place is skipped. | Pace: nobody waits on an empty step. |
 
@@ -89,10 +99,11 @@ need not be the host.
   server and client must be built from the same one.
 * Views contain no maps (vectors and arrays indexed by seat or resource), because JSON keys
   must be strings.
-* No lobby options yet: a Wonderful lobby sends `options: None` and answers `SetOptions`
-  with "This game has no options to set." Empire side B or an expansion would add a
-  `GameOptions::Wonderful` variant, with `default_options()` and `check_options()` in
-  `server/src/games/wonderful.rs` and `options()` on the client (as Hanabi does).
+* Lobby options travel as `GameOptions::Wonderful(wonderful_core::Options)`, so far only
+  `ascension`. The server starts every lobby with it off (`default_options()` in
+  `server/src/games/wonderful.rs`), and the room's capacity follows it
+  (`GameOptions::max_players`: 5, or 7 with the expansion). Empire side B would be another
+  field of `Options`.
 
 **Client.**
 
@@ -132,13 +143,13 @@ need not be the host.
 
 ## Left to do, in order
 
-1. **Play it in a browser** (checklist below). Everything after assumes it works. Look at
-   the long names ("Gardens of the Hesperides") and the Krystallium spaces in particular.
+1. **Play it in a browser** with people (checklist below), with and without the expansion,
+   and with six or seven players.
 2. **Dialog:** Escape closes it, focus moves in on open and back on close.
 3. **Absent players:** decide what should happen (see Known issues).
-4. **Lobby options:** Empire side B, then the expansions (Corruption & Ascension, War or
-   Peace), all of which need a per-game lobby rules payload; the expansions also need their
-   cards and rules (Game Park has both). Not started. Solo mode isn't planned either.
+4. **Empire side B:** another lobby option. The campaign expansions (War or Peace, Leisure &
+   Decadence) are scenarios with rules of their own, a much bigger job. Solo mode isn't
+   planned either.
 
 ### The browser pass
 

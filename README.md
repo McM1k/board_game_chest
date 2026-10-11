@@ -3,7 +3,8 @@
 Three multiplayer, browser-based games in Rust, served by one server and played from
 one page: Catan, the Hanabi clone from
 [McM1k/hanabii](https://github.com/McM1k/hanabii) (merged from commit `c2d5fa6`), and a
-card-drafting empire builder ("It's a Wonderful World", base game).
+card-drafting empire builder ("It's a Wonderful World", with its Corruption & Ascension
+expansion).
 All use the same rooms: one player creates a room and gets a 4-letter code, the
 others join with it, the host starts the game.
 
@@ -11,7 +12,7 @@ others join with it, the host starts the game.
 |-------|------------|
 | `games/catan` (crate `catan-core`) | Catan rules: board, game, actions, per-player views. No I/O. |
 | `games/hanabi` (crate `hanabi-core`) | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
-| `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card table, drafting, planning, production, scoring, redacted per-player view. No I/O. |
+| `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card tables (base game and Corruption & Ascension), drafting, planning, production, scoring, redacted per-player view. No I/O. |
 | `protocol` | The WebSocket messages: the room flow every game shares (create, join, lobby options, start, leave), and one enum per thing that differs by game (`GameKind`, `GameOptions`, `GameMove`, `GameView`). |
 | `server` | Axum server: the room system (`rooms.rs`, which names no game), each game's server side in `src/games/`, one WebSocket per player; serves the client. |
 | `client` | Leptos (CSR/WASM) front end: a shell (`app.rs`, `menu.rs`, `main.rs`: the menu, the connection, the routing between screens) and each game's screens and stylesheet in `src/games/<name>/`. |
@@ -67,19 +68,20 @@ the game. It now runs on the room system Catan already had:
   code (no `I` or `O`). **Join** takes the code, and the code decides which game you
   end up in, whatever you picked in the menu.
 * **Host.** The first seat is the host. Only the host starts the game, and in Hanabi
-  only the host picks the variant rules (everyone sees them, locked, as they change).
-  It's a Wonderful World has no options: the host just starts.
+  only the host picks the variant rules (everyone sees them, locked, as they change), as
+  in It's a Wonderful World whether to play with the Corruption & Ascension expansion.
 * **Seats and reconnecting.** Every seat has a token kept in the browser tab. If the
   connection drops during a game the seat stays yours, shown as "offline" to the
   others, and a refresh or a reconnect takes it back. In a lobby, leaving frees the seat;
   a dropped connection (a reload, a phone switching apps) keeps it for 2 minutes first.
 * **Names** are trimmed, at most 20 characters, and unique in a room (ignoring case).
-* **Limits.** Catan 2–4 players, Hanabi 2–5, It's a Wonderful World 2–5. Joining a running game is refused
-  unless you hold its token. A room nobody has connected to for 30 minutes is removed.
+* **Limits.** Catan 2–4 players, Hanabi 2–5, It's a Wonderful World 2–5, or 2–7 with its
+  expansion (which can't be switched off once more than five are seated). Joining a running
+  game is refused unless you hold its token. A room nobody has connected to for 30 minutes is removed.
 * **Seat order.** Catan shuffles the seats when the game starts. Hanabi keeps join
   order, so the host plays first and the order round the table is who joined when.
   It's a Wonderful World shuffles the seats like Catan; there are no turns, so the
-  seat only decides who passes cards to whom, and which Empire you play.
+  seat only decides who passes cards to whom. Its Empires are dealt at random.
 
 Rooms live in memory only; a server restart ends every game.
 
@@ -93,23 +95,25 @@ cargo test --workspace
   longest road (incl. cut roads), largest army, dev cards, winning, hidden info.
 * `hanabi-core` (133): the original rules tests, unchanged apart from one assertion
   rewritten the way clippy prefers.
-* `wonderful-core` (56, plus one ignored): the base-game card table, the draft (hand
-  sizes, which way the hands go in each round, secret picks, the discards with two
-  players), planning (build, recycle, scrap, cubes that must fit where they go),
+* `wonderful-core` (68, plus one ignored): both card tables, the draft (hand sizes, which
+  way the hands go in each round, secret picks, the discards), planning (build, recycle, scrap, cubes that must fit where they go),
   production (the races and their ties, the characters, the Science choice, Krystallium,
-  cubes that are lost, the wrap-up step), scoring and the tie-breaks, what a view hides,
+  cubes that are lost, the wrap-up step), scoring and the tie-breaks, Corruption &
+  Ascension (dealing from both decks for 2 to 7 players, corruption, two winners per race
+  from six players, duos, Empires dealt at random), what a view hides,
   JSON round trips, and whole games from a seed for 2 to 5 players. The ignored
   `economy_report` prints how a simple bot fares with the cards (see "The cards" below).
 * `protocol` (8): every message survives JSON, including each game's view (the Hanabi
   maps are keyed by seat and color), every move, view and option names its game, and rule
   payloads from before "hanabii" existed still parse.
-* `server` (37): in `rooms.rs`, the room flows run for every game: starting with a full
+* `server` (38): in `rooms.rs`, the room flows run for every game: starting with a full
   table and a view for every seat, host-only start and options, seat order, fullness,
   reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
   for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
   Hanabi's rules options (hanabii locks the others, rules freeze once the game starts, …) and
-  a whole game, It's a Wonderful World's hidden picks, seat checks and whole games.
-* `client` (86): native render tests that build real games and render every screen to
+  a whole game, It's a Wonderful World's hidden picks, seat checks, its expansion switch (up
+  to seven seats) and whole games, one with the expansion at a full table.
+* `client` (91): native render tests that build real games and render every screen to
   HTML. In the shell: every game is registered under its own kind and drawn in its own
   frame, and a state from the server puts its board on screen until you leave. In each
   game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
@@ -214,12 +218,12 @@ Hanabi moves are `ClientMsg::Move(GameMove::Hanabi(..))`, the lobby's rules trav
 
 ## It's a Wonderful World
 
-A card-drafting empire builder for 2–5 players, played over four rounds, where
+A card-drafting empire builder for 2–5 players (2–7 with its expansion), played over four rounds, where
 **everybody acts at the same time**: there are no turns, so the game only ever waits for the
 slowest player. Each round has three phases.
 
 1. **Draft.** You are dealt 7 cards (10 with two players, where the 3 cards left at the end
-   are discarded). Each step you keep one and pass the rest on: to the next seat in rounds 1
+   are discarded; with the expansion, cards from both decks, see below). Each step you keep one and pass the rest on: to the next seat in rounds 1
    and 3, to the previous one in rounds 2 and 4. Picks are secret until everybody has picked.
 2. **Planning.** Every card you kept is either **built** (it goes under construction) or
    **recycled** for the cube it gives, which goes on a building that still needs that
@@ -228,7 +232,7 @@ slowest player. Each round has three phases.
 3. **Production**, one resource after the other: Materials, Energy, Science, Gold, Exploration.
    Your Empire and your finished cards make cubes of that resource; you place them on
    buildings or on the Empire, and **cubes you don't place are lost**. Whoever makes strictly
-   the most of a resource takes a character: a Financier for Materials or Gold, a General for
+   the most of a resource (the two best from six players on) takes a character: a Financier for Materials or Gold, a General for
    Energy or Exploration, and for Science the winner chooses. A tie gives nothing. Characters
    fill the character spaces of buildings. Five cubes on the Empire make a Krystallium, a
    wildcard cube that stands in for any resource (not for a character), and the only thing
@@ -246,19 +250,35 @@ are shared beyond that.
 
 The catalogue is the published base game: 78 designs, 150 cards (many designs come in several
 copies), and the five Empires on their side A (Noram States, Republic of Europe, Federation of
-Asia, Panafrican Union, Aztec Empire), which each produce a few cubes and score a bonus. The
-numbers come from Game Park's online version of the game
-([gamepark/its-a-wonderful-world](https://github.com/gamepark/its-a-wonderful-world)). Seats are
-shuffled when the game starts and seat *i* plays Empire *i*.
+Asia, Panafrican Union, Aztec Empire), which each produce a few cubes and score a bonus. They are
+dealt at random. The numbers come from Game Park's online version of the game
+([gamepark/its-a-wonderful-world](https://github.com/gamepark/its-a-wonderful-world)).
 
-The whole catalogue is one table, `designs()` in `games/wonderful/src/cards.rs`, with each
-design's number of copies, and the `EMPIRES` table below it. `cargo test -p wonderful-core
-economy_report -- --ignored --nocapture` prints how two simple bots fare with it.
+The catalogue is two tables, `designs()` in `games/wonderful/src/cards.rs`, with each design's
+number of copies, and the `EMPIRES` table above them. `cargo test -p wonderful-core
+economy_report -- --ignored --nocapture` prints how two simple bots fare, with and without the
+expansion.
+
+### Corruption & Ascension
+
+The host can switch the expansion on in the waiting room. It follows the official rulebook:
+
+* its own deck of 56 cards (38 designs), dealt beside the base one: each hand is 8 + 4 cards
+  with two players, 6 + 3 with three or four, 6 + 2 with five or six, 5 + 2 with seven. The
+  draft still stops at 7 cards and the rest is discarded. Its cards carry a "C&A" tag;
+* **corruption**: some of its cards have corrupted resources, which take that much off your
+  production of that resource (never below zero), for the cubes and the supremacy alike;
+* **duos**: some score points for each pair of two card types, or of a type and a
+  character, or of the two characters;
+* two more Empires, Nations of Oceania and North Hegemony, dealt with the others, and up to 7
+  players: from six players on the two best producers both take the character (two tied for
+  first share it, a tie for second leaves second empty, three tied for first give it to
+  nobody), and for Science each chooses their own.
 
 ### What isn't in it
 
-Only the base game on side A of the Empires: no side B (the same Empire for everybody), no
-Corruption & Ascension or War or Peace option in the lobby, no solo play, and no turn timer.
+Side A of the Empires only, no side B (the same Empire for everybody); no War or Peace or
+Leisure & Decadence, which are campaigns of scenarios; no solo play, and no turn timer.
 
 ### Where it lives
 
@@ -280,5 +300,5 @@ sends every seat its own view after every move.
 * No chat, spectators or turn timers; a finished game ends the room's play (leave and
   create a new room for another round).
 * Catan always uses the random standard layout.
-* It's a Wonderful World is the base game only, on side A of the Empires (see its section
-  above).
+* It's a Wonderful World plays side A of the Empires only, and without the campaign
+  expansions (see its section above).

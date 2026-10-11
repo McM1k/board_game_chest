@@ -35,13 +35,14 @@ pub fn kind_class(kind: Kind) -> &'static str {
     }
 }
 
-pub fn empire_name(seat: usize) -> &'static str {
-    EMPIRES[seat % EMPIRES.len()].name
+/// The name of an Empire card (an index into `EMPIRES`, as dealt to a seat).
+pub fn empire_name(empire: usize) -> &'static str {
+    EMPIRES[empire % EMPIRES.len()].name
 }
 
-/// What the seat's Empire card scores at the end, e.g. "3 VP per Discovery".
-pub fn empire_points(seat: usize) -> String {
-    let empire = &EMPIRES[seat % EMPIRES.len()];
+/// What an Empire card scores at the end, e.g. "3 VP per Discovery".
+pub fn empire_points(empire: usize) -> String {
+    let empire = &EMPIRES[empire % EMPIRES.len()];
     let per = empire
         .combo
         .map(|(kind, points)| (points, kind.name()))
@@ -349,19 +350,16 @@ pub fn target_name(target: Target) -> String {
     }
 }
 
-/// The seat that produced strictly more than everyone else in the current
-/// production step, i.e. the one who takes the character.
-pub fn supremacy(view: &View) -> Option<usize> {
-    let Phase::Production { step } = view.phase else { return None };
+/// Who takes the character in the current production step: the seat that
+/// produced strictly more than everyone else, or from six players on the two
+/// best (see `wonderful_core::supremacy`).
+pub fn supremacy(view: &View) -> Vec<usize> {
+    let Phase::Production { step } = view.phase else { return Vec::new() };
     if step as usize >= Res::ALL.len() {
-        return None;
+        return Vec::new();
     }
-    let most = view.players.iter().map(|p| p.produced).max()?;
-    if most == 0 {
-        return None;
-    }
-    let best: Vec<usize> = (0..view.players.len()).filter(|&i| view.players[i].produced == most).collect();
-    (best.len() == 1).then(|| best[0])
+    let made: Vec<u8> = view.players.iter().map(|p| p.produced).collect();
+    wonderful_core::supremacy(&made)
 }
 
 // ----- card text -----------------------------------------------------------------
@@ -394,6 +392,13 @@ pub fn production_parts(card: &Card) -> Vec<(Res, String)> {
     if let Some((res, kind)) = card.scaled {
         parts.push((res, format!("+1 {} per {}", res.name(), kind.name())));
     }
+    // Corrupted resources take that much off.
+    for res in Res::ALL {
+        let n = card.corruption[res.index()];
+        if n > 0 {
+            parts.push((res, format!("\u{2212}{n} {}", res.name())));
+        }
+    }
     parts
 }
 
@@ -409,12 +414,16 @@ pub fn points_parts(card: &Card) -> Vec<String> {
     if let Some((token, points)) = card.per_token {
         parts.push(format!("{points} VP per {}", token.name()));
     }
+    if let Some((a, b, points)) = card.duo {
+        parts.push(format!("{points} VP per {} + {}", a.name(), b.name()));
+    }
     parts
 }
 
 /// The whole card in one sentence, for a tooltip or a screen reader.
 pub fn card_summary(card: &Card) -> String {
-    let mut parts = vec![format!("{} ({})", card.name, card.kind.name()), format!("costs {}", cost_text(&card.cost))];
+    let deck = if card.ascension { ", Corruption & Ascension" } else { "" };
+    let mut parts = vec![format!("{} ({}{deck})", card.name, card.kind.name()), format!("costs {}", cost_text(&card.cost))];
     let makes: Vec<String> = production_parts(card).into_iter().map(|(_, text)| text).collect();
     if !makes.is_empty() {
         parts.push(format!("makes {}", makes.join(", ")));
@@ -544,14 +553,22 @@ pub fn describe_event(event: &Event, names: &[String], you: usize) -> String {
         Event::Completed { seat, card } => {
             format!("{} finished {}.", who(*seat, names, you), card.def().name)
         }
-        Event::Supremacy { res, seat: Some(seat) } => {
+        Event::Supremacy { res, seats } if seats.len() == 1 => {
             let what = match res.supremacy_token() {
                 Some(token) => format!("took a {}", token.name()),
                 None => "may choose a character".into(),
             };
-            format!("{} produced the most {} and {what}.", who(*seat, names, you), res.name())
+            format!("{} produced the most {} and {what}.", who(seats[0], names, you), res.name())
         }
-        Event::Supremacy { res, seat: None } => {
+        // From six players on, the two best both take one.
+        Event::Supremacy { res, seats } if !seats.is_empty() => {
+            let what = match res.supremacy_token() {
+                Some(token) => format!("each took a {}", token.name()),
+                None => "may each choose a character".into(),
+            };
+            format!("{} led the {} race and {what}.", join_who(seats, names, you), res.name())
+        }
+        Event::Supremacy { res, .. } => {
             let character = match res.supremacy_token() {
                 Some(token) => token.name(),
                 None => "character",
@@ -640,9 +657,11 @@ mod tests {
         ["Ann", "Bob", "Cy"].iter().map(|s| s.to_string()).collect()
     }
 
-    /// A game in planning in which everybody drafted their first card each time.
+    /// A game in planning in which everybody drafted their first card each
+    /// time. Seat `i` plays Empire `i` (Noram States first).
     fn planning() -> State {
         let mut s = State::new(3, 4);
+        s.empires = vec![0, 1, 2];
         for _ in 0..wonderful_core::DRAFT_PICKS {
             for seat in 0..3 {
                 let card = s.players[seat].hand[0];
@@ -895,16 +914,16 @@ mod tests {
         s.players[0].produced = 3;
         s.players[1].produced = 1;
         s.players[2].produced = 0;
-        assert_eq!(supremacy(&s.view_for(2)), Some(0));
+        assert_eq!(supremacy(&s.view_for(2)), vec![0]);
         s.players[1].produced = 3;
-        assert_eq!(supremacy(&s.view_for(0)), None, "tied");
+        assert!(supremacy(&s.view_for(0)).is_empty(), "tied");
         s.players.iter_mut().for_each(|p| p.produced = 0);
-        assert_eq!(supremacy(&s.view_for(0)), None, "nobody produced anything");
+        assert!(supremacy(&s.view_for(0)).is_empty(), "nobody produced anything");
         s.players[1].produced = 2;
         s.phase = Phase::Production { step: WRAP_UP };
-        assert_eq!(supremacy(&s.view_for(0)), None, "no supremacy in the wrap-up");
+        assert!(supremacy(&s.view_for(0)).is_empty(), "no supremacy in the wrap-up");
         s.phase = Phase::Planning;
-        assert_eq!(supremacy(&s.view_for(0)), None);
+        assert!(supremacy(&s.view_for(0)).is_empty());
     }
 
     #[test]
@@ -933,6 +952,24 @@ mod tests {
     }
 
     #[test]
+    fn the_expansions_cards_read_like_the_cards_too() {
+        // Corruption: what it takes off, after what it makes.
+        let patrol = id("Border Patrol").def();
+        assert_eq!(
+            production_parts(patrol),
+            vec![(Res::Gold, "+1 Gold".to_string()), (Res::Exploration, "\u{2212}1 Exploration".to_string())]
+        );
+        // Duos.
+        assert_eq!(points_parts(id("Immortality").def()), vec!["9 VP per Research + Project".to_string()]);
+        assert_eq!(points_parts(id("Orbital Station").def()), vec!["6 VP per Financier + General".to_string()]);
+        // The summary says which deck a card comes from.
+        let text = card_summary(patrol);
+        assert!(text.starts_with("Border Patrol (Structure, Corruption & Ascension); costs 2 Materials; "), "{text}");
+        assert!(text.contains("makes +1 Gold, \u{2212}1 Exploration"), "{text}");
+        assert!(!card_summary(id("Zeppelin").def()).contains("Corruption"));
+    }
+
+    #[test]
     fn every_card_has_text_for_every_part() {
         for card in catalogue() {
             assert!(!cost_text(&card.cost).is_empty(), "{}", card.name);
@@ -955,9 +992,10 @@ mod tests {
         assert_eq!(join_names(&[0, 2], &n), "Ann and Cy");
         assert_eq!(join_names(&[0, 1, 2], &n), "Ann, Bob and Cy");
         assert_eq!(empire_name(0), "Noram States");
-        assert_eq!(empire_name(5), "Noram States");
+        assert_eq!(empire_name(5), "Nations of Oceania");
         assert_eq!(empire_points(0), "1 VP per Financier");
         assert_eq!(empire_points(4), "3 VP per Discovery");
+        assert_eq!(empire_points(6), "2 VP per Vehicle");
     }
 
     #[test]
@@ -1068,23 +1106,32 @@ mod tests {
         assert_eq!(one(Event::Completed { seat: 0, card: id("Zeppelin") }), "You finished Zeppelin.");
         assert_eq!(one(Event::Completed { seat: 1, card: id("Zeppelin") }), "Bob finished Zeppelin.");
         assert_eq!(
-            one(Event::Supremacy { res: Res::Materials, seat: Some(2) }),
+            one(Event::Supremacy { res: Res::Materials, seats: vec![2] }),
             "Cy produced the most Materials and took a Financier."
         );
         assert_eq!(
-            one(Event::Supremacy { res: Res::Gold, seat: Some(0) }),
+            one(Event::Supremacy { res: Res::Gold, seats: vec![0] }),
             "You produced the most Gold and took a Financier."
         );
         assert_eq!(
-            one(Event::Supremacy { res: Res::Science, seat: Some(1) }),
+            one(Event::Supremacy { res: Res::Science, seats: vec![1] }),
             "Bob produced the most Science and may choose a character."
         );
         assert_eq!(
-            one(Event::Supremacy { res: Res::Energy, seat: None }),
+            one(Event::Supremacy { res: Res::Energy, seats: vec![] }),
             "Energy tied: nobody takes a General."
         );
-        assert_eq!(one(Event::Supremacy { res: Res::Exploration, seat: None }), "Exploration tied: nobody takes a General.");
-        assert_eq!(one(Event::Supremacy { res: Res::Science, seat: None }), "Science tied: nobody takes a character.");
+        assert_eq!(one(Event::Supremacy { res: Res::Exploration, seats: vec![] }), "Exploration tied: nobody takes a General.");
+        assert_eq!(one(Event::Supremacy { res: Res::Science, seats: vec![] }), "Science tied: nobody takes a character.");
+        // From six players on, two can take it.
+        assert_eq!(
+            one(Event::Supremacy { res: Res::Energy, seats: vec![1, 0] }),
+            "Bob and You led the Energy race and each took a General."
+        );
+        assert_eq!(
+            one(Event::Supremacy { res: Res::Science, seats: vec![2, 1] }),
+            "Cy and Bob led the Science race and may each choose a character."
+        );
         assert_eq!(one(Event::Chose { seat: 1, token: Token::Financier }), "Bob chose a Financier.");
     }
 

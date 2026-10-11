@@ -99,7 +99,7 @@ impl crate::games::Game for Hanabi {
     }
 
     fn options(&self, app: App, options: GameOptions) {
-        let GameOptions::Hanabi(rules) = options;
+        let GameOptions::Hanabi(rules) = options else { return };
         app.games.hanabi.rules.set(rules);
     }
 

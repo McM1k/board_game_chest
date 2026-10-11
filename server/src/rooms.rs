@@ -151,7 +151,7 @@ pub fn process(state: &Shared, tx: &Tx, ident: &mut Option<Ident>, msg: ClientMs
             if r.game.is_some() {
                 return Some("That game has already started.".into());
             }
-            if r.seats.len() >= r.kind.max_players() {
+            if r.seats.len() >= r.kind.max_players_with(r.options.as_ref()) {
                 return Some("That room is full.".into());
             }
             let name = match clean_name(&name) {
@@ -176,8 +176,11 @@ pub fn process(state: &Shared, tx: &Tx, ident: &mut Option<Ident>, msg: ClientMs
         ClientMsg::SetOptions(options) => {
             let id = ident.as_ref()?;
             let r = rooms.map.get_mut(&id.room)?;
-            if r.options.is_none() || options.game() != r.kind {
+            if r.options.is_none() {
                 return Some("This game has no options to set.".into());
+            }
+            if options.game() != r.kind {
+                return Some("Those options are for another game.".into());
             }
             if r.game.is_some() {
                 return Some("The game has already started.".into());
@@ -186,6 +189,9 @@ pub fn process(state: &Shared, tx: &Tx, ident: &mut Option<Ident>, msg: ClientMs
                 return Some("Only the host can change the options.".into());
             }
             match games::game(r.kind).check_options(options) {
+                Ok(options) if r.seats.len() > r.kind.max_players_with(Some(&options)) => {
+                    Some("There are too many players here for that.".into())
+                }
                 Ok(options) => {
                     r.options = Some(options);
                     broadcast(r);
@@ -661,16 +667,28 @@ mod tests {
         for game in GameKind::ALL {
             let state = new_state();
             let (code, mut clients) = lobby(&state, game, 2);
-            let has_options = games::game(game).default_options().is_some();
-            assert_eq!(state.lock().unwrap().map[&code].options.is_some(), has_options);
-            let guest = clients[1].send(&state, ClientMsg::SetOptions(hanabi_rules.clone()));
-            let host = clients[0].send(&state, ClientMsg::SetOptions(hanabi_rules.clone()));
-            if has_options {
+            let defaults = games::game(game).default_options();
+            assert_eq!(state.lock().unwrap().map[&code].options, defaults);
+            // The game's own options, or some for a game that has none.
+            let options = defaults.clone().unwrap_or(hanabi_rules.clone());
+            let guest = clients[1].send(&state, ClientMsg::SetOptions(options.clone()));
+            let host = clients[0].send(&state, ClientMsg::SetOptions(options));
+            if defaults.is_some() {
                 assert_eq!(guest.as_deref(), Some("Only the host can change the options."));
                 assert_eq!(host, None);
             } else {
                 assert_eq!(guest.as_deref(), Some("This game has no options to set."));
                 assert_eq!(host.as_deref(), Some("This game has no options to set."));
+            }
+            // Another game's options are refused.
+            if defaults.is_some() {
+                let other = GameKind::ALL
+                    .into_iter()
+                    .filter(|&g| g != game)
+                    .find_map(|g| games::game(g).default_options())
+                    .unwrap();
+                let r = clients[0].send(&state, ClientMsg::SetOptions(other));
+                assert_eq!(r.as_deref(), Some("Those options are for another game."));
             }
         }
     }
@@ -678,13 +696,16 @@ mod tests {
     #[test]
     fn every_game_starts_and_shows_every_seat_its_view() {
         for game in GameKind::ALL {
+            // A full table under the lobby's first options.
+            let seats = game.max_players_with(games::game(game).default_options().as_ref());
             let state = new_state();
-            let (_code, mut clients) = lobby(&state, game, game.max_players());
+            let (code, mut clients) = lobby(&state, game, seats);
+            assert_eq!(join(&state, &code, "Late").err().as_deref(), Some("That room is full."));
             assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
             for c in &mut clients {
                 let (view, names, connected) = c.latest_game().expect("a view for every seat");
                 assert_eq!(view.game(), game);
-                assert_eq!(names.len(), game.max_players());
+                assert_eq!(names.len(), seats);
                 assert!(connected.iter().all(|&c| c));
             }
         }

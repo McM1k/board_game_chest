@@ -10,15 +10,20 @@ fn id(name: &str) -> CardId {
 
 /// Another copy of the design called `name` (it must have more than one).
 fn twin(name: &str) -> CardId {
-    (DESIGNS as u16..DECK_SIZE as u16)
+    let first = id(name);
+    (0..CARDS as u16)
         .map(CardId)
-        .find(|c| c.def().name == name)
+        .find(|&c| c != first && c.def().name == name)
         .unwrap_or_else(|| panic!("{name} has a single copy"))
 }
 
 /// A game in which everybody has drafted their first card each time.
 fn to_planning(n: usize, seed: u64) -> State {
-    let mut s = State::new(n, seed);
+    to_planning_with(n, seed, Options::default())
+}
+
+fn to_planning_with(n: usize, seed: u64, options: Options) -> State {
+    let mut s = State::with_options(n, seed, options);
     for _ in 0..DRAFT_PICKS {
         for seat in 0..n {
             let card = s.players[seat].hand[0];
@@ -31,6 +36,8 @@ fn to_planning(n: usize, seed: u64) -> State {
 
 /// Planning with nothing drafted, built or finished: a blank slate for
 /// setting up a production scenario by hand.
+/// Seat `i` plays Empire `i`: Noram States, the Republic of Europe, the
+/// Federation of Asia...
 fn blank(n: usize) -> State {
     let mut s = to_planning(n, 7);
     for p in &mut s.players {
@@ -38,6 +45,7 @@ fn blank(n: usize) -> State {
         p.buildings.clear();
         p.empire.clear();
     }
+    s.empires = (0..n).collect();
     s
 }
 
@@ -78,6 +86,7 @@ fn finish_round(s: &mut State) {
 
 fn all_cards(s: &State) -> Vec<CardId> {
     let mut v = s.deck.clone();
+    v.extend(&s.ascension_deck);
     v.extend(&s.discard);
     for p in &s.players {
         v.extend(&p.hand);
@@ -92,17 +101,19 @@ fn all_cards(s: &State) -> Vec<CardId> {
 /// No card is ever lost or duplicated.
 fn check_cards(s: &State) {
     let mut v = all_cards(s);
-    assert_eq!(v.len(), DECK_SIZE);
+    let total = DECK_SIZE + if s.options.ascension { ASCENSION_DECK_SIZE } else { 0 };
+    assert_eq!(v.len(), total);
     v.sort_by_key(|c| c.0);
     v.dedup();
-    assert_eq!(v.len(), DECK_SIZE, "a card is in two places");
+    assert_eq!(v.len(), total, "a card is in two places");
 }
 
 // ----- the catalogue -----------------------------------------------------
 
 #[test]
 fn the_catalogue_is_the_base_game() {
-    let all = catalogue();
+    assert_eq!(catalogue().len(), DESIGNS + ASCENSION_DESIGNS);
+    let all: Vec<&Card> = catalogue().iter().filter(|c| !c.ascension).collect();
     assert_eq!(all.len(), DESIGNS);
     assert_eq!(DECK_SIZE, 150);
     // Designs and cards of each type, Structures to Discoveries.
@@ -110,10 +121,10 @@ fn the_catalogue_is_the_base_game() {
     let cards = Kind::ALL.map(|k| all.iter().filter(|c| c.kind == k).map(|c| c.copies as usize).sum::<usize>());
     assert_eq!(designs, [9, 9, 23, 20, 17]);
     assert_eq!(cards, [50, 31, 23, 29, 17]);
-    let mut names: Vec<_> = all.iter().map(|c| c.name).collect();
+    let mut names: Vec<_> = catalogue().iter().map(|c| c.name).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), DESIGNS, "names must be unique");
+    assert_eq!(names.len(), DESIGNS + ASCENSION_DESIGNS, "names must be unique, in both decks");
     for c in all {
         let total = c.cost.total();
         assert!((2..=8).contains(&total), "{} costs {total}", c.name);
@@ -153,7 +164,7 @@ fn every_design_has_its_copies_in_the_deck() {
     }
     // ...then the extra copies.
     for card in catalogue() {
-        let n = (0..DECK_SIZE as u16).filter(|&i| CardId(i).def().name == card.name).count();
+        let n = (0..CARDS as u16).filter(|&i| CardId(i).def().name == card.name).count();
         assert_eq!(n, card.copies as usize, "{}", card.name);
     }
     assert_eq!(twin("Recycling Plant").def().name, "Recycling Plant");
@@ -184,10 +195,10 @@ fn supremacy_characters() {
 
 #[test]
 fn a_new_game_deals_a_hand_to_everybody() {
-    for n in MIN_PLAYERS..=MAX_PLAYERS {
+    for n in MIN_PLAYERS..=Options::default().max_players() {
         let s = State::new(n, 5);
         let size = if n == 2 { 10 } else { 7 };
-        assert_eq!(hand_size(n), size);
+        assert_eq!(hand_sizes(n, Options::default()), (size, 0));
         assert_eq!((s.round, s.phase), (1, Phase::Draft));
         assert_eq!(s.deck.len(), DECK_SIZE - n * size);
         for p in &s.players {
@@ -297,7 +308,7 @@ fn only_draft_moves_work_during_the_draft() {
 
 #[test]
 fn seven_picks_end_the_draft() {
-    for n in 3..=MAX_PLAYERS {
+    for n in 3..=Options::default().max_players() {
         let s = to_planning(n, 21);
         for p in &s.players {
             assert_eq!(p.drafted.len(), DRAFT_PICKS);
@@ -483,7 +494,7 @@ fn the_best_producer_takes_the_character() {
     assert_eq!((s.players[0].pool, s.players[0].produced), (3, 3));
     assert_eq!((s.players[1].pool, s.players[1].produced), (2, 2));
     assert!(!s.players[0].ready && !s.players[1].ready, "both have cubes to place");
-    assert!(s.log.contains(&Event::Supremacy { res: Res::Materials, seat: Some(0) }));
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Materials, seats: vec![0] }));
     skip_to(&mut s, 1);
     // Energy: only the Republic of Europe makes any.
     assert_eq!(s.players[1].generals, 1);
@@ -502,12 +513,12 @@ fn each_resource_gives_its_own_character() {
     skip_to(&mut s, 3);
     assert_eq!(s.players[1].generals, 2);
     // Gold: 1 each, a tie.
-    assert!(s.log.contains(&Event::Supremacy { res: Res::Gold, seat: None }));
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Gold, seats: vec![] }));
     assert_eq!(s.players[0].financiers + s.players[1].financiers, 1);
     skip_to(&mut s, 4);
     // Exploration: only seat 1 makes any.
     assert_eq!(s.players[1].generals, 3, "Exploration: a General");
-    assert!(s.log.contains(&Event::Supremacy { res: Res::Exploration, seat: Some(1) }));
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Exploration, seats: vec![1] }));
 }
 
 #[test]
@@ -516,26 +527,29 @@ fn a_tie_for_the_most_gives_nobody_a_character() {
     s.players[1].empire = vec![id("Industrial Complex")]; // Materials 2 + 1, like Noram's 3
     start_production(&mut s);
     assert_eq!((s.players[0].produced, s.players[1].produced), (3, 3));
-    assert!(s.log.contains(&Event::Supremacy { res: Res::Materials, seat: None }));
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Materials, seats: vec![] }));
     for p in &s.players {
         assert_eq!(p.generals + p.financiers, 0, "nobody took the Materials character");
     }
 }
 
 #[test]
-fn the_empires_are_the_base_games_side_a() {
+fn the_empires_are_the_seven_side_a_ones() {
     for empire in EMPIRES {
         let icons: u32 = empire.base.iter().map(|&n| n as u32).sum();
         assert!((3..=4).contains(&icons), "{}", empire.name);
         assert!(empire.combo.is_some() != empire.per_token.is_some(), "{} scores one way", empire.name);
     }
     for res in Res::ALL {
-        assert!(EMPIRES.iter().any(|e| e.base[res.index()] > 0), "{res:?}");
+        assert!(EMPIRES.iter().filter(|e| !e.ascension).any(|e| e.base[res.index()] > 0), "{res:?}");
     }
     let mut names: Vec<_> = EMPIRES.iter().map(|e| e.name).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 5);
+    assert_eq!(names.len(), 7);
+    // Five come with the base game, two with Corruption & Ascension.
+    let expansion: Vec<_> = EMPIRES.iter().filter(|e| e.ascension).map(|e| e.name).collect();
+    assert_eq!(expansion, ["Nations of Oceania", "North Hegemony"]);
 }
 
 #[test]
@@ -1029,7 +1043,11 @@ fn play_smart(n: usize, seed: u64) -> State {
 }
 
 fn play_with(n: usize, seed: u64, bot: fn(&State, usize, usize) -> Option<Action>) -> State {
-    let mut s = State::new(n, seed);
+    play_with_options(n, seed, Options::default(), bot)
+}
+
+fn play_with_options(n: usize, seed: u64, options: Options, bot: fn(&State, usize, usize) -> Option<Action>) -> State {
+    let mut s = State::with_options(n, seed, options);
     let mut turn = seed as usize;
     for _ in 0..50_000 {
         if s.phase == Phase::Over {
@@ -1055,7 +1073,7 @@ fn play_with(n: usize, seed: u64, bot: fn(&State, usize, usize) -> Option<Action
 
 #[test]
 fn whole_games_end_for_every_player_count() {
-    for n in MIN_PLAYERS..=MAX_PLAYERS {
+    for n in MIN_PLAYERS..=Options::default().max_players() {
         for seed in 0..6 {
             for s in [play_out(n, seed), play_smart(n, seed)] {
                 assert_eq!((s.round, s.scores.len()), (ROUNDS, n));
@@ -1064,7 +1082,7 @@ fn whole_games_end_for_every_player_count() {
                     assert!(p.hand.is_empty() && p.drafted.is_empty() && p.picked.is_none());
                 }
                 // Four rounds of drafting used this much of the deck.
-                let dealt = ROUNDS as usize * n * hand_size(n);
+                let dealt = ROUNDS as usize * n * hand_sizes(n, Options::default()).0;
                 assert_eq!(s.deck.len(), DECK_SIZE - dealt);
                 // Every score is the sum of its parts.
                 for (i, score) in s.scores.iter().enumerate() {
@@ -1084,7 +1102,7 @@ fn games_are_reproducible_from_the_seed() {
 
 #[test]
 fn a_sensible_player_builds_a_good_number_of_cards() {
-    for n in MIN_PLAYERS..=MAX_PLAYERS {
+    for n in MIN_PLAYERS..=Options::default().max_players() {
         let s = play_smart(n, 1);
         for (i, p) in s.players.iter().enumerate() {
             assert!(p.empire.len() >= 3, "seat {i} of {n} finished only {}", p.empire.len());
@@ -1212,6 +1230,7 @@ fn views_survive_json_in_every_phase() {
     }
     check(&s);
     check(&play_out(3, 6));
+    check(&play_with_options(7, 6, Options { ascension: true }, bot));
 }
 
 #[test]
@@ -1260,19 +1279,29 @@ fn every_error_has_a_message() {
 #[test]
 #[ignore]
 fn economy_report() {
-    for n in 2..=5 {
-        for (name, play) in [("dumb", play_out as fn(usize, u64) -> State), ("smart", play_smart)] {
+    for options in [Options::default(), Options { ascension: true }] {
+        for n in MIN_PLAYERS..=options.max_players() {
+            economy_line(n, options);
+        }
+    }
+}
+
+fn economy_line(n: usize, options: Options) {
+    {
+        let bots = [("dumb", bot as fn(&State, usize, usize) -> Option<Action>), ("smart", smart_bot)];
+        for (name, play) in bots {
             let (mut cards, mut scores) = (vec![], vec![]);
             for seed in 0..20 {
-                let s = play(n, seed);
+                let s = play_with_options(n, seed, options, play);
                 for (i, p) in s.players.iter().enumerate() {
                     cards.push(p.empire.len());
                     scores.push(s.scores[i].total as usize);
                 }
             }
             let avg = |v: &Vec<usize>| v.iter().sum::<usize>() as f64 / v.len() as f64;
+            let deck = if options.ascension { "C&A " } else { "base" };
             println!(
-                "n={n} {name:5} cards avg {:.1} min {} max {} | score avg {:.1} min {} max {}",
+                "{deck} n={n} {name:5} cards avg {:.1} min {} max {} | score avg {:.1} min {} max {}",
                 avg(&cards), cards.iter().min().unwrap(), cards.iter().max().unwrap(),
                 avg(&scores), scores.iter().min().unwrap(), scores.iter().max().unwrap()
             );
@@ -1280,3 +1309,210 @@ fn economy_report() {
     }
 }
 
+// ----- Corruption & Ascension ------------------------------------------------
+
+#[test]
+fn the_ascension_deck_is_corruption_and_ascension() {
+    let all: Vec<&Card> = catalogue().iter().filter(|c| c.ascension).collect();
+    assert_eq!(all.len(), ASCENSION_DESIGNS);
+    assert_eq!(all.iter().map(|c| c.copies as usize).sum::<usize>(), ASCENSION_DECK_SIZE);
+    let designs = Kind::ALL.map(|k| all.iter().filter(|c| c.kind == k).count());
+    let cards = Kind::ALL.map(|k| all.iter().filter(|c| c.kind == k).map(|c| c.copies as usize).sum::<usize>());
+    assert_eq!(designs, [8, 6, 8, 9, 7]);
+    assert_eq!(cards, [19, 12, 8, 10, 7]);
+    assert_eq!((deck(false).len(), deck(true).len()), (DECK_SIZE, ASCENSION_DECK_SIZE));
+    assert!(deck(true).iter().all(|c| c.def().ascension));
+    // Corruption and duos are the expansion's alone.
+    assert!(catalogue().iter().filter(|c| !c.ascension).all(|c| c.corruption == [0; 5] && c.duo.is_none()));
+    assert!(all.iter().filter(|c| c.corruption != [0; 5]).count() >= 10);
+    for c in &all {
+        let ways = [c.vp > 0, c.combo.is_some(), c.per_token.is_some(), c.duo.is_some()];
+        assert!(ways.iter().filter(|&&w| w).count() <= 1, "{} scores two ways", c.name);
+    }
+    // Checked against the rulebook's examples and the printed cards.
+    let research_project = (Per::Kind(Kind::Research), Per::Kind(Kind::Project), 9);
+    assert_eq!(id("Immortality").def().duo, Some(research_project));
+    let structure_general = (Per::Kind(Kind::Structure), Per::Token(Token::General), 5);
+    assert_eq!(id("High-Security Prison").def().duo, Some(structure_general));
+    let patrol = id("Border Patrol").def();
+    assert_eq!((patrol.produces, patrol.corruption, patrol.copies), ([0, 0, 0, 1, 0], [0, 0, 0, 0, 1], 3));
+}
+
+#[test]
+fn the_expansion_deals_from_both_decks_for_up_to_seven() {
+    let ca = Options { ascension: true };
+    assert_eq!((Options::default().max_players(), ca.max_players()), (5, MAX_PLAYERS));
+    for (n, sizes) in [(2, (8, 4)), (3, (6, 3)), (4, (6, 3)), (5, (6, 2)), (6, (6, 2)), (7, (5, 2))] {
+        assert_eq!(hand_sizes(n, ca), sizes);
+        let s = State::with_options(n, 3, ca);
+        for p in &s.players {
+            let from_ca = p.hand.iter().filter(|c| c.def().ascension).count();
+            assert_eq!((p.hand.len() - from_ca, from_ca), sizes, "{n} players");
+        }
+        assert_eq!(s.deck.len(), DECK_SIZE - n * sizes.0);
+        assert_eq!(s.ascension_deck.len(), ASCENSION_DECK_SIZE - n * sizes.1);
+        check_cards(&s);
+    }
+    // Without the expansion nothing comes from its deck.
+    let s = State::new(4, 3);
+    assert!(s.ascension_deck.is_empty());
+    assert!(s.players.iter().flat_map(|p| &p.hand).all(|c| !c.def().ascension));
+}
+
+#[test]
+#[should_panic]
+fn six_players_need_the_expansion() {
+    State::with_options(6, 0, Options::default());
+}
+
+#[test]
+#[should_panic]
+fn eight_players_never_fit() {
+    State::with_options(8, 0, Options { ascension: true });
+}
+
+#[test]
+fn after_seven_picks_the_rest_of_a_bigger_hand_is_discarded() {
+    // Two players with the expansion: 12 cards each, 7 kept, 5 discarded.
+    let s = to_planning_with(2, 5, Options { ascension: true });
+    for p in &s.players {
+        assert_eq!(p.drafted.len(), DRAFT_PICKS);
+        assert!(p.hand.is_empty());
+    }
+    assert_eq!(s.discard.len(), 2 * 5);
+    assert!(s.players.iter().all(|p| p.empire_cubes == 0), "no recycling bonus");
+    check_cards(&s);
+}
+
+#[test]
+fn corruption_takes_production_down_but_never_below_zero() {
+    let mut s = blank(2);
+    // Noram States: 3 Materials and 1 Gold. Lawless Zone: +1 Materials, +1
+    // Energy, and one Gold corrupted.
+    s.players[0].empire = vec![id("Lawless Zone")];
+    assert_eq!(Res::ALL.map(|r| s.production(0, r)), [4, 1, 0, 0, 0]);
+    // Raiders: +2 Exploration and another Gold corrupted, which can't take
+    // Gold below zero.
+    s.players[0].empire.push(id("Raiders"));
+    assert_eq!(Res::ALL.map(|r| s.production(0, r)), [4, 1, 0, 0, 2]);
+}
+
+#[test]
+fn corrupted_production_decides_the_supremacy() {
+    let mut s = blank(2);
+    // Noram States' 3 Materials, less the Robot Factory's corrupted one, tie
+    // the Republic of Europe's 2: nobody takes the character.
+    s.players[0].empire = vec![id("Robot Factory")];
+    start_production(&mut s);
+    assert_eq!((s.players[0].produced, s.players[1].produced), (2, 2));
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Materials, seats: vec![] }));
+    assert_eq!(s.players[0].financiers + s.players[1].financiers, 0);
+}
+
+#[test]
+fn from_six_players_the_two_best_take_the_character() {
+    let nobody: Vec<usize> = Vec::new();
+    // One place below six players.
+    assert_eq!(supremacy(&[3, 2, 1, 0, 0]), vec![0]);
+    assert_eq!(supremacy(&[3, 3, 1, 0, 0]), nobody);
+    // Two places from six on.
+    assert_eq!(supremacy(&[1, 4, 0, 2, 0, 0]), vec![1, 3], "the two best");
+    assert_eq!(supremacy(&[4, 4, 1, 0, 0, 0]), vec![0, 1], "two tied for first take both places");
+    assert_eq!(supremacy(&[4, 2, 2, 0, 0, 0, 1]), vec![0], "a tie for second: only the first");
+    assert_eq!(supremacy(&[4, 4, 4, 0, 0, 0]), nobody, "three tied for first: nobody");
+    assert_eq!(supremacy(&[4, 0, 0, 0, 0, 0]), vec![0], "nobody second with nothing made");
+    assert_eq!(supremacy(&[0; 7]), nobody);
+}
+
+#[test]
+fn with_six_players_both_science_winners_choose() {
+    let mut s = to_planning_with(6, 7, Options { ascension: true });
+    for p in &mut s.players {
+        p.drafted.clear();
+        p.buildings.clear();
+        p.empire.clear();
+    }
+    s.empires = (0..6).collect();
+    // Science: seat 0 makes 4, seat 1 (the Republic of Europe) 1 + 2, seat 3
+    // (the Panafrican Union) 2.
+    s.players[0].empire = vec![id("Research Center"), twin("Research Center")];
+    s.players[1].empire = vec![id("Neuroscience")]; // 1 per Research, itself included
+    s.players[1].empire.push(id("Supercomputer")); // +1 Science, and a second Research
+    start_production(&mut s);
+    skip_to(&mut s, 2);
+    assert_eq!((0..6).map(|i| s.production(i, Res::Science)).collect::<Vec<_>>(), [4, 4, 0, 2, 0, 0]);
+    // Seats 0 and 1 tie for first: both take the character, each choosing.
+    let choosing: Vec<usize> = (0..6).filter(|&i| s.players[i].choose).collect();
+    assert_eq!(choosing, vec![0, 1]);
+    assert!(s.log.contains(&Event::Supremacy { res: Res::Science, seats: vec![0, 1] }));
+    let before = (s.players[0].generals, s.players[1].financiers);
+    s.apply(0, Action::Choose { token: Token::General }).unwrap();
+    s.apply(1, Action::Choose { token: Token::Financier }).unwrap();
+    assert_eq!((s.players[0].generals, s.players[1].financiers), (before.0 + 1, before.1 + 1));
+}
+
+#[test]
+fn duos_score_each_pair_of_both() {
+    let mut s = blank(2);
+    // The rulebook's example: Immortality, 9 VP per duo of a Research and a
+    // Project. Two Research and one Project make one duo.
+    s.players[0].empire = vec![id("Immortality"), id("Neuroscience"), id("Giant Tower")];
+    assert_eq!(s.score_of(0).combo, 9);
+    // A second Project makes a second duo.
+    s.players[0].empire.push(id("Espionage Agency"));
+    assert_eq!(s.score_of(0).combo, 18);
+    // Characters pair up too: Orbital Station, 6 per Financier and General.
+    let mut s = blank(2);
+    s.players[1].empire = vec![id("Orbital Station")];
+    s.players[1].generals = 2;
+    s.players[1].financiers = 3;
+    // Two duos, plus the Republic of Europe's 1 per General.
+    assert_eq!(s.score_of(1).combo, 2 * 6 + 2);
+}
+
+#[test]
+fn empires_are_dealt_at_random_from_the_box() {
+    let dealt = |options: Options, n: usize| -> Vec<Vec<usize>> {
+        (0..30).map(|seed| State::with_options(n, seed, options).empires).collect()
+    };
+    // The base game deals only its five, one per seat, not always the same.
+    let base = dealt(Options::default(), 3);
+    assert!(base.iter().flatten().all(|&e| !EMPIRES[e].ascension));
+    assert!(base.iter().any(|e| e != &base[0]), "always the same Empires");
+    for e in &base {
+        let mut d = e.clone();
+        d.sort_unstable();
+        d.dedup();
+        assert_eq!(d.len(), 3, "one Empire per seat");
+    }
+    // The expansion's two can be dealt too, and with seven players all are.
+    let ca = Options { ascension: true };
+    assert!(dealt(ca, 3).iter().flatten().any(|&e| EMPIRES[e].ascension));
+    let mut all = State::with_options(7, 1, ca).empires;
+    all.sort_unstable();
+    assert_eq!(all, (0..7).collect::<Vec<_>>());
+    // The view says who plays which.
+    let s = State::with_options(4, 2, ca);
+    let v = s.view_for(0);
+    assert_eq!(v.players.iter().map(|p| p.empire_card).collect::<Vec<_>>(), s.empires);
+    assert!(v.options.ascension);
+}
+
+#[test]
+fn whole_games_end_with_the_expansion_for_every_player_count() {
+    let ca = Options { ascension: true };
+    for n in MIN_PLAYERS..=MAX_PLAYERS {
+        for seed in 0..4 {
+            for s in [play_with_options(n, seed, ca, bot), play_with_options(n, seed, ca, smart_bot)] {
+                assert_eq!((s.round, s.scores.len()), (ROUNDS, n));
+                assert!(!s.winners().is_empty());
+                let (base, extra) = hand_sizes(n, ca);
+                assert_eq!(s.deck.len(), DECK_SIZE - ROUNDS as usize * n * base);
+                assert_eq!(s.ascension_deck.len(), ASCENSION_DECK_SIZE - ROUNDS as usize * n * extra);
+                for (i, score) in s.scores.iter().enumerate() {
+                    assert_eq!(*score, s.score_of(i));
+                }
+            }
+        }
+    }
+}
