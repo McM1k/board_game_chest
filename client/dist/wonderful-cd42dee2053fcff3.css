@@ -670,6 +670,68 @@
   flex: none;
 }
 
+/* A card of the Corruption & Ascension deck says so in its band. */
+.wonderful .card-deck {
+  margin-left: auto;
+  padding: 0.02rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: #6b3fa0;
+  border-radius: 999px;
+}
+
+/* A corrupted resource: its cube under a red "no" sign. */
+.wonderful .cube.corrupt {
+  position: relative;
+}
+
+.wonderful .cube.corrupt::after {
+  content: "";
+  position: absolute;
+  inset: -0.14rem;
+  border: 2px solid #d42a3c;
+  border-radius: 50%;
+  background: linear-gradient(135deg, transparent 44%, #d42a3c 44%, #d42a3c 56%, transparent 56%);
+}
+
+/* The lobby's expansion switch. */
+.wonderful .option {
+  margin: 0.2rem 0 1rem;
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.wonderful .option-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wonderful .option-toggle input {
+  display: inline-block;
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--pop);
+}
+
+.wonderful .option-toggle input:disabled,
+.wonderful .option-toggle input:disabled + span {
+  cursor: default;
+}
+
+.wonderful .option .hint {
+  margin: 0.35rem 0 0;
+}
+
 .wonderful .card-name {
   display: block;
   padding: 0.05rem 0.7rem 0;
