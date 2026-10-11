@@ -19,16 +19,18 @@ pub enum GameKind {
     Hanabi,
     /// It's a Wonderful World, base game.
     Wonderful,
+    SmallWorld,
 }
 
 impl GameKind {
-    pub const ALL: [GameKind; 3] = [GameKind::Catan, GameKind::Hanabi, GameKind::Wonderful];
+    pub const ALL: [GameKind; 4] = [GameKind::Catan, GameKind::Hanabi, GameKind::Wonderful, GameKind::SmallWorld];
 
     pub fn title(self) -> &'static str {
         match self {
             GameKind::Catan => "Catan",
             GameKind::Hanabi => "Hanabi",
             GameKind::Wonderful => "It's a Wonderful World",
+            GameKind::SmallWorld => "Small World",
         }
     }
 
@@ -42,6 +44,7 @@ impl GameKind {
             GameKind::Catan => 4,
             GameKind::Hanabi => 5,
             GameKind::Wonderful => 7,
+            GameKind::SmallWorld => smallworld_core::MAX_PLAYERS,
         }
     }
 
@@ -87,6 +90,9 @@ pub enum GameMove {
     /// Everybody moves at the same time, so the server checks a move against
     /// the rules only, never against a turn.
     Wonderful(wonderful_core::Action),
+    /// Checked against whose turn it is, except for the tokens a player who
+    /// lost regions puts back after someone else's turn.
+    SmallWorld(smallworld_core::Action),
 }
 
 impl GameMove {
@@ -95,6 +101,7 @@ impl GameMove {
             GameMove::Catan(_) => GameKind::Catan,
             GameMove::Hanabi(_) => GameKind::Hanabi,
             GameMove::Wonderful(_) => GameKind::Wonderful,
+            GameMove::SmallWorld(_) => GameKind::SmallWorld,
         }
     }
 }
@@ -105,6 +112,7 @@ pub enum GameView {
     Catan(Box<catan_core::GameView>),
     Hanabi(Box<hanabi_core::PlayerView>),
     Wonderful(Box<wonderful_core::View>),
+    SmallWorld(Box<smallworld_core::View>),
 }
 
 impl GameView {
@@ -113,6 +121,7 @@ impl GameView {
             GameView::Catan(_) => GameKind::Catan,
             GameView::Hanabi(_) => GameKind::Hanabi,
             GameView::Wonderful(_) => GameKind::Wonderful,
+            GameView::SmallWorld(_) => GameKind::SmallWorld,
         }
     }
 }
@@ -189,7 +198,8 @@ mod tests {
         let hanabi = GameOptions::Hanabi(GameRules::default());
         assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabi)), 5);
         assert_eq!(GameKind::Catan.max_players_with(None), 4);
-        assert_eq!(GameKind::ALL.len(), 3);
+        assert_eq!(GameKind::SmallWorld.max_players_with(None), 5);
+        assert_eq!(GameKind::ALL.len(), 4);
         for g in GameKind::ALL {
             assert_eq!(g.min_players(), 2);
             assert!(!g.title().is_empty());
@@ -222,6 +232,11 @@ mod tests {
             })),
             ClientMsg::Move(GameMove::Wonderful(wonderful_core::Action::Ready)),
             ClientMsg::SetOptions(GameOptions::Wonderful(wonderful_core::Options { ascension: true })),
+            ClientMsg::Create { game: GameKind::SmallWorld, name: "Di".into() },
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Pick { offer: 2 })),
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Conquer { region: 12 })),
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Ally { seat: Some(1) })),
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::EndTurn)),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -236,15 +251,18 @@ mod tests {
         let catan = catan_core::Game::new(catan_core::Rules::default(), vec!["A".into(), "B".into()], &mut rng);
         let hanabi = GameState::new(2, 1, GameRules::default());
         let wonderful = wonderful_core::State::new(2, 1);
+        let small_world = smallworld_core::State::new(2, 1);
         let views = [
             GameView::Catan(Box::new(catan.view_for(Some(0)))),
             GameView::Hanabi(Box::new(hanabi.view_for(PlayerId(0)))),
             GameView::Wonderful(Box::new(wonderful.view_for(0))),
+            GameView::SmallWorld(Box::new(small_world.view_for(0))),
         ];
         let moves = [
             GameMove::Catan(catan_core::Action::EndTurn),
             GameMove::Hanabi(hanabi_core::Action::Discard { card_id: hanabi_core::CardId(0) }),
             GameMove::Wonderful(wonderful_core::Action::Ready),
+            GameMove::SmallWorld(smallworld_core::Action::EndConquests),
         ];
         for ((view, mv), kind) in views.iter().zip(&moves).zip(GameKind::ALL) {
             assert_eq!((view.game(), mv.game()), (kind, kind));
@@ -326,6 +344,27 @@ mod tests {
         assert!(view.players[1].picked && view.picked.is_none());
         assert_eq!(names.len(), 3);
         assert_eq!(connected, vec![true, false, true]);
+    }
+
+    /// The Small World view hides the other players' coins.
+    #[test]
+    fn small_world_state_survives_json() {
+        let mut game = smallworld_core::State::new(3, 8);
+        game.apply(0, smallworld_core::Action::Pick { offer: 1 }).unwrap();
+        let msg = ServerMsg::Game {
+            view: GameView::SmallWorld(Box::new(game.view_for(1))),
+            names: vec!["A".into(), "B".into(), "C".into()],
+            connected: vec![true, true, false],
+        };
+        let (GameView::SmallWorld(view), names, _) = game_through_json(&msg) else {
+            panic!("not a Small World view");
+        };
+        assert_eq!(*view, game.view_for(1));
+        assert_eq!((view.you, view.board, view.regions.len()), (1, 3, 30));
+        assert_eq!(view.players[1].coins, Some(smallworld_core::START_COINS));
+        assert_eq!(view.players[0].coins, None);
+        assert!(view.players[0].active.is_some());
+        assert_eq!(names.len(), 3);
     }
 
     #[test]

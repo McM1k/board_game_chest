@@ -219,6 +219,7 @@ dependencies = [
  "protocol",
  "rand 0.8.8",
  "serde_json",
+ "smallworld-core",
  "wasm-bindgen",
  "web-sys",
  "wonderful-core",
@@ -1307,6 +1308,7 @@ dependencies = [
  "rand 0.8.8",
  "serde",
  "serde_json",
+ "smallworld-core",
  "wonderful-core",
 ]
 
@@ -1671,6 +1673,7 @@ dependencies = [
  "protocol",
  "rand 0.8.8",
  "serde_json",
+ "smallworld-core",
  "tokio",
  "tower-http",
  "wonderful-core",
@@ -1787,6 +1790,14 @@ name = "smallvec"
 version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
+
+[[package]]
+name = "smallworld-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "socket2"

@@ -11,6 +11,7 @@
 
 pub mod catan;
 pub mod hanabi;
+pub mod smallworld;
 pub mod wonderful;
 
 use crate::app::{App, Lobby};
@@ -68,6 +69,7 @@ pub fn game(kind: GameKind) -> &'static dyn Game {
         GameKind::Catan => &catan::Catan,
         GameKind::Hanabi => &hanabi::Hanabi,
         GameKind::Wonderful => &wonderful::Wonderful,
+        GameKind::SmallWorld => &smallworld::SmallWorld,
     }
 }
 
@@ -78,6 +80,7 @@ pub struct Games {
     pub catan: catan::Signals,
     pub hanabi: hanabi::Signals,
     pub wonderful: wonderful::Signals,
+    pub smallworld: smallworld::Signals,
 }
 
 impl Games {
@@ -86,6 +89,7 @@ impl Games {
             catan: catan::Signals::new(),
             hanabi: hanabi::Signals::new(),
             wonderful: wonderful::Signals::new(),
+            smallworld: smallworld::Signals::new(),
         }
     }
 }

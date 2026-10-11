@@ -1,10 +1,10 @@
-# Catan + Hanabi + It's a Wonderful World
+# Catan + Hanabi + It's a Wonderful World + Small World
 
-Three multiplayer, browser-based games in Rust, served by one server and played from
+Four multiplayer, browser-based games in Rust, served by one server and played from
 one page: Catan, the Hanabi clone from
-[McM1k/hanabii](https://github.com/McM1k/hanabii) (merged from commit `c2d5fa6`), and a
+[McM1k/hanabii](https://github.com/McM1k/hanabii) (merged from commit `c2d5fa6`), a
 card-drafting empire builder ("It's a Wonderful World", with its Corruption & Ascension
-expansion).
+expansion), and Small World, the fantasy conquest game, on the box's four boards.
 All use the same rooms: one player creates a room and gets a 4-letter code, the
 others join with it, the host starts the game.
 
@@ -13,6 +13,7 @@ others join with it, the host starts the game.
 | `games/catan` (crate `catan-core`) | Catan rules: board, game, actions, per-player views. No I/O. |
 | `games/hanabi` (crate `hanabi-core`) | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
 | `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card tables (base game and Corruption & Ascension), drafting, planning, production, scoring, redacted per-player view. No I/O. |
+| `games/smallworld` (crate `smallworld-core`) | Small World rules: the four boards, the 14 races and 20 powers, conquest, decline, scoring, a view that hides the other players' coins. No I/O. |
 | `protocol` | The WebSocket messages: the room flow every game shares (create, join, lobby options, start, leave), and one enum per thing that differs by game (`GameKind`, `GameOptions`, `GameMove`, `GameView`). |
 | `server` | Axum server: the room system (`rooms.rs`, which names no game), each game's server side in `src/games/`, one WebSocket per player; serves the client. |
 | `client` | Leptos (CSR/WASM) front end: a shell (`app.rs`, `menu.rs`, `main.rs`: the menu, the connection, the routing between screens) and each game's screens and stylesheet in `src/games/<name>/`. |
@@ -25,8 +26,8 @@ has one registry listing the games. `docs/adding-a-game.md` walks through adding
 The server is authoritative. Clients send moves; the server validates them with the
 game's rules crate and sends every seat its own filtered view (other players' hands
 and development cards in Catan, your own cards in Hanabi, the hand you are drafting
-from, your pick and your drafted cards in It's a Wonderful World, are never sent to the
-other seats).
+from, your pick and your drafted cards in It's a Wonderful World, everybody else's coins
+in Small World, are never sent to the other seats).
 
 ## Run it
 
@@ -76,12 +77,13 @@ the game. It now runs on the room system Catan already had:
   a dropped connection (a reload, a phone switching apps) keeps it for 2 minutes first.
 * **Names** are trimmed, at most 20 characters, and unique in a room (ignoring case).
 * **Limits.** Catan 2–4 players, Hanabi 2–5, It's a Wonderful World 2–5, or 2–7 with its
-  expansion (which can't be switched off once more than five are seated). Joining a running
+  expansion (which can't be switched off once more than five are seated), Small World 2–5. Joining a running
   game is refused unless you hold its token. A room nobody has connected to for 30 minutes is removed.
 * **Seat order.** Catan shuffles the seats when the game starts. Hanabi keeps join
   order, so the host plays first and the order round the table is who joined when.
   It's a Wonderful World shuffles the seats like Catan; there are no turns, so the
   seat only decides who passes cards to whom. Its Empires are dealt at random.
+  Small World shuffles the seats too: seat 1 plays first.
 
 Rooms live in memory only; a server restart ends every game.
 
@@ -103,24 +105,34 @@ cargo test --workspace
   from six players, duos, Empires dealt at random), what a view hides,
   JSON round trips, and whole games from a seed for 2 to 5 players. The ignored
   `economy_report` prints how a simple bot fares with the cards (see "The cards" below).
-* `protocol` (8): every message survives JSON, including each game's view (the Hanabi
+* `smallworld-core` (30): the four boards (every border goes both ways, the board is in one
+  piece, as many mines as magic sources and caverns), the column and what a combo costs,
+  entering through the border, what a conquest costs and what each race and power takes
+  off, losses and redeploying, the reinforcement die, abandoning, decline (with Ghouls,
+  Spirit and Stout), every bonus that is scored, Amazons, Skeletons, Sorcerers, the Dragon,
+  Heroes and Holes, lairs, camps and fortresses, the Diplomat, Seafaring, Flying, Berserk,
+  hidden coins, JSON, and 48 whole games by a random bot on all four boards, checked after
+  every move (no token is ever made out of nothing, every banner is somewhere once).
+* `protocol` (9): every message survives JSON, including each game's view (the Hanabi
   maps are keyed by seat and color), every move, view and option names its game, and rule
   payloads from before "hanabii" existed still parse.
-* `server` (38): in `rooms.rs`, the room flows run for every game: starting with a full
+* `server` (42): in `rooms.rs`, the room flows run for every game: starting with a full
   table and a view for every seat, host-only start and options, seat order, fullness,
   reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
   for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
   Hanabi's rules options (hanabii locks the others, rules freeze once the game starts, …) and
   a whole game, It's a Wonderful World's hidden picks, seat checks, its expansion switch (up
-  to seven seats) and whole games, one with the expansion at a full table.
-* `client` (91): native render tests that build real games and render every screen to
+  to seven seats) and whole games, one with the expansion at a full table, Small World's
+  turns, hidden coins, reconnecting and whole games for 2 to 5 players.
+* `client` (102): native render tests that build real games and render every screen to
   HTML. In the shell: every game is registered under its own kind and drawn in its own
   frame, and a state from the server puts its board on screen until you leave. In each
   game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
   set, whole games rendered move by move, the clue buttons, rings, drop zones, game-over
   line, flashes; It's a Wonderful World's waiting room and board for every seat, phase and
-  player count of a whole game; the lobbies; and the pure helpers behind what a click
-  means. Animations, drag and drop and the CSS need a browser (see below).
+  player count of a whole game; Small World's board through a whole game, the cost badges,
+  the die's confirmation and the decline button; the lobbies; and the pure helpers behind
+  what a click means. Animations, drag and drop and the CSS need a browser (see below).
 
 ## What has been run in a browser
 
@@ -129,13 +141,18 @@ each game; a first move in each (a Catan settlement and road, a Hanabi clue, an 
 Wonderful World pick); reloading mid-game, which lands back on the board; leaving, which
 goes back to the menu; the page title throughout. It's a Wonderful World was also taken
 through its draft, planning and an Energy step (its kept cards also at phone width), and
-joining a room from a second tab was tried by hand. Still to look at with people:
+joining a room from a second tab was tried by hand. Small World was played to the end by
+script with two players, and its first turns with four and five; the opening was also run
+at phone width. Still to look at with people:
 
 * a whole game of each;
 * Hanabi's hand-slide animation, drag and drop onto the play/discard zones, and the
   flashes and spinning rings (these live in effects that only run in a browser);
 * phones: It's a Wonderful World's tray that sticks to the bottom of the screen, tap
-  targets, and the other two games' layouts.
+  targets, and the other games' layouts (Small World's map scrolls sideways there);
+* Small World's powers that only a few combos use (Heroes, the Dragon, Bivouacking,
+  Fortified, Diplomat, Sorcerers) were tested in the rules and on the server, not clicked
+  through in a browser.
 
 ## Game menu
 
@@ -294,6 +311,67 @@ Moves are `ClientMsg::Move(GameMove::Wonderful(..))` and the game arrives as a
 against the rules and the seat of the connection that sent it, never against a turn, and
 sends every seat its own view after every move.
 
+## Small World
+
+Lead fantasy races to conquer a world too small for all of them, 2 to 5 players, on the
+board for that many (23, 30, 40 or 47 regions; 10 turns with two or three players, 9 with
+four, 8 with five). The rules are the 2015 English rulebook's.
+
+* **Picking.** On your first turn, and whenever you have no active race, you pick a race and
+  special power from the column of six. The top one is free; each one lower costs a coin,
+  left on each combo above it, and whoever takes a combo pockets what was left on it. The
+  banner and badge add up to how many tokens you get.
+* **Conquest.** A region costs 2 tokens, plus 1 for a Mountain, a Troll's Lair, a fortress
+  or each encampment, plus 1 for each token defending it (a Lost Tribe, another race),
+  less what your race and power take off (never below 1). A new race enters through the
+  edge of the board (or the shore of a sea that reaches it); then it conquers next to its
+  regions. The defenders lose one token (Elves none) and put the rest back on their
+  regions after your turn. Seas and the lake are only for Seafaring races.
+* **The reinforcement die.** When you are short, the last conquest of the turn can be tried
+  with up to 3 tokens missing: click a region marked "?", confirm, and the die (0, 0, 0, 1,
+  2, 3) makes up the difference or not. Either way your conquests end.
+* **Following turns.** One token stays in each of your regions, the rest come back in hand.
+  You can abandon regions for their tokens. Or, instead of conquering, put your race **in
+  decline**: one token stays per region (all of them for Ghouls), its power is lost, your
+  older race in decline leaves the map, and you pick a new race next turn.
+* **Redeploying** moves your tokens freely between your regions, and places your power's
+  pieces (encampments, the fortress, the Heroes, the peace of a Diplomat).
+* **Scoring.** A coin per region held by any of your races, plus the bonuses. Coins stay
+  hidden until the end; the most coins win, then the most tokens on the map.
+
+All 14 races and 20 powers of the base game are in, with what each does shown on its combo
+and, for your own race, in the players' panel. The map highlights what a click does now
+(the cost of each region you can conquer, "?" for the die, "+" and "−" when redeploying),
+and the tool buttons in "Your move" switch between conquering and abandoning, or adding
+and taking tokens, encampments, the fortress and Heroes.
+
+### The boards
+
+The four boards were traced from photographs of the printed ones (Days of Wonder's own, on
+BoardGameGeek): every region's terrain, mine, magic source, cavern, Lost Tribe and
+neighbours, and its outline for the map on screen. `docs/small-world.md` says how, and
+what to check if a border looks wrong.
+
+### What isn't in it
+
+The blank race and power, the expansions (Cursed!, Grand Dames, Be Not Afraid..., Royal
+Bonus, the 6-player board, Underground, Realms), and solo or team play.
+
+### Where it lives
+
+Rules in `games/smallworld` (`smallworld-core`, pure and deterministic: the shuffles and the
+die come from the seed the server gives, so a game can be replayed): `maps.rs` for the
+boards, `races.rs` for the races and powers, `state.rs` for the rules, `view.rs` for what a
+seat sees; server side in `server/src/games/smallworld.rs`; screens in
+`client/src/games/smallworld/` (`screens.rs` for the page, create/join and the waiting room,
+`board.rs` for the game, `map.rs` for the map, `shapes.rs` for the boards' outlines,
+`look.rs` for the texts and what a click means, `mod.rs` for the state kept between
+redraws); styles in `smallworld.css` beside them, all scoped under `.smallworld`.
+
+Moves are `ClientMsg::Move(GameMove::SmallWorld(..))` and the game arrives as a
+`ServerMsg::Game` holding a `GameView::SmallWorld`, which carries what the seat may do
+right now, so the client never works the rules out for itself.
+
 ## Known gaps
 
 * Rooms live in memory only; a server restart ends all games.
@@ -302,3 +380,5 @@ sends every seat its own view after every move.
 * Catan always uses the random standard layout.
 * It's a Wonderful World plays side A of the Empires only, and without the campaign
   expansions (see its section above).
+* Small World plays the base game only, on boards traced from photographs (see its
+  section above).

@@ -1,0 +1,830 @@
+/* Small World. Everything is scoped under .smallworld, so it can't leak
+   into the other games (which reuse names like .panel, .hint and .tag), and
+   the custom properties live on .smallworld too.
+
+   The idea: an old atlas on a dark wooden table. Parchment panels with
+   brown ink, the map in the colours of its terrains, and the seats'
+   colours only on the tokens. */
+
+.smallworld {
+  --wood: #23180f;
+  --wood-2: #2f2116;
+  --parch: #f2e6c8;
+  --parch-2: #e7d6ac;
+  --parch-3: #d9c38f;
+  --ink: #2b2116;
+  --ink-soft: #6b5a43;
+  --line: #c4ab76;
+  --wax: #a8402a;
+  --wax-hi: #c2533a;
+  --wax-ink: #fff6ea;
+  --gold: #c99a2e;
+  --target: #fff3a8;
+  --danger: #8e2a1c;
+
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(110% 60% at 50% -10%, #4a3320 0%, rgba(74, 51, 32, 0) 60%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 3px, transparent 3px 11px),
+    var(--wood);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.smallworld,
+.smallworld * {
+  box-sizing: border-box;
+}
+
+.smallworld .app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+}
+
+.smallworld h1,
+.smallworld h2,
+.smallworld h3 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  margin: 0;
+}
+
+.smallworld h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.6rem;
+}
+
+.smallworld p {
+  margin: 0;
+}
+
+.smallworld ul,
+.smallworld ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.smallworld .hint,
+.smallworld .note,
+.smallworld .caption {
+  color: var(--ink-soft);
+}
+
+.smallworld .note,
+.smallworld .caption {
+  font-size: 0.85rem;
+}
+
+/* ---------- buttons and fields: :where() keeps their specificity at zero,
+   so every special button below simply wins. ---------- */
+
+.smallworld :where(button) {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--parch-2);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.smallworld :where(button:hover:not(:disabled)) {
+  border-color: var(--ink-soft);
+}
+
+.smallworld :where(button:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.smallworld :where(button.primary) {
+  background: var(--wax);
+  border-color: var(--wax);
+  color: var(--wax-ink);
+}
+
+.smallworld :where(button.primary:hover:not(:disabled)) {
+  background: var(--wax-hi);
+  border-color: var(--wax-hi);
+}
+
+.smallworld :where(button.danger) {
+  background: none;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.smallworld :where(button.link) {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-weight: 500;
+  text-decoration: underline;
+  padding: 0.25rem;
+}
+
+.smallworld :focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.smallworld :where(input) {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.smallworld .code-input {
+  text-align: center;
+  font-size: 1.5rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+.smallworld .tag {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.02rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--parch-3);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.smallworld .tag-off {
+  color: #fff3ee;
+  background: #7d3a2c;
+}
+
+/* ---------- panels ---------- */
+
+.smallworld .panel {
+  background: var(--parch);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- the entry screens ---------- */
+
+.smallworld .entry {
+  max-width: 27rem;
+  margin: 5vh auto 0;
+  text-align: center;
+  color: var(--parch);
+}
+
+.smallworld .entry .mark svg {
+  width: 5rem;
+  height: 5rem;
+}
+
+.smallworld .game-title {
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  line-height: 1.05;
+  margin-top: 0.4rem;
+}
+
+.smallworld .lede {
+  max-width: 36ch;
+  margin: 0.8rem auto 1.4rem;
+  color: var(--parch-3);
+}
+
+.smallworld .game-title + .panel {
+  margin-top: 1.4rem;
+}
+
+.smallworld .entry .panel {
+  text-align: left;
+  color: var(--ink);
+}
+
+.smallworld .join-form label {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.smallworld .join-form button,
+.smallworld .entry .panel > button {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.smallworld .join-form button.link,
+.smallworld .entry .panel > button.link {
+  width: auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.smallworld .join-form .hint {
+  margin: 1rem 0 0.6rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.smallworld .room-code {
+  margin: 0.2rem 0 1rem;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 3.2rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-align: center;
+  color: var(--wax);
+}
+
+.smallworld .roster {
+  margin: 0 0 1rem;
+}
+
+.smallworld .roster li {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.smallworld .entry .panel > button + .hint {
+  margin-top: 0.6rem;
+}
+
+/* ---------- the game screen ---------- */
+
+.smallworld .top-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--parch);
+  margin-bottom: 0.7rem;
+}
+
+.smallworld .top-bar .brand {
+  font-size: 1.35rem;
+}
+
+.smallworld .top-bar .room {
+  margin-left: auto;
+  color: var(--parch-3);
+}
+
+.smallworld .top-bar .room-tag {
+  letter-spacing: 0.15em;
+  color: var(--parch);
+}
+
+.smallworld .top-bar button.link {
+  color: var(--parch-3);
+}
+
+.smallworld .status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+  background: var(--parch);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+}
+
+.smallworld .turn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.6rem;
+  padding-right: 1rem;
+  border-right: 1px solid var(--line);
+  line-height: 1.1;
+}
+
+.smallworld .turn-word,
+.smallworld .turn-of {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.smallworld .turn-num {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+
+.smallworld .status h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.smallworld .board-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1rem;
+  align-items: start;
+}
+
+.smallworld .side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* One column on narrow screens, with your move above the map. */
+@media (max-width: 960px) {
+  .smallworld .board-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .smallworld .map-col {
+    min-width: 0;
+  }
+
+  .smallworld .side-col {
+    display: contents;
+  }
+
+  .smallworld .side-col > .panel {
+    order: 1;
+  }
+
+  .smallworld .side-col > .actions,
+  .smallworld .side-col > .results {
+    order: -1;
+  }
+}
+
+/* ---------- the map ---------- */
+
+.smallworld .map-frame {
+  padding: 0.5rem;
+  background: #1a120b;
+  border: 1px solid #4a3622;
+  border-radius: 0.9rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.smallworld .map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.smallworld .region polygon {
+  stroke: #f7efdc;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+}
+
+.smallworld .t-farm polygon { fill: url(#sw-farm); }
+.smallworld .t-forest polygon { fill: url(#sw-forest); }
+.smallworld .t-hill polygon { fill: url(#sw-hill); }
+.smallworld .t-swamp polygon { fill: url(#sw-swamp); }
+.smallworld .t-mountain polygon { fill: url(#sw-mountain); }
+.smallworld .t-sea polygon { fill: url(#sw-sea); }
+.smallworld .t-lake polygon { fill: url(#sw-lake); }
+
+/* What the tool in hand can act on: the rest of the map is dimmed. */
+.smallworld .regions:has(.target, .gamble) .region:not(.target, .gamble) polygon {
+  filter: brightness(0.62) saturate(0.7);
+}
+
+.smallworld .region.target,
+.smallworld .region.gamble {
+  cursor: pointer;
+}
+
+.smallworld .region.target polygon {
+  stroke: var(--target);
+  stroke-width: 4;
+}
+
+.smallworld .region.target:hover polygon {
+  filter: brightness(1.15);
+}
+
+.smallworld .region.gamble polygon {
+  stroke: #ffd36a;
+  stroke-width: 3.2;
+  stroke-dasharray: 9 6;
+}
+
+.smallworld .region.pending polygon {
+  stroke: #fff;
+  stroke-width: 5;
+  stroke-dasharray: none;
+  filter: brightness(1.2);
+}
+
+.smallworld .overlay {
+  pointer-events: none;
+}
+
+.smallworld .marker circle {
+  fill: #f7efdc;
+  stroke: var(--ink);
+  stroke-width: 1.3;
+}
+
+.smallworld .marker path {
+  fill: var(--ink);
+}
+
+.smallworld .marker.mine path { fill: #8a2b1e; }
+.smallworld .marker.magic path { fill: #3b5bc9; }
+.smallworld .marker.cavern path { fill: #3a2c1e; }
+.smallworld .marker.lair circle { fill: #b7d38a; }
+.smallworld .marker.fort circle { fill: #d9c38f; }
+.smallworld .marker.camp circle { fill: #f2d89a; }
+.smallworld .marker.camp path { fill: #7a4a1c; }
+.smallworld .marker.hole circle { fill: #c9b08a; }
+.smallworld .marker.hero circle { fill: #ffe9a8; }
+.smallworld .marker.hero path { fill: #b07a12; }
+.smallworld .marker.dragon circle { fill: #ffd2c4; }
+.smallworld .marker.dragon path { fill: #b52a1b; }
+
+.smallworld .token rect {
+  stroke: #1b130b;
+  stroke-width: 1.6;
+}
+
+.smallworld .token text {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 700;
+  fill: #fff;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 2px;
+}
+
+.smallworld .token .tag {
+  font-size: 11px;
+}
+
+.smallworld .token .count {
+  font-size: 14px;
+}
+
+/* A race in decline: its tokens turned over, grey side up. */
+.smallworld .token.declined rect {
+  filter: saturate(0.25) brightness(0.8);
+  stroke-dasharray: 4 3;
+}
+
+.smallworld .number {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  fill: rgba(255, 255, 255, 0.85);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2.5px;
+}
+
+.smallworld .tribe rect {
+  fill: #cfc3a6;
+  stroke: #4b3d29;
+  stroke-width: 1.4;
+}
+
+.smallworld .tribe path {
+  fill: #4b3d29;
+}
+
+.smallworld .badge circle {
+  fill: var(--target);
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+
+.smallworld .badge text {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  fill: var(--ink);
+  text-anchor: middle;
+}
+
+.smallworld .badge.die circle {
+  fill: #ffd36a;
+}
+
+.smallworld .badge.die text {
+  font-size: 12px;
+}
+
+/* ---------- the key under the map ---------- */
+
+.smallworld .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--parch-3);
+}
+
+.smallworld .legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.smallworld .legend .key {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.smallworld .legend .key.wide {
+  width: 1.7rem;
+}
+
+/* ---------- your move ---------- */
+
+.smallworld .actions.you-act {
+  border-color: var(--wax);
+  box-shadow: 0 0 0 2px var(--wax), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.smallworld .in-hand {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.smallworld .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.smallworld .row .primary {
+  margin-left: auto;
+}
+
+.smallworld .tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.smallworld .tool {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  background: var(--parch-2);
+}
+
+.smallworld .tool.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--parch);
+}
+
+.smallworld .peace {
+  margin-top: 0.7rem;
+}
+
+.smallworld .gamble {
+  margin-top: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  background: #fff3c9;
+  border: 1px dashed var(--gold);
+  border-radius: 0.6rem;
+}
+
+.smallworld .die-face {
+  padding: 0.2rem 0.6rem;
+  font-weight: 700;
+  background: #fff3c9;
+  border: 1px solid var(--gold);
+  border-radius: 0.4rem;
+}
+
+/* ---------- players ---------- */
+
+.smallworld .player {
+  padding: 0.55rem 0.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.smallworld .player:last-child {
+  border-bottom: none;
+}
+
+.smallworld .player.current {
+  background: linear-gradient(90deg, rgba(168, 64, 42, 0.12), transparent);
+  border-radius: 0.4rem;
+}
+
+.smallworld .player-head {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.smallworld .player-head .swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--ink);
+}
+
+.smallworld .player-name {
+  font-weight: 700;
+}
+
+.smallworld .coins {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #7a5a12;
+}
+
+.smallworld .armies {
+  margin: 0.25rem 0 0.15rem 1.25rem;
+  font-size: 0.88rem;
+}
+
+.smallworld .army .tag {
+  margin-left: 0.35rem;
+}
+
+.smallworld .army.declined .army-name {
+  color: var(--ink-soft);
+}
+
+.smallworld .army-extra {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.smallworld .player .note {
+  margin-left: 1.25rem;
+}
+
+.smallworld .powers {
+  margin: 0.3rem 0 0.3rem 1.25rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  background: var(--parch-2);
+  border-radius: 0.5rem;
+}
+
+.smallworld .powers p + p {
+  margin-top: 0.2rem;
+}
+
+/* ---------- the column ---------- */
+
+.smallworld .column-panel.picking {
+  border-color: var(--wax);
+  box-shadow: 0 0 0 2px var(--wax), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.smallworld .offer {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.smallworld .offer:last-child {
+  border-bottom: none;
+}
+
+.smallworld .offer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.smallworld .offer-name {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+
+.smallworld .offer-tokens {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.smallworld .offer-text {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.smallworld .offer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
+}
+
+.smallworld .offer-foot .primary {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.smallworld .offer-cost {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.smallworld .on-it {
+  margin-right: auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #7a5a12;
+}
+
+/* ---------- log and results ---------- */
+
+.smallworld .log li {
+  padding: 0.22rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px dotted var(--line);
+}
+
+.smallworld .log li:last-child {
+  border-bottom: none;
+}
+
+.smallworld .results table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.smallworld .results th,
+.smallworld .results td {
+  padding: 0.35rem 0.3rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.smallworld .results .num {
+  text-align: right;
+}
+
+.smallworld .results tr.won td {
+  font-weight: 700;
+  color: var(--wax);
+}
+
+/* ---------- phones ---------- */
+
+@media (max-width: 600px) {
+  .smallworld .app {
+    padding: 0.6rem 0.5rem 3rem;
+  }
+
+  /* The map keeps a readable size and scrolls sideways. */
+  .smallworld .map-frame {
+    padding: 0.25rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .smallworld .map {
+    min-width: 640px;
+  }
+
+  .smallworld .status {
+    gap: 0.7rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .smallworld .top-bar .brand {
+    font-size: 1.1rem;
+  }
+}

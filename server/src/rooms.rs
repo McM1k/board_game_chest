@@ -439,6 +439,9 @@ mod tests {
 
         let (code, _wonderful) = lobby(&state, GameKind::Wonderful, 5);
         assert_eq!(join(&state, &code, "P6").err().as_deref(), Some("That room is full."));
+
+        let (code, _small_world) = lobby(&state, GameKind::SmallWorld, 5);
+        assert_eq!(join(&state, &code, "P6").err().as_deref(), Some("That room is full."));
     }
 
     #[test]
@@ -638,6 +641,7 @@ mod tests {
             GameMove::Catan(catan_core::Action::EndTurn),
             GameMove::Hanabi(hanabi_core::Action::Play { card_id: hanabi_core::CardId(0) }),
             GameMove::Wonderful(wonderful_core::Action::Ready),
+            GameMove::SmallWorld(smallworld_core::Action::EndConquests),
         ];
         for game in GameKind::ALL {
             let state = new_state();

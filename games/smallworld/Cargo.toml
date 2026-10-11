@@ -1,0 +1,11 @@
+[package]
+name = "smallworld-core"
+version = "0.1.0"
+edition = "2021"
+description = "Small World rules: the four boards, the 14 races and 20 special powers, conquest, decline, scoring"
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -8,6 +8,7 @@
 
 pub mod catan;
 pub mod hanabi;
+pub mod smallworld;
 pub mod wonderful;
 
 use protocol::{GameKind, GameMove, GameOptions, GameView};
@@ -53,5 +54,6 @@ pub fn game(kind: GameKind) -> &'static dyn Game {
         GameKind::Catan => &catan::Catan,
         GameKind::Hanabi => &hanabi::Hanabi,
         GameKind::Wonderful => &wonderful::Wonderful,
+        GameKind::SmallWorld => &smallworld::SmallWorld,
     }
 }

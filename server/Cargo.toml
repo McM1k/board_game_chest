@@ -7,6 +7,7 @@ edition = "2021"
 catan-core = { workspace = true }
 hanabi-core = { workspace = true }
 wonderful-core = { workspace = true }
+smallworld-core = { workspace = true }
 protocol = { path = "../protocol" }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }

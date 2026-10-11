@@ -85,6 +85,7 @@ mod render_tests {
             GameKind::Catan => "class=\"theme-catan\"",
             GameKind::Hanabi => "class=\"hanabi\"",
             GameKind::Wonderful => "class=\"wonderful\"",
+            GameKind::SmallWorld => "class=\"smallworld\"",
         }
     }
 
@@ -99,6 +100,7 @@ mod render_tests {
             }
             GameKind::Hanabi => GameView::Hanabi(Box::new(GameState::new(3, 5, GameRules::default()).view_for(PlayerId(1)))),
             GameKind::Wonderful => GameView::Wonderful(Box::new(wonderful_core::State::new(3, 7).view_for(1))),
+            GameKind::SmallWorld => GameView::SmallWorld(Box::new(smallworld_core::State::new(3, 7).view_for(1))),
         }
     }
 
@@ -111,11 +113,11 @@ mod render_tests {
             let html = current_screen(app).to_html();
             assert!(html.contains("Pick a game") && html.contains("menu-page"));
             assert!(html.contains("Catan") && html.contains("Hanabi"));
-            assert!(shows(&html, "It's a Wonderful World"));
-            // Catan seats 2-4, Hanabi 2-5, It's a Wonderful World 2-7 (with
-            // its expansion).
+            assert!(shows(&html, "It's a Wonderful World") && html.contains("Small World"));
+            // Catan seats 2-4, Hanabi and Small World 2-5, It's a Wonderful
+            // World 2-7 (with its expansion).
             assert_eq!(html.matches("2\u{2013}4 players").count(), 1);
-            assert_eq!(html.matches("2\u{2013}5 players").count(), 1);
+            assert_eq!(html.matches("2\u{2013}5 players").count(), 2);
             assert_eq!(html.matches("2\u{2013}7 players").count(), 1);
             // One card per game, each with its picture and its sentence.
             assert_eq!(html.matches("class=\"game-card\"").count(), GameKind::ALL.len());
@@ -212,6 +214,7 @@ mod render_tests {
                 assert!(games.catan.view.get_untracked().is_none());
                 assert!(games.hanabi.view.get_untracked().is_none());
                 assert!(games.wonderful.view.get_untracked().is_none());
+                assert!(games.smallworld.view.get_untracked().is_none());
                 assert!(app.room.get_untracked().is_empty());
             }
         });
