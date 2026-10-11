@@ -50,10 +50,11 @@ Edge cases:
 
 ## Why the code is shaped this way
 
-The shape copies Hanabi's: a pure rules crate, three protocol additions, one `Running` arm on
-the server, one module on the client. Where nothing was specified, the nearest existing game
-was copied: Hanabi for the crate and protocol, Catan for the screen lifecycle, Hanabi's
-scoped stylesheet for the CSS.
+The shape is every game's (see `docs/adding-a-game.md`): a pure rules crate, a variant in
+the protocol's per-game enums, a module behind the server's `Game` and `Running` traits, and
+a client folder behind the client's `Game` trait. Where nothing was specified, the nearest
+existing game was copied: Hanabi for the crate and protocol, Catan for the screen lifecycle,
+Hanabi's scoped stylesheet for the CSS.
 
 **Rules crate.** `wonderful-core` depends on serde alone. The only randomness is the opening
 shuffle, so the server passes a seed and `apply` takes no RNG (Catan differs because it
@@ -74,30 +75,32 @@ redo production or scoring.
 
 **Server.** The seat comes from the connection's token, never from the message. A refused move
 sends an error to the sender only. An accepted one sends every connected seat its full view
-(not a diff), so a reconnect is just a rejoin. Seats are shuffled at Start (like Catan,
-unlike Hanabi) because seat order decides passing direction and Empire; after Start, seat 0
+(not a diff), so a reconnect is just a rejoin. Seats are shuffled at Start (`shuffles_seats`,
+like Catan, unlike Hanabi) because seat order decides passing direction and Empire; after Start, seat 0
 need not be the host.
 
 **Protocol.**
 
-* `ClientMsg::Wonderful(Action)` wraps the crate's own `Action`, as the other games do.
-* `ServerMsg::WonderfulState { view, names, connected }`: names and connection flags travel
-  beside the view, because the rules crate knows nothing about people.
+* `ClientMsg::Move(GameMove::Wonderful(Action))` wraps the crate's own `Action`, as for the
+  other games.
+* `ServerMsg::Game { view: GameView::Wonderful(..), names, connected }`: names and connection
+  flags travel beside the view, because the rules crate knows nothing about people.
 * Cards travel as `CardId`s and each side looks them up in its own copy of the catalogue, so
   server and client must be built from the same one.
 * Views contain no maps (vectors and arrays indexed by seat or resource), because JSON keys
   must be strings.
-* No lobby options: `Lobby.rules` and `SetRules` are typed for Hanabi, so a Wonderful lobby
-  sends `rules: None` and answers `SetRules` with "This game has no options to set." If
-  Corruption & Ascension ever needs an option, the rules payload has to become per-game.
+* No lobby options yet: a Wonderful lobby sends `options: None` and answers `SetOptions`
+  with "This game has no options to set." Empire side B or an expansion would add a
+  `GameOptions::Wonderful` variant, with `default_options()` and `check_options()` in
+  `server/src/games/wonderful.rs` and `options()` on the client (as Hanabi does).
 
 **Client.**
 
-* The screen is rebuilt on every message: `Screen::WonderfulGame` carries the view, as
-  Catan does, rather than Hanabi's signals (which exist to protect animations Wonderful
-  doesn't have). Interface state that must outlive a rebuild (the piece picked in the tray, a
-  recycled card waiting for a target) lives in `App.wonderful` and is re-checked against each
-  new view: `effective_held` falls back to the first piece held when the chosen one is gone,
+* The game screen is redrawn on every message from the view kept in `Signals`
+  (`client/src/games/wonderful/mod.rs`), as Catan's is, rather than built once like Hanabi's
+  (which protects animations Wonderful doesn't have). Interface state that must outlive a
+  redraw (the piece picked in the tray, a recycled card waiting for a target) lives in its
+  `Ui` and is re-checked against each new view: `effective_held` falls back to the first piece held when the chosen one is gone,
   and `CubeFrom::valid` hides the dialog once its card is gone.
 * Browser code is kept thin. What a click means is decided by pure functions in `look.rs`
   with native tests (`pick_for_space`, `pick_for_empire`, `cube_targets`); the closures in
@@ -107,7 +110,7 @@ need not be the host.
   overrides that. On a resource's space Krystallium is used only when picked, since it fits
   anything and is easy to waste. Recycle opens a dialog for the cube's target, because the
   target is part of the move; Scrap's dialog only confirms, its cube always goes on the Empire.
-* `client/wonderful.css` scopes every rule under `.wonderful`; generic element rules sit in
+* `client/src/games/wonderful/wonderful.css` scopes every rule under `.wonderful`; generic element rules sit in
   `:where()` so the prefix adds no specificity. Checked rendered (not clicked) at 1280, 390,
   360 and 320 px; below 560 px the standings table stacks, because a scrolling table hid the
   Total column. The only change to the other games' look: the menu's max width went from
@@ -158,8 +161,8 @@ need not be the host.
 ## Traps
 
 * **Four bots drive the whole-game tests**: `bot` and `smart_bot` in
-  `wonderful-core/src/tests.rs`, `wonderful_move` in `server/src/rooms.rs`, `next_move` in
-  `client/src/wonderful/board.rs`. After a rules change a bot may stall or loop instead of
+  `games/wonderful/src/tests.rs`, `next_move` in `server/src/games/wonderful.rs`, `next_move` in
+  `client/src/games/wonderful/board.rs`. After a rules change a bot may stall or loop instead of
   failing clearly. Suspect the bots first.
 * **Every new kind of move must go through `apply`**, which ends in `settle()`. Anything else
   can leave the game with everyone done and nobody advancing.

@@ -179,7 +179,7 @@ pub fn hanabii_ring_colors(
 }
 
 /// The `--ring-stops` custom property a card's ring gradient is built from
-/// (see `.card-ring` in style.css): one hard-edged arc per color, all the
+/// (see `.card-ring` in hanabi.css): one hard-edged arc per color, all the
 /// same size.
 pub fn ring_stops_style(colors: &[Color]) -> String {
     let n = colors.len() as f64;

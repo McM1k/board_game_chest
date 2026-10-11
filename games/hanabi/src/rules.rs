@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::card::{Card, Clue, Color};
 
 /// Optional variant rules a room can toggle in the lobby before starting a
-/// game. Kept as a small `Copy` struct so it can ride along on `SetRules`,
-/// the lobby `Joined` reply, and `GameState`/`PlayerView` itself without any
-/// ceremony. `#[serde(default)]` on every field means older clients sending
+/// game. Kept as a small `Copy` struct so it can ride along in the lobby
+/// options (`GameOptions::Hanabi`), and in `GameState`/`PlayerView` itself
+/// without any ceremony. `#[serde(default)]` on every field means older clients sending
 /// a partial (or bare `{}`) payload still deserialize fine, with anything
 /// missing defaulting to off.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,7 +106,7 @@ impl GameRules {
     /// Idempotent, and the server applies it whenever the lobby rules
     /// change (so every client sees the locked-in preset) as well as when
     /// a game is created, so a client can't sneak extra options in next to
-    /// the mode by sending a hand-built `SetRules`. [`GameRules::active_colors`],
+    /// the mode by sending hand-built `SetOptions`. [`GameRules::active_colors`],
     /// [`GameRules::is_short`] and [`GameRules::max_rank`] all read
     /// through it too, so they answer for the mode even on un-normalized
     /// rules.

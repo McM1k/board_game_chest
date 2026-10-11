@@ -7,14 +7,19 @@ card-drafting empire builder ("It's a Wonderful World", base game).
 All use the same rooms: one player creates a room and gets a 4-letter code, the
 others join with it, the host starts the game.
 
-| Crate         | What it is |
-|---------------|------------|
-| `engine`      | Catan rules: board, game, actions, per-player views. No I/O. |
-| `hanabi-core` | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
-| `wonderful-core` | It's a Wonderful World rules: the card table, drafting, planning, production, scoring, redacted per-player view. No I/O. |
-| `protocol`    | The WebSocket messages shared by every game: create / join / start / leave, the lobby, and a wrapper for each game's moves and views. |
-| `server`      | Axum server: the shared room system, one WebSocket per player, serves the client. |
-| `client`      | Leptos (CSR/WASM) front end: game menu, the shared create/join screen, and each game's own screens. |
+| Where | What it is |
+|-------|------------|
+| `games/catan` (crate `catan-core`) | Catan rules: board, game, actions, per-player views. No I/O. |
+| `games/hanabi` (crate `hanabi-core`) | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
+| `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card table, drafting, planning, production, scoring, redacted per-player view. No I/O. |
+| `protocol` | The WebSocket messages: the room flow every game shares (create, join, lobby options, start, leave), and one enum per thing that differs by game (`GameKind`, `GameOptions`, `GameMove`, `GameView`). |
+| `server` | Axum server: the room system (`rooms.rs`, which names no game), each game's server side in `src/games/`, one WebSocket per player; serves the client. |
+| `client` | Leptos (CSR/WASM) front end: a shell (`app.rs`, `menu.rs`, `main.rs`: the menu, the connection, the routing between screens) and each game's screens and stylesheet in `src/games/<name>/`. |
+
+Each game is the same set of folders: its rules crate in `games/`, a module in
+`server/src/games/` behind two traits (`Game` to start it, `Running` to play it), and a folder
+in `client/src/games/` behind one trait (menu card, home, lobby, board, page title). Each crate
+has one registry listing the games. `docs/adding-a-game.md` walks through adding one.
 
 The server is authoritative. Clients send moves; the server validates them with the
 game's rules crate and sends every seat its own filtered view (other players' hands
@@ -44,25 +49,13 @@ Env vars: `PORT` (default 3000), `STATIC_DIR` (default `client/dist`).
 Development with live reload: run `cargo run -p server` and, in `client/`,
 `trunk serve` (its `Trunk.toml` proxies `/ws` to the server on port 3000).
 
-### Make sure you are building the right folder
+### Make sure you are serving a fresh build
 
-Unzip into a new, empty folder (not on top of an older copy of the project), `cd`
-into it, and check before building:
-
-```sh
-ls client/src/hanabi                      # board.rs  look.rs  mod.rs  screens.rs
-ls client/src/wonderful                   # board.rs  look.rs  mod.rs  screens.rs
-grep -rn "Not connected yet" client/src   # must print nothing
-```
-
-If the `grep` prints a line, that folder still holds the old menu (the one from before
-Hanabi was merged, where its card was greyed out) and a build of it will show that menu
-whatever you clean or rebuild. After building, `grep -c "Not connected yet" client/dist/*.wasm`
-must print `0`.
-
-Also: if `trunk build` fails it leaves the previous `client/dist` in place, so an old
-page can keep being served. Delete `client/dist` before building, so a failed build
-shows up as a missing page instead.
+`client/dist` holds a committed release build. `trunk serve` builds into that same folder (as
+a development build), so run `trunk build --release` again before committing it. If
+`trunk build` fails it leaves the previous `client/dist` in place, so an old page can keep
+being served: delete `client/dist` before building, and a failed build shows up as a missing
+page instead.
 
 ## Rooms (the part that changed for Hanabi)
 
@@ -96,7 +89,7 @@ Rooms live in memory only; a server restart ends every game.
 cargo test --workspace
 ```
 
-* `engine` (17): board shape, setup order, production, robber/discard, trading, ports,
+* `catan-core` (17): board shape, setup order, production, robber/discard, trading, ports,
   longest road (incl. cut roads), largest army, dev cards, winning, hidden info.
 * `hanabi-core` (133): the original rules tests, unchanged apart from one assertion
   rewritten the way clippy prefers.
@@ -107,44 +100,38 @@ cargo test --workspace
   cubes that are lost, the wrap-up step), scoring and the tie-breaks, what a view hides,
   JSON round trips, and whole games from a seed for 2 to 5 players. The ignored
   `economy_report` prints how a simple bot fares with the cards (see "The cards" below).
-* `protocol` (7): every message survives JSON, including the Hanabi and Wonderful views
-  (the Hanabi maps are keyed by seat and color), and rule payloads from before "hanabii"
-  existed still parse.
-* `server` (34): the room flows for all three games, host-only start and rules, seat order,
-  fullness, reconnecting with a token, stale disconnects, lobby seats kept through a short
-  drop, moves for the wrong game, a
-  whole Hanabi game and a whole Wonderful game to their end, every seat's own hand (and
-  nobody else's) in Wonderful, and the Hanabi rule tests that used to live in the old
-  server (hanabii locks the other options, rules freeze once the game starts, …).
-* `client` (83): native render tests that build real games and render every screen to
-  HTML: all Catan phases, the menu, the lobbies, the Hanabi board for every seat,
-  player count and rule set, whole games rendered move by move, the clue
-  buttons, rings, drop zones, game-over line, flashes; and It's a Wonderful World's
-  home, waiting room and board, for every seat, phase and player count of a whole
-  game, plus the pure helpers behind what a click means. They check what the first
-  paint looks like. Animations, drag and drop and the CSS need a browser (see below).
+* `protocol` (8): every message survives JSON, including each game's view (the Hanabi
+  maps are keyed by seat and color), every move, view and option names its game, and rule
+  payloads from before "hanabii" existed still parse.
+* `server` (37): in `rooms.rs`, the room flows run for every game: starting with a full
+  table and a view for every seat, host-only start and options, seat order, fullness,
+  reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
+  for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
+  Hanabi's rules options (hanabii locks the others, rules freeze once the game starts, …) and
+  a whole game, It's a Wonderful World's hidden picks, seat checks and whole games.
+* `client` (86): native render tests that build real games and render every screen to
+  HTML. In the shell: every game is registered under its own kind and drawn in its own
+  frame, and a state from the server puts its board on screen until you leave. In each
+  game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
+  set, whole games rendered move by move, the clue buttons, rings, drop zones, game-over
+  line, flashes; It's a Wonderful World's waiting room and board for every seat, phase and
+  player count of a whole game; the lobbies; and the pure helpers behind what a click
+  means. Animations, drag and drop and the CSS need a browser (see below).
 
-## What has not been run
+## What has been run in a browser
 
-The WASM target couldn't be installed in the environment this was built in, so the
-client was compiled and tested natively but **never opened in a browser**. The server
-was exercised over real WebSockets with a script for both games. Before relying on it,
-build it with Trunk and play a round of each game, looking in particular at:
+Scripted runs in headless Firefox with two players: the menu; creating, joining and starting
+each game; a first move in each (a Catan settlement and road, a Hanabi clue, an It's a
+Wonderful World pick); reloading mid-game, which lands back on the board; leaving, which
+goes back to the menu; the page title throughout. It's a Wonderful World was also taken
+through its draft, planning and an Energy step (its kept cards also at phone width), and
+joining a room from a second tab was tried by hand. Still to look at with people:
 
+* a whole game of each;
 * Hanabi's hand-slide animation, drag and drop onto the play/discard zones, and the
   flashes and spinning rings (these live in effects that only run in a browser);
-* the two stylesheets: Catan's is scoped under `.theme-catan` and Hanabi's
-  (`client/hanabi.css`) under `.hanabi`, so they can't restyle each other, but that
-  scoping was done mechanically;
-* the tab title (it follows the game, and Hanabi's "Hanabii" mode);
-* It's a Wonderful World: the click handlers (picking a card, Build / Recycle / Scrap and
-  the dialog that asks where a recycled cube goes, picking a piece in the tray and a space
-  for it), the tray that sticks to the bottom of the screen, and `client/wonderful.css`
-  on a real phone. Its pages were rendered natively and the HTML was looked at in
-  headless Chromium at desktop and phone widths (no sideways scrolling), but nothing
-  there was clicked. On the server side whole games for 2, 3 and 5 players were played
-  over real WebSockets with a script, with one player's connection dropping and coming
-  back with its token in each.
+* phones: It's a Wonderful World's tray that sticks to the bottom of the screen, tap
+  targets, and the other two games' layouts.
 
 ## Game menu
 
@@ -155,13 +142,13 @@ create/join screen; "← All games" and leaving a game bring you back.
 
 ### Look and feel
 
-* Tiles are original SVG illustrations (`client/src/art.rs`): pine forest, clay hills
+* Tiles are original SVG illustrations (`client/src/games/catan/art.rs`): pine forest, clay hills
   with brick stacks, sheep meadow, wheat fields, snowy mountains, desert with cactus.
   Alternate tiles are mirrored so neighbours of one terrain differ. No image files.
 * 2:1 harbours are drawn in the colour of their resource, 3:1 harbours in neutral.
 * Anything that just changed on the board (a new road, settlement, city upgrade, or the
   robber's new tile) gets an ember contour that flickers and fades over 2.4 s
-  (`EMBER_MS` in `client/src/state.rs`, animation in `client/style.css`). Changes are
+  (`EMBER_MS` in `client/src/games/catan/look.rs`, animation in `catan.css` beside it). Changes are
   found by diffing each new game state against the previous one on the client, so every
   player sees them. The first state after joining or reconnecting isn't highlighted.
 
@@ -176,19 +163,24 @@ Longest Road, Largest Army, first to 10 points wins.
 
 ### Adding your tweaks
 
-Numbers live in `engine::Rules` (`victory_points`, `discard_above`, `bank_ratio`,
+Numbers live in `catan_core::Rules` (`victory_points`, `discard_above`, `bank_ratio`,
 `longest_road_min`, `largest_army_min`) and are passed to `Game::new` in
-`server/src/rooms.rs` (look for `Running::Catan`). Structural tweaks go in
-`engine/src/game.rs`:
+`server/src/games/catan.rs`. Structural tweaks go in `games/catan/src/game.rs`:
 
 * new costs / pieces: `build_*` functions and the `MAX_*` constants
 * new action: add a variant to `Action`, handle it in `apply_current`
-* new board layout: `Board::generate` in `engine/src/board.rs`
+* new board layout: `Board::generate` in `games/catan/src/board.rs`
 * anything the UI must show: add it to `GameView` (`view_for`) and render it in
-  `client/src/game.rs`
+  `client/src/games/catan/board.rs` (the game screen) or `map.rs` (the island)
 
-Because the engine has no I/O, new rules are easy to unit-test (see the tests at the
+Because the rules crate has no I/O, new rules are easy to unit-test (see the tests at the
 bottom of `game.rs`).
+
+Where it lives: rules in `games/catan` (`catan-core`), server side in
+`server/src/games/catan.rs`, screens in `client/src/games/catan/` (`screens.rs` for
+create/join and the waiting room, `board.rs` for the game screen, `map.rs` and `art.rs` for
+the island, `look.rs` for the ember highlights), styles in `catan.css` beside them, all scoped
+under `.theme-catan`.
 
 ## Hanabi
 
@@ -200,10 +192,10 @@ touch preview, drag a card onto the play or discard zone, the received-clue badg
 highlights for new cards and touched cards, the turn-ordered hands that slide to their
 new place, and the fireworks that fill in as a suit is built.
 
-Where it lives: rules in `hanabi-core`, server side in `server/src/rooms.rs`
-(`Running::Hanabi`), screens in `client/src/hanabi/` (`screens.rs` for the page, create/
-join and the lobby with its rules picker, `board.rs` for the game, `look.rs` for the
-pure display helpers), styles in `client/hanabi.css`.
+Where it lives: rules in `games/hanabi` (`hanabi-core`), server side in
+`server/src/games/hanabi.rs`, screens in `client/src/games/hanabi/` (`screens.rs` for the
+page, create/join and the lobby with its rules picker, `board.rs` for the game, `look.rs`
+for the pure display helpers), styles in `hanabi.css` beside them, scoped under `.hanabi`.
 
 What differs from the stand-alone app:
 
@@ -216,8 +208,9 @@ What differs from the stand-alone app:
 * moves the rules refuse come back as a short message in a toast at the top of the page.
 
 The wire protocol is serde's default JSON for `protocol::ClientMsg` / `ServerMsg`;
-Hanabi moves are `ClientMsg::Hanabi(hanabi_core::Action)` and the game arrives as
-`ServerMsg::HanabiState`.
+Hanabi moves are `ClientMsg::Move(GameMove::Hanabi(..))`, the lobby's rules travel as
+`GameOptions::Hanabi`, and the game arrives as a `ServerMsg::Game` holding a
+`GameView::Hanabi`.
 
 ## It's a Wonderful World
 
@@ -258,7 +251,7 @@ numbers come from Game Park's online version of the game
 ([gamepark/its-a-wonderful-world](https://github.com/gamepark/its-a-wonderful-world)). Seats are
 shuffled when the game starts and seat *i* plays Empire *i*.
 
-The whole catalogue is one table, `designs()` in `wonderful-core/src/cards.rs`, with each
+The whole catalogue is one table, `designs()` in `games/wonderful/src/cards.rs`, with each
 design's number of copies, and the `EMPIRES` table below it. `cargo test -p wonderful-core
 economy_report -- --ignored --nocapture` prints how two simple bots fare with it.
 
@@ -269,15 +262,15 @@ Corruption & Ascension or War or Peace option in the lobby, no solo play, and no
 
 ### Where it lives
 
-Rules in `wonderful-core` (pure and deterministic: the shuffle is a small generator seeded by
-the server, so there is no `rand` and a game can be replayed from its seed); server side in
-`server/src/rooms.rs` (`Running::Wonderful`); screens in `client/src/wonderful/` (`screens.rs`
-for the page, create/join and the waiting room, `board.rs` for the game, `look.rs` for the pure
-display helpers and what a click means, `mod.rs` for the interface state that outlives a
-redraw); styles in `client/wonderful.css`, all scoped under `.wonderful`.
+Rules in `games/wonderful` (`wonderful-core`, pure and deterministic: the shuffle is a small
+generator seeded by the server, so there is no `rand` and a game can be replayed from its seed);
+server side in `server/src/games/wonderful.rs`; screens in `client/src/games/wonderful/`
+(`screens.rs` for the page, create/join and the waiting room, `board.rs` for the game,
+`look.rs` for the pure display helpers and what a click means, `mod.rs` for the state kept
+between redraws); styles in `wonderful.css` beside them, all scoped under `.wonderful`.
 
-Moves are `ClientMsg::Wonderful(wonderful_core::Action)` and the game arrives as
-`ServerMsg::WonderfulState`. Because everybody moves at once, the server checks each move
+Moves are `ClientMsg::Move(GameMove::Wonderful(..))` and the game arrives as a
+`ServerMsg::Game` holding a `GameView::Wonderful`. Because everybody moves at once, the server checks each move
 against the rules and the seat of the connection that sent it, never against a turn, and
 sends every seat its own view after every move.
 
