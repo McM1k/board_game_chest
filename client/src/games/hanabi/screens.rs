@@ -5,7 +5,7 @@
 //! use it: rooms now have a host, and only the host changes the rules (and
 //! starts the game); everyone else sees the same controls, locked.
 
-use crate::state::{create_room, join_room, leave, send, App, Screen};
+use crate::app::{create_room, join_room, leave, send, App, Screen};
 use hanabi_core::GameRules;
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameKind, GameOptions, LobbyPlayer};
@@ -18,7 +18,7 @@ const HANABII_CARD_MARKERS: &str = "A spinning ring shows every color a card cou
 
 /// The page title of a Hanabi screen, which the browser tab follows.
 pub fn tab_title(app: App) -> &'static str {
-    if app.hanabi.hanabii() {
+    if app.games.hanabi.hanabii() {
         "Hanabii"
     } else {
         "Hanabi"
@@ -30,7 +30,7 @@ pub fn tab_title(app: App) -> &'static str {
 pub fn shell(app: App, content: impl IntoView + 'static) -> impl IntoView {
     // A memo, so the title is only rebuilt when the mode flips, not on the
     // (many) state updates that leave it alone.
-    let hanabii = Memo::new(move |_| app.hanabi.hanabii());
+    let hanabii = Memo::new(move |_| app.games.hanabi.hanabii());
     view! {
         <div class="hanabi">
             <main class="app">
@@ -117,7 +117,7 @@ fn set_rules(app: App, rules: GameRules) {
 /// it's picked and echoes it back, so the locked controls show exactly what
 /// the mode plays with).
 fn rule_group_class(app: App) -> &'static str {
-    if app.hanabi.rules.get().hanabii {
+    if app.games.hanabi.rules.get().hanabii {
         "rule-group rule-group-locked"
     } else {
         "rule-group"
@@ -138,7 +138,7 @@ fn rule_group_class(app: App) -> &'static str {
 /// does mean "back to normal".
 fn hanabii_mode_control(app: App, can_edit: bool) -> impl IntoView {
     let on_toggle = move |_| {
-        let rules = app.hanabi.rules.get_untracked();
+        let rules = app.games.hanabi.rules.get_untracked();
         let rules = if rules.hanabii {
             GameRules::default()
         } else {
@@ -152,7 +152,7 @@ fn hanabii_mode_control(app: App, can_edit: bool) -> impl IntoView {
             <label class="rule-toggle">
                 <input
                     type="checkbox"
-                    prop:checked=move || app.hanabi.rules.get().hanabii
+                    prop:checked=move || app.games.hanabi.rules.get().hanabii
                     disabled=!can_edit
                     on:change=on_toggle
                 />
@@ -189,13 +189,13 @@ fn suit_rule_toggle(
     set_short: impl Fn(&mut GameRules, bool) + Copy + Send + Sync + 'static,
 ) -> impl IntoView {
     let on_toggle = move |_| {
-        let mut rules = app.hanabi.rules.get_untracked();
+        let mut rules = app.games.hanabi.rules.get_untracked();
         let was_on = get(&rules);
         set(&mut rules, !was_on);
         set_rules(app, rules);
     };
     let on_toggle_short = move |_| {
-        let mut rules = app.hanabi.rules.get_untracked();
+        let mut rules = app.games.hanabi.rules.get_untracked();
         let was_on = get_short(&rules);
         set_short(&mut rules, !was_on);
         set_rules(app, rules);
@@ -206,8 +206,8 @@ fn suit_rule_toggle(
             <label class="rule-toggle">
                 <input
                     type="checkbox"
-                    prop:checked=move || get(&app.hanabi.rules.get())
-                    disabled={move || !can_edit || app.hanabi.rules.get().hanabii}
+                    prop:checked=move || get(&app.games.hanabi.rules.get())
+                    disabled={move || !can_edit || app.games.hanabi.rules.get().hanabii}
                     on:change=on_toggle
                 />
                 <span>{label}</span>
@@ -216,9 +216,9 @@ fn suit_rule_toggle(
             <label class="rule-toggle rule-toggle-sub">
                 <input
                     type="checkbox"
-                    prop:checked=move || get_short(&app.hanabi.rules.get())
+                    prop:checked=move || get_short(&app.games.hanabi.rules.get())
                     disabled={move || {
-                        let rules = app.hanabi.rules.get();
+                        let rules = app.games.hanabi.rules.get();
                         !can_edit || rules.hanabii || !get(&rules)
                     }}
                     on:change=on_toggle_short
@@ -237,18 +237,18 @@ fn suit_rule_toggle(
 fn extra_colors_control(app: App, can_edit: bool) -> impl IntoView {
     let on_change_count = move |ev: leptos::ev::Event| {
         let value: u8 = event_target_value(&ev).parse().unwrap_or(0).min(2);
-        let mut rules = app.hanabi.rules.get_untracked();
+        let mut rules = app.games.hanabi.rules.get_untracked();
         rules.extra_colors = value;
         set_rules(app, rules);
     };
     let on_toggle_short = move |_| {
-        let mut rules = app.hanabi.rules.get_untracked();
+        let mut rules = app.games.hanabi.rules.get_untracked();
         rules.extra_colors_short = !rules.extra_colors_short;
         set_rules(app, rules);
     };
     let option = move |count: u8| {
         view! {
-            <option value=count.to_string() prop:selected=move || app.hanabi.rules.get().extra_colors == count>
+            <option value=count.to_string() prop:selected=move || app.games.hanabi.rules.get().extra_colors == count>
                 {count.to_string()}
             </option>
         }
@@ -259,7 +259,7 @@ fn extra_colors_control(app: App, can_edit: bool) -> impl IntoView {
             <label class="rule-select">
                 <span>"Extra colors"</span>
                 <select
-                    disabled={move || !can_edit || app.hanabi.rules.get().hanabii}
+                    disabled={move || !can_edit || app.games.hanabi.rules.get().hanabii}
                     on:change=on_change_count
                 >
                     {option(0)}
@@ -271,9 +271,9 @@ fn extra_colors_control(app: App, can_edit: bool) -> impl IntoView {
             <label class="rule-toggle rule-toggle-sub">
                 <input
                     type="checkbox"
-                    prop:checked=move || app.hanabi.rules.get().extra_colors_short
+                    prop:checked=move || app.games.hanabi.rules.get().extra_colors_short
                     disabled={move || {
-                        let rules = app.hanabi.rules.get();
+                        let rules = app.games.hanabi.rules.get();
                         !can_edit || rules.hanabii || rules.extra_colors == 0
                     }}
                     on:change=on_toggle_short
@@ -292,7 +292,7 @@ fn extra_colors_control(app: App, can_edit: bool) -> impl IntoView {
 /// block of its own rather than reusing `suit_rule_toggle`'s shape.
 fn six_cards_control(app: App, can_edit: bool) -> impl IntoView {
     let on_toggle = move |_| {
-        let mut rules = app.hanabi.rules.get_untracked();
+        let mut rules = app.games.hanabi.rules.get_untracked();
         rules.six_cards = !rules.six_cards;
         set_rules(app, rules);
     };
@@ -302,8 +302,8 @@ fn six_cards_control(app: App, can_edit: bool) -> impl IntoView {
             <label class="rule-toggle">
                 <input
                     type="checkbox"
-                    prop:checked=move || app.hanabi.rules.get().six_cards
-                    disabled={move || !can_edit || app.hanabi.rules.get().hanabii}
+                    prop:checked=move || app.games.hanabi.rules.get().six_cards
+                    disabled={move || !can_edit || app.games.hanabi.rules.get().hanabii}
                     on:change=on_toggle
                 />
                 <span>"Six-card suits"</span>
@@ -402,5 +402,71 @@ pub fn lobby_screen(
                 "Leave room"
             </button>
         </div>
+    }
+}
+
+/// The menu card's picture: five fanned cards in the five Hanabi colours.
+pub fn icon() -> impl IntoView {
+    let card = |angle: i32, fill: &'static str| {
+        view! {
+            <rect x="25" y="14" width="14" height="24" rx="2.5" fill=fill stroke="#1d2c3a" stroke-width="1.2"
+                  transform=format!("rotate({angle} 32 52)") />
+        }
+    };
+    view! {
+        <svg viewBox="0 0 64 64" role="img" aria-label="Hanabi">
+            {card(-32, "#e63946")}
+            {card(-16, "#f2cc4b")}
+            {card(0, "#f6efdd")}
+            {card(16, "#2ec4b6")}
+            {card(32, "#3a86ff")}
+        </svg>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::players;
+    use leptos::tachys::view::RenderHtml;
+
+    #[test]
+    fn hanabi_lobby_lets_only_the_host_pick_rules_and_start() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let seats = players(&["Ann", "Bob", "Cy"]);
+            let host = lobby_screen(app, "WXYZ".into(), seats.clone(), 0, true).to_html();
+            assert!(host.contains("WXYZ") && host.contains("Start game"));
+            assert!(host.contains("Hanabii mode") && host.contains("Multicolor suit"));
+            assert!(host.contains("Black powder suit") && host.contains("Six-card suits"));
+            assert!(host.contains("Ann") && host.contains("(you)") && host.contains("host"));
+            assert!(host.contains("Leave room"));
+            // The start button is enabled with three players...
+            assert!(host.contains("Everyone who's here is in"));
+            assert!(!host.contains("Needs at least 2 players"));
+            // ...and the rules are editable. Only the "1 of each card" sub-options
+            // of suits that aren't switched on are locked.
+            assert_eq!(host.matches("disabled").count(), 3, "{host}");
+
+            // Alone, the host can't start yet.
+            let alone = lobby_screen(app, "WXYZ".into(), players(&["Ann"]), 0, true).to_html();
+            assert!(alone.contains("Needs at least 2 players"));
+
+            // A guest sees the same rules, locked, and no start button.
+            let guest = lobby_screen(app, "WXYZ".into(), seats, 2, false).to_html();
+            assert!(guest.contains("Hanabii mode") && guest.contains("Cy") && guest.contains("(you)"));
+            assert!(!guest.contains("Start game"));
+            assert!(guest.contains("Waiting for the host to pick the rules and start the game"));
+            // Every control is locked for them (the mode, both suits and their
+            // sub-options, the extra-colors count and its sub-option, six cards).
+            assert_eq!(guest.matches("disabled").count(), 8, "{guest}");
+
+            // A seat whose connection dropped says so.
+            let mut seats = players(&["Ann", "Bob"]);
+            seats[1].connected = false;
+            let html = lobby_screen(app, "WXYZ".into(), seats, 0, true).to_html();
+            assert!(html.contains("offline"));
+        });
     }
 }

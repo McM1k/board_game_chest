@@ -1,8 +1,13 @@
-use crate::art::{gradient_id, tile_art, DEFS};
-use crate::state::{now_ms, send, App, FreshKind, Mode, EMBER_MS};
-use protocol::{ClientMsg, GameMove};
+//! The island: tiles, harbours, roads, buildings, the robber, the targets
+//! you can click, and the ember contour on what just changed.
+
+use super::art::{gradient_id, tile_art, DEFS};
+use super::look::{now_ms, FreshKind, EMBER_MS};
+use super::Mode;
+use crate::app::{send, App};
 use catan_core::{Action, GameView, Phase, Resource};
 use leptos::prelude::*;
+use protocol::{ClientMsg, GameMove};
 
 pub const PLAYER_COLORS: [&str; 4] = ["#e63946", "#3a86ff", "#f4a261", "#2ec4b6"];
 
@@ -149,7 +154,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
         let board = ember_board.clone();
         move || {
             let now = now_ms();
-            app.fresh
+            app.games.catan.fresh
                 .get()
                 .into_iter()
                 .filter(|f| now - f.at < EMBER_MS)
@@ -173,7 +178,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
         let board = ember_board;
         move || {
             let now = now_ms();
-            app.fresh
+            app.games.catan.fresh
                 .get()
                 .into_iter()
                 .filter(|f| now - f.at < EMBER_MS)
@@ -218,7 +223,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
         if !my_turn {
             return ().into_any();
         }
-        let mode = app.ui.mode.get();
+        let mode = app.games.catan.ui.mode.get();
         let (settle, city, road, tiles): (&[usize], &[usize], &[usize], &[usize]) = match &v.phase {
             Phase::Setup { .. } => (&v.legal.settlements, &[], &v.legal.roads, &[]),
             Phase::RoadBuilding { .. } => (&[], &[], &v.legal.roads, &[]),
@@ -250,7 +255,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                     <polygon points=pts class="target tile-target"
                         on:click=move |_| {
                             if victims.len() > 1 {
-                                app.ui.robber_tile.set(Some(ti));
+                                app.games.catan.ui.robber_tile.set(Some(ti));
                             } else {
                                 send(app, &ClientMsg::Move(GameMove::Catan(Action::MoveRobber { tile: ti, victim: victims.first().copied() })));
                             }
@@ -268,7 +273,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                     <line x1=f(a.0) y1=f(a.1) x2=f(b.0) y2=f(b.1) class="target edge-target"
                         on:click=move |_| {
                             send(app, &ClientMsg::Move(GameMove::Catan(Action::BuildRoad { edge: ei })));
-                            app.ui.mode.set(Mode::None);
+                            app.games.catan.ui.mode.set(Mode::None);
                         } />
                 }
             })
@@ -289,7 +294,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                                 Action::BuildSettlement { vertex: vi }
                             };
                             send(app, &ClientMsg::Move(GameMove::Catan(a)));
-                            app.ui.mode.set(Mode::None);
+                            app.games.catan.ui.mode.set(Mode::None);
                         } />
                 }
             })

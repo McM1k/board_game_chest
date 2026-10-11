@@ -20,7 +20,7 @@ use wonderful_core::{
 
 use super::look::{self, CubeFrom, Held, Slot};
 use super::Ui;
-use crate::state::{leave, send, App};
+use crate::app::{leave, send, App};
 
 /// What every part of the board needs. Cheap to clone: the state is shared.
 #[derive(Clone)]
@@ -33,7 +33,7 @@ struct Ctx {
 
 impl Ctx {
     fn ui(&self) -> Ui {
-        self.app.wonderful
+        self.app.games.wonderful.ui
     }
 
     fn me(&self) -> &PlayerView {
@@ -55,8 +55,18 @@ impl Ctx {
     }
 }
 
-/// The whole game screen for the state the server last sent.
-pub fn board(app: App, view: View, names: Vec<String>, connected: Vec<bool>, room: String) -> impl IntoView {
+/// The running game, redrawn whenever the server sends a new state.
+pub fn board(app: App) -> AnyView {
+    let wonderful = app.games.wonderful;
+    (move || {
+        let view = wonderful.view.get()?;
+        Some(game_screen(app, view, wonderful.names.get(), wonderful.connected.get(), app.room.get()))
+    })
+    .into_any()
+}
+
+/// The whole game screen for one state the server sent.
+pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool>, room: String) -> impl IntoView {
     let ctx = Ctx { app, view: Arc::new(view), names: Arc::new(names), connected: Arc::new(connected) };
     let over = ctx.view.phase == Phase::Over;
 
@@ -1084,7 +1094,7 @@ mod tests {
     /// The board for `seat` as the browser would first paint it.
     fn render_with(app: App, state: &State, seat: usize) -> String {
         let n = state.seats();
-        board(app, state.view_for(seat), names(n), vec![true; n], "ABCD".into()).to_html()
+        game_screen(app, state.view_for(seat), names(n), vec![true; n], "ABCD".into()).to_html()
     }
 
     fn render(state: &State, seat: usize) -> String {
@@ -1369,7 +1379,7 @@ mod tests {
         // With the Krystallium picked, it fits every space.
         let html = in_owner(|| {
             let app = App::new();
-            app.wonderful.held.set(Some(Held::Krystallium));
+            app.games.wonderful.ui.held.set(Some(Held::Krystallium));
             render_with(app, &state, 0)
         });
         assert_eq!(html.matches("socket free res-energy fits").count(), 1);
@@ -1418,7 +1428,7 @@ mod tests {
 
         let html = in_owner(|| {
             let app = App::new();
-            app.wonderful.cube_from.set(Some(CubeFrom::Recycle(card)));
+            app.games.wonderful.ui.cube_from.set(Some(CubeFrom::Recycle(card)));
             render_with(app, &state, 0)
         });
         assert!(html.contains("modal-bg") && html.contains("role=\"dialog\""));
@@ -1429,7 +1439,7 @@ mod tests {
         // Scrapping warns about what is lost and only confirms: the cube goes to the Empire.
         let html = in_owner(|| {
             let app = App::new();
-            app.wonderful.cube_from.set(Some(CubeFrom::Scrap(built)));
+            app.games.wonderful.ui.cube_from.set(Some(CubeFrom::Scrap(built)));
             render_with(app, &state, 0)
         });
         assert!(html.contains("Everything placed on this building is lost."));
@@ -1440,7 +1450,7 @@ mod tests {
         // A choice that no longer applies (the card is gone) shows nothing.
         let html = in_owner(|| {
             let app = App::new();
-            app.wonderful.cube_from.set(Some(CubeFrom::Recycle(built)));
+            app.games.wonderful.ui.cube_from.set(Some(CubeFrom::Recycle(built)));
             render_with(app, &state, 0)
         });
         assert!(!html.contains("modal-bg"));
@@ -1454,7 +1464,7 @@ mod tests {
         state.players[2].krystallium = 2;
         let html = in_owner(|| {
             let n = state.seats();
-            board(
+            game_screen(
                 App::new(),
                 state.view_for(0),
                 names(n),
@@ -1536,7 +1546,7 @@ mod tests {
     fn player_names_are_escaped() {
         let state = State::new(2, 3);
         let html = in_owner(|| {
-            board(
+            game_screen(
                 App::new(),
                 state.view_for(0),
                 vec!["<b>Ann</b>".into(), "Bob & co".into()],

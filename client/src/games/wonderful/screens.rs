@@ -2,13 +2,10 @@
 //! create/join, and the waiting room.
 
 use super::look;
-use crate::state::{create_room, join_room, leave, send, App, Screen};
+use crate::app::{create_room, join_room, leave, send, App, Screen};
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameKind, LobbyPlayer};
 use wonderful_core::Res;
-
-/// The title of the browser tab.
-pub const TAB_TITLE: &str = "It's a Wonderful World";
 
 /// The frame every screen of the game sits in: its own look (see
 /// `wonderful.css`, everything in it is scoped under `.wonderful`).
@@ -136,5 +133,67 @@ pub fn lobby_screen(
                 </button>
             </div>
         </div>
+    }
+}
+
+/// The menu card's picture: a card with a planet on it and the five
+/// resource cubes along its foot.
+pub fn icon() -> impl IntoView {
+    let cube = |x: f64, fill: &'static str| {
+        view! { <rect x=x y="42" width="5" height="5" rx="1.2" fill=fill stroke="#0b2a2a" stroke-width="0.6" /> }
+    };
+    view! {
+        <svg viewBox="0 0 64 64" role="img" aria-label="It's a Wonderful World">
+            <g transform="rotate(-6 32 32)">
+                <rect x="14" y="8" width="36" height="48" rx="4" fill="#eef1ea" stroke="#0b2a2a" stroke-width="1.5" />
+                <path d="M14 12a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v6H14z" fill="#1f9d8f" />
+                <circle cx="32" cy="31" r="8" fill="#ff6b8b" />
+                <ellipse cx="32" cy="31" rx="13" ry="3.4" fill="none" stroke="#0b2a2a" stroke-width="1.4" transform="rotate(-18 32 31)" />
+                {cube(16.5, "#9aa5b1")}
+                {cube(23.0, "#2b2f33")}
+                {cube(29.5, "#3fb86e")}
+                {cube(36.0, "#f2c230")}
+                {cube(42.5, "#3b82e0")}
+            </g>
+        </svg>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{players, shows};
+    use leptos::tachys::view::RenderHtml;
+
+    #[test]
+    fn wonderful_lobby_lets_only_the_host_start() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let seats = players(&["Ann", "Bob", "Cy"]);
+            let host = lobby_screen(app, "WXYZ".into(), seats.clone(), 0, true).to_html();
+            assert!(host.contains("WXYZ") && host.contains("Start game"));
+            assert!(host.contains("Ann") && host.contains("(you)") && host.contains("host"));
+            assert!(host.contains("Leave room"));
+            // With three players the start button is enabled.
+            assert!(shows(&host, "Everyone who's here is in"));
+            assert!(!host.contains("Needs at least 2 players") && !host.contains("disabled"));
+
+            // Alone, the host can't start yet.
+            let alone = lobby_screen(app, "WXYZ".into(), players(&["Ann"]), 0, true).to_html();
+            assert!(alone.contains("Needs at least 2 players") && alone.contains("disabled"));
+
+            // A guest waits for the host.
+            let guest = lobby_screen(app, "WXYZ".into(), seats, 2, false).to_html();
+            assert!(guest.contains("Cy") && guest.contains("(you)"));
+            assert!(guest.contains("Waiting for the host to start the game"));
+            assert!(!guest.contains("Start game"));
+
+            // A seat whose connection dropped says so.
+            let mut seats = players(&["Ann", "Bob"]);
+            seats[1].connected = false;
+            let html = lobby_screen(app, "WXYZ".into(), seats, 0, true).to_html();
+            assert!(html.contains("offline"));
+        });
     }
 }

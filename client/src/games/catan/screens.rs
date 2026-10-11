@@ -1,4 +1,7 @@
-use crate::state::{create_room, join_room, leave, send, App, Screen};
+//! The screens before the game: your name and the room code, then the
+//! waiting room.
+
+use crate::app::{create_room, join_room, leave, send, App, Screen};
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameKind, LobbyPlayer};
 
@@ -36,7 +39,7 @@ pub fn lobby_screen(app: App, room: String, players: Vec<LobbyPlayer>, is_host: 
         .map(|(i, p)| {
             view! {
                 <li>
-                    <span class="swatch" style=format!("background:{}", crate::board::PLAYER_COLORS[i % 4]) />
+                    <span class="swatch" style=format!("background:{}", super::map::PLAYER_COLORS[i % 4]) />
                     {p.name.clone()}
                     {(i == 0).then(|| view! { <span class="badge">"host"</span> })}
                     {(!p.connected).then(|| view! { <span class="badge off">"offline"</span> })}
@@ -62,5 +65,57 @@ pub fn lobby_screen(app: App, room: String, players: Vec<LobbyPlayer>, is_host: 
             }}
             <button class="link" on:click=move |_| leave(app)>"Leave room"</button>
         </div>
+    }
+}
+
+fn hex_points(cx: f64, cy: f64, r: f64) -> String {
+    let h = r * 0.866;
+    [
+        (cx, cy - r),
+        (cx + h, cy - r / 2.0),
+        (cx + h, cy + r / 2.0),
+        (cx, cy + r),
+        (cx - h, cy + r / 2.0),
+        (cx - h, cy - r / 2.0),
+    ]
+    .iter()
+    .map(|(x, y)| format!("{x:.2},{y:.2}"))
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+/// The menu card's picture: three terrain hexes (forest, hills, fields).
+pub fn icon() -> impl IntoView {
+    view! {
+        <svg viewBox="0 0 64 64" role="img" aria-label="Catan">
+            <polygon points=hex_points(21.0, 24.0, 12.0) fill="#2d6a4f" stroke="#fdf6e3" stroke-width="1.5" />
+            <polygon points=hex_points(43.0, 24.0, 12.0) fill="#c1553b" stroke="#fdf6e3" stroke-width="1.5" />
+            <polygon points=hex_points(32.0, 43.0, 12.0) fill="#e0b94f" stroke="#fdf6e3" stroke-width="1.5" />
+            <circle cx="32" cy="43" r="5" fill="#f6efdd" />
+            <text x="32" y="46" text-anchor="middle" font-size="8" font-weight="700" fill="#c1121f">"8"</text>
+        </svg>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::players;
+    use leptos::tachys::view::RenderHtml;
+
+    #[test]
+    fn home_and_lobby_render() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            assert!(home_screen(app).to_html().contains("Create a room"));
+            let mut seats = players(&["Ann", "Bob"]);
+            seats[1].connected = false;
+            let html = lobby_screen(app, "WXYZ".into(), seats, true).to_html();
+            assert!(html.contains("WXYZ") && html.contains("Start game"));
+            assert!(html.contains("offline"));
+            let alone = lobby_screen(app, "WXYZ".into(), players(&["Ann"]), true).to_html();
+            assert!(alone.contains("Need at least 2 players"));
+        });
     }
 }

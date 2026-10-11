@@ -1,8 +1,12 @@
-use crate::board::{board_svg, robber_victims, PLAYER_COLORS};
-use crate::state::{leave, send, App, Mode, Picker};
-use protocol::{ClientMsg, GameMove};
+//! The game screen: the island in the middle, the players, your hand, the
+//! actions, trades and the log around it.
+
+use super::map::{board_svg, robber_victims, PLAYER_COLORS};
+use super::{Mode, Picker};
+use crate::app::{leave, send, App};
 use catan_core::{Action, DevCard, GameView, Hand, Phase, Resource, SetupExpect};
 use leptos::prelude::*;
+use protocol::{ClientMsg, GameMove};
 
 fn act(app: App, a: Action) {
     send(app, &ClientMsg::Move(GameMove::Catan(a)));
@@ -61,6 +65,16 @@ fn status_text(v: &GameView) -> String {
         }
         Phase::Finished { winner } => format!("{} wins the game!", v.players[*winner].name),
     }
+}
+
+/// The running game, redrawn whenever the server sends a new state.
+pub fn board(app: App) -> AnyView {
+    let catan = app.games.catan;
+    (move || {
+        let view = catan.view.get()?;
+        Some(game_screen(app, view, catan.connected.get(), app.room.get()))
+    })
+    .into_any()
 }
 
 pub fn game_screen(app: App, v: GameView, connected: Vec<bool>, room: String) -> impl IntoView {
@@ -176,10 +190,10 @@ fn hand_panel(app: App, v: &GameView) -> AnyView {
                 DevCard::Knight => act(app, Action::PlayKnight),
                 DevCard::RoadBuilding => act(app, Action::PlayRoadBuilding),
                 DevCard::YearOfPlenty => {
-                    app.ui.picks.set(vec![]);
-                    app.ui.picker.set(Some(Picker::YearOfPlenty));
+                    app.games.catan.ui.picks.set(vec![]);
+                    app.games.catan.ui.picker.set(Some(Picker::YearOfPlenty));
                 }
-                DevCard::Monopoly => app.ui.picker.set(Some(Picker::Monopoly)),
+                DevCard::Monopoly => app.games.catan.ui.picker.set(Some(Picker::Monopoly)),
                 DevCard::VictoryPoint => {}
             };
             Some(view! {
@@ -233,20 +247,20 @@ fn actions_panel(app: App, v: &GameView) -> AnyView {
             let dev_ok = has(&[(Resource::Sheep, 1), (Resource::Wheat, 1), (Resource::Ore, 1)]) && v.deck_left > 0;
 
             let toggle = move |m: Mode| {
-                app.ui.mode.update(|cur| *cur = if *cur == m { Mode::None } else { m });
+                app.games.catan.ui.mode.update(|cur| *cur = if *cur == m { Mode::None } else { m });
             };
             view! {
                 <section class="panel">
                     <h3>"Build"</h3>
                     <div class="btn-row">
                         <button disabled=!road_ok title="1 Wood + 1 Brick"
-                            class:active=move || app.ui.mode.get() == Mode::Road
+                            class:active=move || app.games.catan.ui.mode.get() == Mode::Road
                             on:click=move |_| toggle(Mode::Road)>"Road"</button>
                         <button disabled=!settle_ok title="1 Wood + 1 Brick + 1 Sheep + 1 Wheat"
-                            class:active=move || app.ui.mode.get() == Mode::Settlement
+                            class:active=move || app.games.catan.ui.mode.get() == Mode::Settlement
                             on:click=move |_| toggle(Mode::Settlement)>"Settlement"</button>
                         <button disabled=!city_ok title="2 Wheat + 3 Ore"
-                            class:active=move || app.ui.mode.get() == Mode::City
+                            class:active=move || app.games.catan.ui.mode.get() == Mode::City
                             on:click=move |_| toggle(Mode::City)>"City"</button>
                         <button disabled=!dev_ok title="1 Sheep + 1 Wheat + 1 Ore"
                             on:click=move |_| act(app, Action::BuyDevCard)>
@@ -255,7 +269,7 @@ fn actions_panel(app: App, v: &GameView) -> AnyView {
                     </div>
                     <p class="muted small-text">"Costs: road = wood+brick · settlement = wood+brick+sheep+wheat · city = 2 wheat+3 ore · dev card = sheep+wheat+ore"</p>
                     <button class="primary" on:click=move |_| {
-                        app.ui.mode.set(Mode::None);
+                        app.games.catan.ui.mode.set(Mode::None);
                         act(app, Action::EndTurn);
                     }>"End turn"</button>
                 </section>
@@ -343,8 +357,8 @@ fn trade_panel(app: App, v: &GameView) -> AnyView {
             let ok = me.hand.0[i] >= ratios[i];
             view! {
                 <button class=format!("res-btn res-{i}") disabled=!ok
-                    class:active=move || app.ui.bank_give.get() == Some(i)
-                    on:click=move |_| app.ui.bank_give.set(Some(i))>
+                    class:active=move || app.games.catan.ui.bank_give.get() == Some(i)
+                    on:click=move |_| app.games.catan.ui.bank_give.set(Some(i))>
                     {format!("{} {}:1", Resource::ALL[i].name(), ratios[i])}
                 </button>
             }
@@ -354,8 +368,8 @@ fn trade_panel(app: App, v: &GameView) -> AnyView {
         .map(|i| {
             view! {
                 <button class=format!("res-btn res-{i}")
-                    class:active=move || app.ui.bank_get.get() == Some(i)
-                    on:click=move |_| app.ui.bank_get.set(Some(i))>
+                    class:active=move || app.games.catan.ui.bank_get.get() == Some(i)
+                    on:click=move |_| app.games.catan.ui.bank_get.set(Some(i))>
                     {Resource::ALL[i].name()}
                 </button>
             }
@@ -368,32 +382,32 @@ fn trade_panel(app: App, v: &GameView) -> AnyView {
             <div class="label">"Give"</div><div class="btn-row wrap">{give_row}</div>
             <div class="label">"Get"</div><div class="btn-row wrap">{get_row}</div>
             <button disabled=move || {
-                    let (g, r) = (app.ui.bank_give.get(), app.ui.bank_get.get());
+                    let (g, r) = (app.games.catan.ui.bank_give.get(), app.games.catan.ui.bank_get.get());
                     g.is_none() || r.is_none() || g == r
                 }
                 on:click=move |_| {
-                    if let (Some(g), Some(r)) = (app.ui.bank_give.get_untracked(), app.ui.bank_get.get_untracked()) {
+                    if let (Some(g), Some(r)) = (app.games.catan.ui.bank_give.get_untracked(), app.games.catan.ui.bank_get.get_untracked()) {
                         act(app, Action::BankTrade { give: Resource::ALL[g], get: Resource::ALL[r] });
-                        app.ui.bank_give.set(None);
-                        app.ui.bank_get.set(None);
+                        app.games.catan.ui.bank_give.set(None);
+                        app.games.catan.ui.bank_get.set(None);
                     }
                 }>"Trade with bank"</button>
         </section>
         <section class="panel">
             <h3>"Offer a trade to players"</h3>
             <div class="two-col">
-                <div><div class="label">"You give"</div>{hand_editor(app.ui.give, hand_max)}</div>
-                <div><div class="label">"You want"</div>{hand_editor(app.ui.want, [9; 5])}</div>
+                <div><div class="label">"You give"</div>{hand_editor(app.games.catan.ui.give, hand_max)}</div>
+                <div><div class="label">"You want"</div>{hand_editor(app.games.catan.ui.want, [9; 5])}</div>
             </div>
             <button disabled=move || {
-                    let (g, w) = (app.ui.give.get(), app.ui.want.get());
+                    let (g, w) = (app.games.catan.ui.give.get(), app.games.catan.ui.want.get());
                     sum(g) == 0 || sum(w) == 0 || (0..5).any(|i| g[i] > 0 && w[i] > 0)
                 }
                 on:click=move |_| {
-                    let (g, w) = (app.ui.give.get_untracked(), app.ui.want.get_untracked());
+                    let (g, w) = (app.games.catan.ui.give.get_untracked(), app.games.catan.ui.want.get_untracked());
                     act(app, Action::ProposeTrade { give: Hand(g), want: Hand(w) });
-                    app.ui.give.set([0; 5]);
-                    app.ui.want.set([0; 5]);
+                    app.games.catan.ui.give.set([0; 5]);
+                    app.games.catan.ui.want.set([0; 5]);
                 }>"Offer trade"</button>
         </section>
     }
@@ -462,14 +476,14 @@ fn modals(app: App, v: &GameView) -> AnyView {
                 <div class="modal-bg"><div class="modal card">
                     <h2>"A 7 was rolled"</h2>
                     <p>{format!("You hold more than {} cards. Discard {need}.", v.rules.discard_above)}</p>
-                    {hand_editor(app.ui.discard, max)}
+                    {hand_editor(app.games.catan.ui.discard, max)}
                     <button class="primary"
-                        disabled=move || sum(app.ui.discard.get()) != need
+                        disabled=move || sum(app.games.catan.ui.discard.get()) != need
                         on:click=move |_| {
-                            act(app, Action::Discard(Hand(app.ui.discard.get_untracked())));
-                            app.ui.discard.set([0; 5]);
+                            act(app, Action::Discard(Hand(app.games.catan.ui.discard.get_untracked())));
+                            app.games.catan.ui.discard.set([0; 5]);
                         }>
-                        {move || format!("Discard ({}/{need})", sum(app.ui.discard.get()))}
+                        {move || format!("Discard ({}/{need})", sum(app.games.catan.ui.discard.get()))}
                     </button>
                 </div></div>
             }
@@ -479,7 +493,7 @@ fn modals(app: App, v: &GameView) -> AnyView {
 
     // Choose whom to steal from.
     if let (Phase::MoveRobber { .. }, Some(tile), true) =
-        (&v.phase, app.ui.robber_tile.get(), v.seat == Some(v.current))
+        (&v.phase, app.games.catan.ui.robber_tile.get(), v.seat == Some(v.current))
     {
         let buttons = robber_victims(v, tile)
             .into_iter()
@@ -488,7 +502,7 @@ fn modals(app: App, v: &GameView) -> AnyView {
                 view! {
                     <button on:click=move |_| {
                         act(app, Action::MoveRobber { tile, victim: Some(p) });
-                        app.ui.robber_tile.set(None);
+                        app.games.catan.ui.robber_tile.set(None);
                     }>
                         <span class="swatch" style=format!("background:{}", PLAYER_COLORS[p % 4]) />
                         {name}
@@ -500,14 +514,14 @@ fn modals(app: App, v: &GameView) -> AnyView {
             <div class="modal-bg"><div class="modal card">
                 <h2>"Steal from…"</h2>
                 <div class="btn-row wrap">{buttons}</div>
-                <button class="link" on:click=move |_| app.ui.robber_tile.set(None)>"Cancel"</button>
+                <button class="link" on:click=move |_| app.games.catan.ui.robber_tile.set(None)>"Cancel"</button>
             </div></div>
         }
         .into_any();
     }
 
     // Year of Plenty / Monopoly picker.
-    if let Some(kind) = app.ui.picker.get() {
+    if let Some(kind) = app.games.catan.ui.picker.get() {
         let title = match kind {
             Picker::YearOfPlenty => "Year of Plenty: pick 2 resources from the bank",
             Picker::Monopoly => "Monopoly: pick a resource to take from everyone",
@@ -518,17 +532,17 @@ fn modals(app: App, v: &GameView) -> AnyView {
                     <button class=format!("res-btn res-{i}") on:click=move |_| match kind {
                         Picker::Monopoly => {
                             act(app, Action::PlayMonopoly(Resource::ALL[i]));
-                            app.ui.picker.set(None);
+                            app.games.catan.ui.picker.set(None);
                         }
                         Picker::YearOfPlenty => {
-                            let mut picks = app.ui.picks.get_untracked();
+                            let mut picks = app.games.catan.ui.picks.get_untracked();
                             picks.push(i);
                             if picks.len() == 2 {
                                 act(app, Action::PlayYearOfPlenty(Resource::ALL[picks[0]], Resource::ALL[picks[1]]));
-                                app.ui.picker.set(None);
-                                app.ui.picks.set(vec![]);
+                                app.games.catan.ui.picker.set(None);
+                                app.games.catan.ui.picks.set(vec![]);
                             } else {
-                                app.ui.picks.set(picks);
+                                app.games.catan.ui.picks.set(picks);
                             }
                         }
                     }>{Resource::ALL[i].name()}</button>
@@ -539,11 +553,144 @@ fn modals(app: App, v: &GameView) -> AnyView {
             <div class="modal-bg"><div class="modal card">
                 <h2>{title}</h2>
                 <div class="btn-row wrap">{buttons}</div>
-                <button class="link" on:click=move |_| { app.ui.picker.set(None); app.ui.picks.set(vec![]); }>"Cancel"</button>
+                <button class="link" on:click=move |_| { app.games.catan.ui.picker.set(None); app.games.catan.ui.picks.set(vec![]); }>"Cancel"</button>
             </div></div>
         }
         .into_any();
     }
 
     ().into_any()
+}
+
+/// Native render smoke tests: build real game states with the rules and
+/// render the game screen to HTML, catching panics (bad indexing, unwraps)
+/// that the type checker can't see.
+#[cfg(test)]
+mod tests {
+    use super::super::look::{now_ms, Fresh, FreshKind};
+    use super::*;
+    use catan_core::{Game, Rules};
+    use leptos::tachys::view::RenderHtml;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    fn game_after_setup(n: usize) -> (Game, StdRng) {
+        let mut rng = StdRng::seed_from_u64(42);
+        let names = (0..n).map(|i| format!("P{i}")).collect();
+        let mut g = Game::new(Rules::default(), names, &mut rng);
+        while let Phase::Setup { expect, .. } = g.phase.clone() {
+            let s = g.current;
+            let a = match expect {
+                SetupExpect::Settlement => Action::BuildSettlement { vertex: g.legal_settlements(s, true)[0] },
+                SetupExpect::Road => Action::BuildRoad { edge: g.legal_roads(s, g.setup_vertex)[0] },
+            };
+            g.apply(s, a, &mut rng).unwrap();
+        }
+        (g, rng)
+    }
+
+    fn render(g: &Game, seat: Option<usize>) -> String {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let view = g.view_for(seat);
+            let n = view.players.len();
+            game_screen(app, view, vec![true; n], "ABCD".into()).to_html()
+        })
+    }
+
+    #[test]
+    fn renders_every_phase_for_every_seat() {
+        let (mut g, mut rng) = game_after_setup(3);
+        for seat in [Some(0), Some(1), Some(2), None] {
+            let html = render(&g, seat);
+            assert!(html.contains("Roll dice") == (seat == Some(0)));
+        }
+        g.do_roll(2, 3, &mut rng).unwrap();
+        g.players[0].hand = Hand([4, 4, 4, 4, 4]);
+        g.players[0].dev = vec![DevCard::Knight, DevCard::Monopoly];
+        for seat in [Some(0), Some(1), None] {
+            let html = render(&g, seat);
+            assert!(html.contains("<svg"));
+        }
+        let html = render(&g, Some(0));
+        assert!(html.contains("End turn"));
+        assert!(html.contains("Trade with the bank"));
+        assert!(html.contains("Knight"));
+
+        // Robber, discard and open-trade states.
+        g.players[1].hand = Hand([3, 3, 3, 0, 0]);
+        g.phase = Phase::Roll;
+        g.do_roll(3, 4, &mut rng).unwrap();
+        for seat in [Some(0), Some(1), Some(2)] {
+            let html = render(&g, seat);
+            assert!(!html.is_empty());
+        }
+        assert!(render(&g, Some(1)).contains("A 7 was rolled"));
+        g.phase = Phase::MoveRobber { back_to_roll: false };
+        assert!(render(&g, Some(0)).contains("target"));
+        g.phase = Phase::Main;
+        g.apply(0, Action::ProposeTrade { give: Hand([1, 0, 0, 0, 0]), want: Hand([0, 0, 1, 0, 0]) }, &mut rng)
+            .unwrap();
+        assert!(render(&g, Some(1)).contains("Trade offer"));
+        assert!(render(&g, Some(0)).contains("Your offer"));
+        g.phase = Phase::Finished { winner: 2 };
+        assert!(render(&g, Some(2)).contains("You win"));
+    }
+
+    #[test]
+    fn board_shows_terrain_art_and_fresh_embers() {
+        let (g, _) = game_after_setup(3);
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let view = g.view_for(Some(0));
+            let n = view.players.len();
+            let render = |app: App, view: GameView| game_screen(app, view, vec![true; n], "ABCD".into()).to_html();
+
+            // Art for every terrain, drawn from gradients + a hex clip.
+            let plain = render(app, view.clone());
+            for marker in [
+                "g-forest", "g-hills", "g-pasture", "g-fields", "g-mountains", "g-desert", "hexclip",
+                "#13422a", "#6e2815", "#8a8a80", "#a8801e", "#4a5568", "#2f5e2c",
+            ] {
+                assert!(plain.contains(marker), "missing {marker}");
+            }
+            assert_eq!(plain.matches("class=\"ember\"").count(), 0);
+
+            // Harbours: one coloured 2:1 token per resource, four neutral 3:1 tokens.
+            for color in ["#2d6a4f", "#c1553b", "#7bc99b", "#e0b94f", "#8d99ae"] {
+                assert!(plain.contains(&format!("fill=\"{color}\"")), "no harbour in {color}");
+            }
+            assert_eq!(plain.matches("fill=\"#fdf6e3\"").count(), 4);
+
+            // One ember per fresh item; expired ones are not drawn.
+            let road = view.roads.iter().position(|r| r.is_some()).unwrap();
+            let piece = view.buildings.iter().position(|b| b.is_some()).unwrap();
+            let now = now_ms();
+            app.games.catan.fresh.set(vec![
+                Fresh { kind: FreshKind::Road(road), at: now - 100.0 },
+                Fresh { kind: FreshKind::Piece(piece), at: now - 500.0 },
+                Fresh { kind: FreshKind::Robber(view.robber), at: now },
+                Fresh { kind: FreshKind::Piece(piece), at: now - 5000.0 },
+            ]);
+            let lit = render(app, view);
+            assert_eq!(lit.matches("class=\"ember\"").count(), 3);
+            assert!(lit.contains("animation-delay:-"));
+        });
+    }
+
+    #[test]
+    fn the_board_follows_the_latest_state() {
+        let (g, _) = game_after_setup(3);
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            assert!(!board(app).to_html().contains("topbar"), "nothing to draw before a state arrives");
+            app.room.set("ABCD".into());
+            app.games.catan.connected.set(vec![true; 3]);
+            app.games.catan.view.set(Some(g.view_for(Some(1))));
+            let html = board(app).to_html();
+            assert!(html.contains("topbar") && html.contains("ABCD"));
+        });
+    }
 }

@@ -3,7 +3,7 @@
 //!
 //! Ported from `game_board.rs` of the stand-alone client (McM1k/hanabii,
 //! Leptos 0.6). What changed: the state comes from the shared `App` (see
-//! `crate::state`) instead of a context of its own, moves go out as
+//! `Signals` in `mod.rs`) instead of a context of its own, moves go out as
 //! `GameMove::Hanabi`, and the bookkeeping that used `Rc<RefCell<..>>` now
 //! rides on the effects' own return values or on `StoredValue`s, because
 //! Leptos 0.8 wants every closure that ends up in a view to be `Send + Sync`.
@@ -24,7 +24,7 @@ use super::look::{
     clue_button_style, clue_image_parts, clue_touch_tooltip, color_class, color_initial,
     describe_move, hanabii_ring_colors, pips, ring_stops_style, turn_order, valid_clues,
 };
-use crate::state::{leave, send, App};
+use crate::app::{leave, send, App};
 
 /// Pulls the dragged card's id back out of a drop event. `dragstart` stores
 /// it as plain text via `DataTransfer::set_data`; this is the other half.
@@ -242,7 +242,7 @@ impl Ui {
 
 /// A seat's name, as the lobby knew it.
 fn player_name(app: App, id: PlayerId) -> String {
-    app.hanabi
+    app.games.hanabi
         .names
         .with_untracked(|names| names.get(id.0 as usize).cloned())
         .unwrap_or_else(|| format!("Player {}", id.0 as usize + 1))
@@ -250,7 +250,7 @@ fn player_name(app: App, id: PlayerId) -> String {
 
 /// Whether it's our turn in a game that is still running.
 fn can_act(app: App, you: PlayerId) -> bool {
-    app.hanabi.view.with(|view| {
+    app.games.hanabi.view.with(|view| {
         view.as_ref()
             .is_some_and(|v| v.current_turn == you && v.status == GameStatus::InProgress)
     })
@@ -263,7 +263,7 @@ fn can_act(app: App, you: PlayerId) -> bool {
 /// is what lets the slide animation move a hand to its new spot instead of
 /// the whole list just popping into a new order.
 pub fn board(app: App) -> impl IntoView {
-    let hanabi = app.hanabi;
+    let hanabi = app.games.hanabi;
     let Some((you, all_ids)) = hanabi.view.with_untracked(|view| {
         view.as_ref().map(|v| {
             let mut ids: Vec<PlayerId> = v.hands.keys().copied().collect();
@@ -361,7 +361,7 @@ pub fn board(app: App) -> impl IntoView {
 fn room_bar(app: App) -> impl IntoView {
     view! {
         <div class="room-bar">
-            <span>"Room " <b class="room-tag">{move || app.hanabi.room.get()}</b></span>
+            <span>"Room " <b class="room-tag">{move || app.room.get()}</b></span>
             <button class="link" on:click=move |_| leave(app)>
                 "Leave game"
             </button>
@@ -415,7 +415,7 @@ fn watch_clues(app: App, ui: Ui) {
 
     Effect::new(move |previous: Option<Option<PlayerId>>| {
         let previous = previous.flatten();
-        let Some((turn, clue)) = app.hanabi.view.with(|view| {
+        let Some((turn, clue)) = app.games.hanabi.view.with(|view| {
             view.as_ref().map(|v| {
                 let clue = match v.last_actor.and_then(|actor| v.last_moves.get(&actor)) {
                     Some(LastMove::Clue { target, clue, touched }) => {
@@ -492,7 +492,7 @@ fn table_view(
     previous_fireworks: StoredValue<Option<HashMap<Color, u8>>>,
     previous_discard_count: StoredValue<Option<usize>>,
 ) -> AnyView {
-    let Some(view) = app.hanabi.view.get() else {
+    let Some(view) = app.games.hanabi.view.get() else {
         return ().into_any();
     };
 
@@ -686,7 +686,7 @@ fn drop_zone_class(available: bool, dragging: bool) -> &'static str {
 /// face up with what that player knows about them) and, for another player,
 /// the clue buttons once their name has been clicked.
 fn hand(app: App, ui: Ui, you: PlayerId, pid: PlayerId, node_ref: NodeRef<Div>) -> AnyView {
-    let hanabi = app.hanabi;
+    let hanabi = app.games.hanabi;
     let is_you = pid == you;
     let name_of = move |id: PlayerId| player_name(app, id);
 
@@ -1186,10 +1186,10 @@ mod tests {
     fn app_showing(game: &GameState, seat: u8) -> App {
         let app = App::new();
         let n = game.players.len();
-        app.hanabi.names.set(NAMES[..n].iter().map(|s| s.to_string()).collect());
-        app.hanabi.connected.set(vec![true; n]);
-        app.hanabi.room.set("ABCD".into());
-        app.hanabi.view.set(Some(game.view_for(PlayerId(seat))));
+        app.games.hanabi.names.set(NAMES[..n].iter().map(|s| s.to_string()).collect());
+        app.games.hanabi.connected.set(vec![true; n]);
+        app.room.set("ABCD".into());
+        app.games.hanabi.view.set(Some(game.view_for(PlayerId(seat))));
         app
     }
 
@@ -1357,7 +1357,7 @@ mod tests {
             // Red gains a card and a card is discarded: exactly those two flash...
             game.fireworks.insert(Color::Red, 3);
             game.discard_pile.push(Card { color: Color::Green, number: 4 });
-            app.hanabi.view.set(Some(game.view_for(PlayerId(0))));
+            app.games.hanabi.view.set(Some(game.view_for(PlayerId(0))));
             let after = paint();
             assert_eq!(after.matches("firework-flash").count(), 1);
             assert!(after.contains("firework firework-red firework-flash"));
@@ -1425,7 +1425,7 @@ mod tests {
 
         in_owner(|| {
             let app = app_showing(&game, 2);
-            app.hanabi.connected.set(vec![true, false, true]);
+            app.games.hanabi.connected.set(vec![true, false, true]);
             let ui = Ui::new();
             let bob = hand(app, ui, PlayerId(2), PlayerId(1), NodeRef::new()).to_html();
             assert!(bob.contains("Bob") && bob.contains("hand-current") && bob.contains("Now playing"));
@@ -1653,13 +1653,13 @@ mod tests {
 
         in_owner(|| {
             let app = App::new();
-            app.hanabi.names.set(vec!["Ann".into(), "Bob".into()]);
+            app.games.hanabi.names.set(vec!["Ann".into(), "Bob".into()]);
             assert_eq!(player_name(app, PlayerId(1)), "Bob");
             assert_eq!(player_name(app, PlayerId(4)), "Player 5");
             assert!(!can_act(app, PlayerId(0)), "no game, no turn");
 
             let game = GameState::new(2, 1, GameRules::default());
-            app.hanabi.view.set(Some(game.view_for(PlayerId(0))));
+            app.games.hanabi.view.set(Some(game.view_for(PlayerId(0))));
             assert!(can_act(app, PlayerId(0)) && !can_act(app, PlayerId(1)));
         });
 
