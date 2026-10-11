@@ -11,13 +11,15 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/style-76a2dc5fe91b01c0.css" integrity="sha384-PTyAWJpNiQOkThgE7JITvh1p1k5EIU559i0rqBj122Dh7fPgcMAm3bVz8J18/xe1"/>
+    <!-- The shell (menu, toasts), then each game's stylesheet from its folder. -->
+    <link rel="stylesheet" href="/style-1aeb6d6a8016f1f4.css" integrity="sha384-On2saW/JJ19s8jTAzeATs9ekkdv4xPP2XZksYurpMc/bGm2z/SRkV12UGCrJ2i7H"/>
+    <link rel="stylesheet" href="/catan-431af0a89321ed75.css" integrity="sha384-zNxY9h7yRZ3vOSYCPTnK3o0f7Ivjz8GyHuunJQJdvxIMEDSgV1qky384JzXA6GV3"/>
     <link rel="stylesheet" href="/hanabi-201b058decda5c7b.css" integrity="sha384-ye/Q350gzZ/RMFtQTW4krfw8d8vGhJLmet6ouzaNwAu8DivK0K9XTlXbJAZ8g7fq"/>
     <link rel="stylesheet" href="/wonderful-e5b0bbbfbb7871f0.css" integrity="sha384-fC2elxod90kg93cKN65Sd3W8x8JhqODntcqIW8xAH0i6Zdf7ai2BM5Ck25tbXvB6"/>
     
 <script type="module">
-import init, * as bindings from '/client-66c0032841e19563.js';
-const wasm = await init({ module_or_path: '/client-66c0032841e19563_bg.wasm' });
+import init, * as bindings from '/client-1aeaa6b86c2cc3fb.js';
+const wasm = await init({ module_or_path: '/client-1aeaa6b86c2cc3fb_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -26,6 +28,6 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-  <link rel="modulepreload" href="/client-66c0032841e19563.js" crossorigin="anonymous" integrity="sha384-tqT5djIpF4onoYDNSrodJSIpzqbBP7xETX9cOugCIXjdCiyo6Jj8tb02eAfo1gUS"><link rel="preload" href="/client-66c0032841e19563_bg.wasm" crossorigin="anonymous" integrity="sha384-pYVPvx+MuDGVV54m84pLDaUX4pNUyKzAT5OoRRdJLk/ru/USE2uepoTqIoPIuI6O" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/client-1aeaa6b86c2cc3fb.js" crossorigin="anonymous" integrity="sha384-3Di/XpMz4ncD3KRxKVzTVtbeiK8iJaJoXYffbxW+0rUkexuEnTFwaL/CpesKGnXZ"><link rel="preload" href="/client-1aeaa6b86c2cc3fb_bg.wasm" crossorigin="anonymous" integrity="sha384-lD8AvhPYiWntmS32Q4g2rb9WoU36hvz4L/mpwDdaqwlYdqEcz2OzNLf3YoqXh9PN" as="fetch" type="application/wasm"></head>
   <body></body>
 </html>
