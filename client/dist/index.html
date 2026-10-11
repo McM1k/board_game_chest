@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Games</title>
-    <!-- Hanabi's and It's a Wonderful World's typefaces; Catan uses the system font. -->
+    <!-- Hanabi's, It's a Wonderful World's and Small World's typefaces; Catan uses the system font. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,10 +16,11 @@
     <link rel="stylesheet" href="/catan-431af0a89321ed75.css" integrity="sha384-zNxY9h7yRZ3vOSYCPTnK3o0f7Ivjz8GyHuunJQJdvxIMEDSgV1qky384JzXA6GV3"/>
     <link rel="stylesheet" href="/hanabi-201b058decda5c7b.css" integrity="sha384-ye/Q350gzZ/RMFtQTW4krfw8d8vGhJLmet6ouzaNwAu8DivK0K9XTlXbJAZ8g7fq"/>
     <link rel="stylesheet" href="/wonderful-cd42dee2053fcff3.css" integrity="sha384-jNGpp+aOKiD6WJ+tCpnzQDo36gIpjLYWzeGRFNMyP5aa/FPz48Zc4uSPBnlvXseL"/>
+    <link rel="stylesheet" href="/smallworld-358bae121481b114.css" integrity="sha384-gp/TUdN1j9gQ4JTR6cZTTOvkEzW2EN4Si1B1JmWkxH2K4IUYpcvon56ie+L7q+zC"/>
     
 <script type="module">
-import init, * as bindings from '/client-397e8054b94dd961.js';
-const wasm = await init({ module_or_path: '/client-397e8054b94dd961_bg.wasm' });
+import init, * as bindings from '/client-b8a165dfdb1c8c26.js';
+const wasm = await init({ module_or_path: '/client-b8a165dfdb1c8c26_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -28,6 +29,6 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-  <link rel="modulepreload" href="/client-397e8054b94dd961.js" crossorigin="anonymous" integrity="sha384-vm6eirs/L5tEpMHo/iHmYTRjyAHPxAxH9IIs8mpvDy8Tl4mDmkKYWRivL1FAv72g"><link rel="preload" href="/client-397e8054b94dd961_bg.wasm" crossorigin="anonymous" integrity="sha384-dJSnCOP1w9noCDphLG16kaSEnHdcguBXtdNmHl4Vce2IOg2hJ/uZShsFCumiZGET" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/client-b8a165dfdb1c8c26.js" crossorigin="anonymous" integrity="sha384-Rc/cvq+pIWs9g7xqZzr+Ry4k15YQhJ1a66l+wohCzZ1mElZno5/gVk6lUIEVz1ys"><link rel="preload" href="/client-b8a165dfdb1c8c26_bg.wasm" crossorigin="anonymous" integrity="sha384-9YC4qFBKlF8XZa3LQQlpmXmFo5GqGSwZdo51kirHDq3z/XjwQFmGCLCdIqPCfqzh" as="fetch" type="application/wasm"></head>
   <body></body>
 </html>
