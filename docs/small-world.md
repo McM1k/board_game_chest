@@ -1,14 +1,22 @@
 # Small World: design notes
 
-What the README doesn't say: how the boards were made, the rule calls the rulebook leaves
+What the README doesn't say: how the boards were made, the rule calls the rule sheets leave
 open, why the code is shaped the way it is, and what is left. The README's "Small World"
 section has the rules as played and where the code lives.
 
-Status (2026-10-11): the base game runs end to end in tests for 2 to 5 players, through the
-rules crate, the server and the client's render tests, and a whole two-player game plus the
-first turns with four and five players were played in headless Firefox by script. The rules
-follow the 2015 English rulebook
-([sw_rules_2015_en.pdf](https://cdn1.daysofwonder.com/smallworld/en/img/sw_rules_2015_en.pdf)).
+Status (2026-10-11): the base game and its six expansions run end to end in tests for 2 to
+5 players (3 to 6 with the Sky Islands), through the rules crate, the server and the
+client's render tests. In headless Firefox, by script: a whole two-player base game, a whole
+four-player game with every expansion, and the first turns with three, five and six players.
+The base rules follow the 2015 English rulebook
+([sw_rules_2015_en.pdf](https://cdn1.daysofwonder.com/smallworld/en/img/sw_rules_2015_en.pdf)),
+the expansions Days of Wonder's own rule sheets:
+[Cursed!](https://cdn1.daysofwonder.com/smallworld/en/img/sw_cu_rules_en.pdf),
+[Grand Dames](https://cdn1.daysofwonder.com/smallworld/en/img/sw_gd_rules_en.pdf),
+[Be Not Afraid...](https://cdn1.daysofwonder.com/smallworld/en/img/sw_bna_en.pdf),
+[Royal Bonus](https://cdn1.daysofwonder.com/smallworld/en/img/sw_royal_en.pdf),
+[A Spider's Web](https://cdn1.daysofwonder.com/smallworld/en/img/sw_spider_en.pdf) and
+[Sky Islands](https://cdn1.daysofwonder.com/smallworld/en/img/sw_si_en.pdf).
 
 ## The boards
 
@@ -63,6 +71,22 @@ Known weak spots, if a border looks wrong in play:
 * "border regions" (where a race enters the map) are those touching the board's frame, or
   on a sea that does. The printed boards don't mark them; this is the rulebook's definition.
 
+### The Sky Islands
+
+Both sides of the Sky Islands board were traced the same way, from Days of Wonder's photographs
+([three islands](https://boardgamegeek.com/image/3740949), [two islands](https://boardgamegeek.com/image/3740951)).
+Clouds hide the islands' edges, so their coasts were drawn by hand (`sky_outlines.py`) and only
+the borders inside an island come from the white lines (`seeds-sky-three.json`,
+`seeds-sky-two.json`). Then `export.py` as above, and `gen_sky.py` writes the tables (it
+expects the exports as `map-sky-three.json` and `map-sky-two.json`). The cloud bridges, the
+islands and where the Beanstalk and the Stairway arrive were read off the photographs and are
+written in `gen_sky.py`:
+
+| Side | Regions | Islands | Cloud bridges | Beanstalk, Stairway |
+|---|---|---|---|---|
+| Three islands | 9 | 2, 4 and 3 regions (the rulebook's example) | 1–3, 2–8, 5–9 | 9 (Forest), 6 (Hill) |
+| Two islands | 10, one a lake | 4 and 6 regions | 2–5, 4–9 | 4 (Swamp), 10 (Forest) |
+
 ## Rules: what was chosen where the rulebook is silent
 
 | Topic | What the engine does |
@@ -81,31 +105,71 @@ Known weak spots, if a border looks wrong in play:
 | The column | Combos are drawn from a shuffled stack of banners and one of badges; a vanished race's banner goes under the stack, used badges are reshuffled when the stack runs out. |
 | Ties | Most coins, then most tokens on the map; still level shares the win. |
 
+## The expansions: what was chosen
+
+The rule sheets are a paragraph per race and power; these are the calls made around them.
+
+| Race or power | What the engine does |
+|---|---|
+| Token supplies | The rule sheets don't count the tokens in the box. Races that never gain tokens get their banner's number plus five, as in the base game (which matches every count found: Kobolds 16, Goblins 11, Gypsies 11, Priestesses 9, White Ladies 7, Leprechauns 11, and the Sky Islands' races). Estimated from the boxes' totals: Fauns 15 and Igors 15 (Royal Bonus's 41 tokens less the Shrubmen's 11), Homunculi 11 and Pygmies 15 (Be Not Afraid... and A Spider's Web hold 98). |
+| Hordes of | The two Hordes tokens are two more tokens of the race, not taken from its supply, gone when it declines. |
+| Marauding | The second round starts when the first is declared done; the die is only offered in the second. |
+| Priestesses | Going into decline with them asks where the Ivory Tower goes (the "Ivory Tower" tool); the plain decline button puts it on a Fortress, else a Mountain, else the first region. |
+| Homunculi | A skipped Homunculi combo gets a token only while the box has one to spare. |
+| Leprechauns | 16 Pots of Gold; a pot can be taken off again while redeploying. Pots pay at the start of the owner's next turn, in decline too. |
+| Pygmies | Only while active, and for each token lost for good (not for those kept in hand). |
+| Catapult | The interface asks only for the target; the Catapult fires from the most exposed region that can reach it (fewest tokens). It stays there, protecting it, until it fires again or the race declines. |
+| Mercenary | Paying for the final conquest after the die: done for you when the die falls short by no more than two and you have a coin. |
+| Behemoth | Behemoths come back in hand when the troops are readied, attack from hand, and are placed while redeploying. One whose region is taken goes back to its owner's hand (rather than being placed at the end of the attacker's turn). |
+| Fireball | At most 4 held. A conquest uses the fewest Fireballs that make it as cheap as possible. |
+| Ice Witches | Winter markers are counted when the conquests end and placed while redeploying; they stay on a region whoever holds it, until the Ice Witches decline. |
+| Skags | The ten markers are 0, 0, 1, 1, 2, 2, 3 coins and three Skag Attacks (a published review's count). Loot left in an abandoned region goes with whoever takes the region next; a Skag Attack there does nothing. A Skag Attack also stops Dragons, Sorcerers and Zeppelins. |
+| Slingmen | The coin comes with any conquest made from two regions away. |
+| Copycat | The copy is picked before anything moves, from the six combos; it ends at the start of the next turn or when someone picks that combo, taking the copied power's pieces with it (a copied Seafaring's tokens leave the water). Copied Wealthy, Spirit and Soul-Touch do nothing. |
+| Lava | One Lava per Mountain held (four at most), on a region next to one of them; the tokens there go back in hand. |
+| Soul-Touch | As Days of Wonder answered: the race in decline comes back with its own power and as many tokens as when it was picked, and plays on the next turn. |
+| Escargots | The start-of-turn coins are the regions' own (less Winter); what the power adds is paid at the end. |
+| Scavengers | A race in decline keeps scoring the regions where the Scavengers hold its token, and doesn't leave the map while it has one. |
+| Storm Giants | The Lightning Bolts take a Mountain within the usual reach. |
+| Drakons | Each Dragon costs a token turned into it and one to hold the region. Their Dragons fly away at the start of the next turn. |
+| Zeppelined | A crash throws the defenders out as a conquest would (a token lost, the rest in hand) and the region burns until the start of the zeppelin's owner's next turn. |
+| Haggling | Pacts are settled at the end of each holder's turn, with the player whose active race is Haggling: a coin per pact to the haggler if the holder took one of that race's regions, else to the holder. |
+| Gunner | Both Cannons are placed at the end of every turn (one with a single region); a fired Cannon can't move that turn; all stand down at the start of the next. |
+| Racketeering | Paid for skips by anyone, the free pick included. |
+| Sky Islands | Played on the board for one player fewer, so with 3 to 6 players; the turn track is the base game's for 3 to 5 players, 8 turns for 6. The Beanstalk and the Stairway go on two ground regions away from the edge and the water, at least three steps apart. An island held whole by one race is worth a coin to that race (the lake doesn't count). |
+
 ## Why the code is shaped this way
 
 The shape is every game's (see `docs/adding-a-game.md`), with It's a Wonderful World as
 the nearest model: a pure crate with its own small seeded generator (SplitMix64) instead of
 `rand`, so the whole game, die rolls included, replays from the seed the server passes.
 
-**The view carries the legal moves.** `View::moves` lists what the seat can do right now
-(regions to conquer with their cost, regions within the die's reach, where tokens can go,
-whether the turn can end and why not). The client highlights and labels exactly those, so
+**The view carries the legal moves.** `View::moves` lists what the seat can do right now: a
+list of moves on regions (`RegionMove` and the region, with the tokens it costs), and the
+other choices (picks with their cost, copying, peace, Trade Pacts, whether the turn can end
+and why not). The client highlights and labels exactly those, so
 it never has to work out the rules, and a rule fixed in the crate is fixed on screen too.
-`State::moves` tries the redeploy actions on a clone of the state, which is simple and
-cheap enough for a few dozen regions.
+`State::check` validates a move on a region without changing anything; `apply` and `moves`
+both go through it, so what is offered is exactly what is accepted.
 
 **One phase at a time, one actor at a time.** `State::actor` names who must act: the current
 player, or during Reinforce the first player with tokens to put back. The server just
 applies a move for the seat of the connection that sent it, and broadcasts.
 
 **The boards are data.** `maps.rs` holds topology only (terrain, features, neighbours), so
-the rules crate stays small; the client's `shapes.rs` holds the outlines in the same order.
+the rules crate stays small; the client's `shapes.rs` holds the outlines in the same order. A
+game plays on a `Board` built from them: the ground board, then the Sky Islands' regions
+numbered after it, with the Beanstalk and the Stairway joining the two. The view carries the
+ground board's size, the side and the access regions, so the client builds the same `Board`.
 
 ## Left to do
 
-* A browser pass with people, especially the rarer powers (Heroes, Dragon, Bivouacking,
-  Fortified, Diplomat, Sorcerers), which were tested in the rules and on the server only.
+* A browser pass with people, especially the powers with their own tools (Heroes, Dragons,
+  Bivouacking, Fortified, Diplomat, Sorcerers, and the expansions' Catapult, Mercenaries,
+  Fireballs, Behemoths, Lava, Winter, Pots of Gold, Cannons, Zeppelins, Copycat and Trade
+  Pacts), which were tested in the rules, on the server and in render tests, but clicked
+  through in a browser only by a script that conquers.
 * Compare each board region by region with a physical copy, if one is at hand.
 * Dialog accessibility: the die's confirmation is a plain box in the action panel.
-* The expansions, if wanted: the 6-player board and the extra races and powers would be
-  more variants in `races.rs` and another table in `maps.rs`.
+* The expansions not in: the 6-player board, Underground, Realms, Necromancer Island, Tales and
+  Legends, Leaders, and the blank banners and badges.

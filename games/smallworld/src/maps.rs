@@ -1,7 +1,13 @@
-//! The four boards of the box, one per number of players, as regions and
-//! who borders whom. Transcribed from photographs of the printed boards
-//! (see `docs/small-world.md`); the outlines the client draws are in its
-//! own `shapes.rs`, with the regions in the same order.
+//! The boards: the four of the box, one per number of players, and the two
+//! sides of the Sky Islands board, as regions and who borders whom.
+//! Transcribed from photographs of the printed boards (see
+//! `docs/small-world.md`); the outlines the client draws are in its own
+//! `shapes.rs`, with the regions in the same order.
+//!
+//! A game is played on a [`Board`]: the ground board alone, or with the Sky
+//! Islands the ground board for one player fewer, the islands beside it
+//! (their regions numbered after the ground's), and the Magical Beanstalk
+//! and the Stairway to Heaven joining two ground regions to the islands.
 
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +35,7 @@ impl Terrain {
         }
     }
 
-    /// Seas and the lake: only Seafaring races go there.
+    /// Seas and lakes: only Seafaring races go there.
     pub fn is_water(self) -> bool {
         matches!(self, Terrain::Sea | Terrain::Lake)
     }
@@ -41,12 +47,12 @@ const CAVERN: u8 = 4;
 const TRIBE: u8 = 8;
 const EDGE: u8 = 16;
 
-/// One region of a board.
+/// One region of a printed board.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub terrain: Terrain,
     flags: u8,
-    /// The regions it shares a border with.
+    /// The regions it shares a border with, on its own board.
     pub adjacent: &'static [u8],
 }
 
@@ -83,7 +89,7 @@ impl Region {
     }
 }
 
-/// A board: its regions and how many turns a game on it lasts.
+/// A printed ground board: its regions and how many turns a game on it lasts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Map {
     pub players: usize,
@@ -96,26 +102,6 @@ impl Map {
     pub fn for_players(players: usize) -> &'static Map {
         MAPS.iter().find(|m| m.players == players).expect("the boards are for 2 to 5 players")
     }
-
-    pub fn adjacent(&self, a: usize, b: usize) -> bool {
-        self.regions[a].adjacent.contains(&(b as u8))
-    }
-
-    /// Next to a sea or the lake.
-    pub fn coastal(&self, region: usize) -> bool {
-        self.regions[region].adjacent.iter().any(|&n| self.regions[n as usize].terrain.is_water())
-    }
-
-    /// Where a race may enter the map: a region on the edge of the board,
-    /// or one whose shore is on a sea that reaches the edge.
-    pub fn border(&self, region: usize) -> bool {
-        let r = &self.regions[region];
-        r.edge()
-            || r.adjacent.iter().any(|&n| {
-                let n = &self.regions[n as usize];
-                n.terrain.is_water() && n.edge()
-            })
-    }
 }
 
 pub static MAPS: [Map; 4] = [
@@ -124,6 +110,216 @@ pub static MAPS: [Map; 4] = [
     Map { players: 4, turns: 9, regions: MAP_4 },
     Map { players: 5, turns: 8, regions: MAP_5 },
 ];
+
+/// A side of the Sky Islands board.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Sky {
+    /// Two islands, one with a lake.
+    Two,
+    /// Three islands, of 2, 3 and 4 regions.
+    Three,
+}
+
+impl Sky {
+    pub fn name(self) -> &'static str {
+        match self {
+            Sky::Two => "Two islands",
+            Sky::Three => "Three islands",
+        }
+    }
+
+    pub fn regions(self) -> &'static [Region] {
+        match self {
+            Sky::Two => SKY_TWO_REGIONS,
+            Sky::Three => SKY_THREE_REGIONS,
+        }
+    }
+
+    /// The islands, as lists of the side's own region numbers.
+    pub fn islands(self) -> &'static [&'static [u8]] {
+        match self {
+            Sky::Two => SKY_TWO_ISLANDS,
+            Sky::Three => SKY_THREE_ISLANDS,
+        }
+    }
+
+    /// Where the Magical Beanstalk and the Stairway to Heaven arrive, as the
+    /// side's own region numbers.
+    pub fn landings(self) -> [usize; 2] {
+        match self {
+            Sky::Two => [3, 9],
+            Sky::Three => [8, 5],
+        }
+    }
+}
+
+/// How many game turns a game lasts: the board's track, or with the Sky
+/// Islands (played on the board for one player fewer) as the rulebook says.
+pub fn turns(players: usize) -> u8 {
+    match players {
+        2 | 3 => 10,
+        4 => 9,
+        _ => 8,
+    }
+}
+
+/// One region of the board a game is played on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Spot {
+    def: &'static Region,
+    pub terrain: Terrain,
+    /// The regions it borders, by their index on the whole board.
+    pub adjacent: Vec<usize>,
+    /// In the Sky Islands.
+    pub sky: bool,
+    /// The island it belongs to, in the Sky Islands.
+    pub island: Option<usize>,
+}
+
+impl Spot {
+    pub fn mine(&self) -> bool {
+        self.def.mine()
+    }
+
+    pub fn magic(&self) -> bool {
+        self.def.magic()
+    }
+
+    pub fn cavern(&self) -> bool {
+        self.def.cavern()
+    }
+
+    pub fn lost_tribe(&self) -> bool {
+        self.def.lost_tribe()
+    }
+
+    pub fn edge(&self) -> bool {
+        self.def.edge()
+    }
+
+    pub fn mountain(&self) -> bool {
+        self.def.mountain()
+    }
+}
+
+/// The board of a game: the ground, and the Sky Islands if they are played.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Board {
+    /// The players the ground board is for.
+    pub ground: usize,
+    pub sky: Option<Sky>,
+    /// Ground regions joined to the islands: the Beanstalk's, then the
+    /// Stairway's, each with the sky region it leads to.
+    pub access: Vec<(usize, usize)>,
+    pub regions: Vec<Spot>,
+    /// The islands' regions, by their index on the whole board.
+    pub islands: Vec<Vec<usize>>,
+}
+
+impl Board {
+    /// The ground board for `ground` players, with the Sky Islands' side
+    /// `sky` beside it, joined at the ground regions `access` (the
+    /// Beanstalk's, then the Stairway's).
+    pub fn new(ground: usize, sky: Option<Sky>, access: &[usize]) -> Board {
+        let map = Map::for_players(ground);
+        let n = map.regions.len();
+        let mut regions: Vec<Spot> = map
+            .regions
+            .iter()
+            .map(|def| Spot {
+                def,
+                terrain: def.terrain,
+                adjacent: def.adjacent.iter().map(|&a| a as usize).collect(),
+                sky: false,
+                island: None,
+            })
+            .collect();
+        let mut islands = Vec::new();
+        let mut links = Vec::new();
+        if let Some(sky) = sky {
+            for def in sky.regions() {
+                regions.push(Spot {
+                    def,
+                    terrain: def.terrain,
+                    adjacent: def.adjacent.iter().map(|&a| n + a as usize).collect(),
+                    sky: true,
+                    island: None,
+                });
+            }
+            for (i, island) in sky.islands().iter().enumerate() {
+                let island: Vec<usize> = island.iter().map(|&r| n + r as usize).collect();
+                for &r in &island {
+                    regions[r].island = Some(i);
+                }
+                islands.push(island);
+            }
+            for (&ground, landing) in access.iter().zip(sky.landings()) {
+                let landing = n + landing;
+                regions[ground].adjacent.push(landing);
+                regions[landing].adjacent.push(ground);
+                links.push((ground, landing));
+            }
+        }
+        Board { ground, sky, access: links, regions, islands }
+    }
+
+    pub fn len(&self) -> usize {
+        self.regions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.regions.is_empty()
+    }
+
+    pub fn adjacent(&self, a: usize, b: usize) -> bool {
+        self.regions[a].adjacent.contains(&b)
+    }
+
+    /// Next to a sea or a lake.
+    pub fn coastal(&self, region: usize) -> bool {
+        self.regions[region].adjacent.iter().any(|&n| self.regions[n].terrain.is_water())
+    }
+
+    /// Where a race may enter the map: a ground region on the edge of the
+    /// board, or one whose shore is on a sea that reaches it. Never in the
+    /// Sky Islands.
+    pub fn border(&self, region: usize) -> bool {
+        let r = &self.regions[region];
+        !r.sky
+            && (r.edge()
+                || r.adjacent.iter().any(|&n| {
+                    let n = &self.regions[n];
+                    n.terrain == Terrain::Sea && n.edge()
+                }))
+    }
+
+    /// One region away from `from` without bordering it, over a region that
+    /// isn't a sea (the Catapult and the Slingmen).
+    pub fn two_away(&self, from: usize, to: usize) -> bool {
+        from != to
+            && !self.adjacent(from, to)
+            && self.regions[from]
+                .adjacent
+                .iter()
+                .any(|&mid| self.regions[mid].terrain != Terrain::Sea && self.adjacent(mid, to))
+    }
+
+    /// Steps between two regions (`usize::MAX` if they aren't joined).
+    pub fn distance(&self, from: usize, to: usize) -> usize {
+        let mut dist = vec![usize::MAX; self.len()];
+        let mut queue = std::collections::VecDeque::from([from]);
+        dist[from] = 0;
+        while let Some(r) = queue.pop_front() {
+            for &n in &self.regions[r].adjacent {
+                if dist[n] == usize::MAX {
+                    dist[n] = dist[r] + 1;
+                    queue.push_back(n);
+                }
+            }
+        }
+        dist[to]
+    }
+}
 
 use Terrain::*;
 
@@ -282,3 +478,32 @@ const MAP_5: &[Region] = &[
     Region::new(Hill, MAGIC | TRIBE | EDGE, &[38, 39, 42, 44, 46]), // 45
     Region::new(Sea, EDGE, &[44, 45]), // 46
 ];
+
+/// The Sky Islands board, 9 regions on 3 islands (cloud bridges included).
+const SKY_THREE_REGIONS: &[Region] = &[
+    Region::new(Farmland, 0, &[1, 2]), // 0
+    Region::new(Forest, MAGIC | TRIBE, &[0, 7]), // 1
+    Region::new(Mountain, MINE, &[0, 3, 4, 5]), // 2
+    Region::new(Farmland, MAGIC, &[2, 4]), // 3
+    Region::new(Swamp, TRIBE, &[2, 3, 5, 8]), // 4
+    Region::new(Hill, 0, &[2, 4]), // 5
+    Region::new(Hill, CAVERN | TRIBE, &[7, 8]), // 6
+    Region::new(Swamp, 0, &[1, 6, 8]), // 7
+    Region::new(Forest, MINE, &[4, 6, 7]), // 8
+];
+const SKY_THREE_ISLANDS: &[&[u8]] = &[&[0, 1], &[2, 3, 4, 5], &[6, 7, 8]];
+
+/// The Sky Islands board, 10 regions on 2 islands (cloud bridges included).
+const SKY_TWO_REGIONS: &[Region] = &[
+    Region::new(Mountain, MINE, &[1, 2, 3]), // 0
+    Region::new(Farmland, 0, &[0, 3, 4]), // 1
+    Region::new(Hill, MAGIC, &[0, 3]), // 2
+    Region::new(Swamp, TRIBE, &[0, 1, 2, 8]), // 3
+    Region::new(Mountain, 0, &[1, 5, 6, 8]), // 4
+    Region::new(Farmland, CAVERN, &[4, 6, 7]), // 5
+    Region::new(Lake, 0, &[4, 5, 7, 8]), // 6
+    Region::new(Swamp, MINE | TRIBE, &[5, 6, 8, 9]), // 7
+    Region::new(Hill, MAGIC | TRIBE, &[3, 4, 6, 7, 9]), // 8
+    Region::new(Forest, 0, &[7, 8]), // 9
+];
+const SKY_TWO_ISLANDS: &[&[u8]] = &[&[0, 1, 2, 3], &[4, 5, 6, 7, 8, 9]];

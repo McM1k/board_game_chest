@@ -16,43 +16,45 @@
 
 use crate::*;
 
+mod expansions;
+
 /// Seat `seat` plays `race` with `power`, holding all of its tokens, at the
 /// start of its conquests. The combo is taken out of the column and stacks.
-fn give(s: &mut State, seat: usize, race: Race, power: Power) {
+pub(crate) fn give(s: &mut State, seat: usize, race: Race, power: Power) {
     s.offers.retain(|o| o.race != race && o.power != power);
     s.races.retain(|&r| r != race);
     s.powers.retain(|&p| p != power);
-    s.players[seat].active = Some(Army {
-        race,
-        power,
-        hand: race.tokens() + power.tokens(),
-        resting: 0,
-        turns: 0,
-        holes: 0,
-        ally: None,
-    });
+    let mut army = Army::new(race, power, race.tokens() + power.tokens());
+    if power == Power::Behemoth {
+        army.behemoths = BEHEMOTHS;
+    }
+    s.players[seat].active = Some(army);
     s.current = seat;
     s.phase = Phase::Conquest { ghouls: false };
     s.this_turn = Turn::default();
 }
 
 /// Puts `count` tokens of `race` in `region`, as they would stand there.
-fn place(s: &mut State, region: usize, race: Race, count: u8) {
+pub(crate) fn place(s: &mut State, region: usize, race: Race, count: u8) {
     let declined = s.owner(race).is_some_and(|(_, d)| d);
     s.regions[region] = RegionState { tokens: Some(Tokens { race, count, declined }), ..RegionState::default() };
 }
 
-fn hand(s: &State, seat: usize) -> u8 {
+pub(crate) fn hand(s: &State, seat: usize) -> u8 {
     s.players[seat].active.map_or(0, |a| a.hand)
 }
 
-fn tokens(s: &State, region: usize) -> u8 {
+pub(crate) fn tokens(s: &State, region: usize) -> u8 {
     s.regions[region].tokens.map_or(0, |t| t.count)
 }
 
 /// A two-player game where nobody has played yet, with no Lost Tribes.
-fn empty_game() -> State {
-    let mut s = State::new(2, 1);
+pub(crate) fn empty_game() -> State {
+    no_tribes(State::new(2, 1))
+}
+
+/// The same game without its Lost Tribes.
+pub(crate) fn no_tribes(mut s: State) -> State {
     for r in &mut s.regions {
         r.lost_tribe = false;
     }
@@ -65,9 +67,12 @@ fn a_new_game_sets_up_the_board_and_the_column() {
         let s = State::new(players, 9);
         let map = Map::for_players(players);
         assert_eq!(s.regions.len(), map.regions.len());
+        assert_eq!((s.board.ground, s.board.sky), (players, None));
         assert_eq!(s.offers.len(), OFFERS);
         assert_eq!(s.races.len(), 14 - OFFERS);
         assert_eq!(s.powers.len(), 20 - OFFERS);
+        assert!(s.races.iter().chain(s.offers.iter().map(|o| &o.race)).all(|r| r.pack() == Pack::Base));
+        assert_eq!(s.turns(), Map::for_players(players).turns);
         assert!(s.players.iter().all(|p| p.coins == START_COINS && p.active.is_none()));
         assert_eq!((s.turn, s.current, s.phase), (1, 0, Phase::Pick));
         for (r, def) in s.regions.iter().zip(map.regions) {
@@ -85,11 +90,12 @@ fn a_new_game_sets_up_the_board_and_the_column() {
 fn the_boards_are_consistent() {
     for map in &MAPS {
         let n = map.regions.len();
+        let board = Board::new(map.players, None, &[]);
         for (i, r) in map.regions.iter().enumerate() {
             assert!(!r.adjacent.is_empty(), "{} players: region {i} borders nothing", map.players);
             for &j in r.adjacent {
                 assert!((j as usize) < n && j as usize != i);
-                assert!(map.adjacent(j as usize, i), "{} players: {i} and {j} aren't mutual", map.players);
+                assert!(board.adjacent(j as usize, i), "{} players: {i} and {j} aren't mutual", map.players);
             }
             assert!(!(r.terrain.is_water() && r.lost_tribe()));
         }
@@ -140,7 +146,7 @@ fn picking_pays_a_coin_to_each_combo_above_and_pockets_the_coins_on_it() {
     assert_eq!(s.apply(0, Action::Pick { offer: 4 }), Err(Error::NotEnoughCoins));
     assert_eq!(s.apply(0, Action::Pick { offer: 9 }), Err(Error::NoSuchOffer));
     assert_eq!(s.apply(1, Action::Pick { offer: 0 }), Err(Error::NotYourTurn));
-    assert_eq!(s.moves(0).pick, vec![0, 1, 2, 3]);
+    assert_eq!(s.moves(0).pick, vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 }
 
 #[test]
@@ -151,7 +157,7 @@ fn a_race_enters_through_the_border_then_conquers_next_to_its_regions() {
     assert_eq!(s.apply(0, Action::Conquer { region: 6 }), Err(Error::NotABorder));
     assert_eq!(s.apply(0, Action::Conquer { region: 0 }), Err(Error::Water));
     // Region 21 isn't on the edge but on a sea that is.
-    assert!(s.map().border(21) && !s.map().border(12));
+    assert!(s.board.border(21) && !s.board.border(12));
     s.apply(0, Action::Conquer { region: 7 }).unwrap();
     assert_eq!(tokens(&s, 7), 2);
     assert_eq!(hand(&s, 0), 10 - 2);
@@ -161,7 +167,7 @@ fn a_race_enters_through_the_border_then_conquers_next_to_its_regions() {
     s.apply(0, Action::Conquer { region: 6 }).unwrap();
     // A mountain costs one more.
     assert_eq!(s.conquest_cost(0, 4), Ok(3));
-    assert_eq!(s.moves(0).conquer.iter().find(|(r, _)| *r == 4), Some(&(4, 3)));
+    assert_eq!(s.moves(0).conquer().iter().find(|(r, _)| *r == 4), Some(&(4, 3)));
 }
 
 #[test]
@@ -250,7 +256,7 @@ fn defenders_lose_a_token_and_put_the_others_back_after_the_turn() {
     s.apply(0, Action::EndTurn).unwrap();
     // Now the Wizards put their two back, then it's their turn.
     assert_eq!((s.phase, s.actor()), (Phase::Reinforce, Some(1)));
-    assert_eq!(s.moves(1).put, vec![15]);
+    assert_eq!(s.moves(1).list(RegionMove::Put), vec![15]);
     assert_eq!(s.apply(1, Action::Put { region: 7 }), Err(Error::NotYours));
     s.apply(1, Action::Put { region: 15 }).unwrap();
     s.apply(1, Action::Put { region: 15 }).unwrap();
@@ -297,10 +303,10 @@ fn the_last_conquest_can_be_tried_with_the_die() {
         place(&mut s, 7, Race::Ratmen, 1);
         s.players[0].active.as_mut().unwrap().hand = 1;
         assert_eq!(s.apply(0, Action::Conquer { region: 6 }), Err(Error::NotEnoughTokens));
-        assert_eq!(s.moves(0).gamble, vec![(5, 2), (6, 2), (8, 2)]);
+        assert_eq!(s.moves(0).gamble(), vec![(5, 2), (6, 2), (8, 2)]);
         // A mountain costs 3: 2 missing, still within the die's reach.
         place(&mut s, 3, Race::Ratmen, 1);
-        assert!(s.moves(0).gamble.contains(&(4, 3)));
+        assert!(s.moves(0).gamble().contains(&(4, 3)));
         s.apply(0, Action::Gamble { region: 6 }).unwrap();
         let Some(&Event::Gambled { die, won: w, .. }) = s.log.iter().rev().find(|e| matches!(e, Event::Gambled { .. }))
         else {
@@ -484,7 +490,7 @@ fn ghouls_keep_every_token_in_decline_and_go_on_conquering_first() {
     s.apply(0, Action::EndConquests).unwrap();
     // The Ghouls redeploy too.
     assert_eq!(s.apply(0, Action::EndTurn), Err(Error::TokensInHand));
-    assert!(s.moves(0).put.contains(&8));
+    assert!(s.moves(0).can(RegionMove::Put, 8));
 
     // Ghouls that don't conquer put their tokens back where they were.
     let mut s = empty_game();
@@ -594,7 +600,7 @@ fn skeletons_raise_a_token_for_every_two_occupied_regions_taken() {
     assert_eq!(hand(&s, 0), 4);
     s.apply(0, Action::EndConquests).unwrap();
     assert_eq!(hand(&s, 0), 5);
-    assert!(s.log.contains(&Event::Raised { seat: 0, tokens: 1 }));
+    assert!(s.log.contains(&Event::Raised { seat: 0, race: Race::Skeletons, tokens: 1 }));
 }
 
 #[test]
@@ -607,7 +613,7 @@ fn sorcerers_replace_a_lone_enemy_token_once_per_opponent() {
     s.players[1].active.as_mut().unwrap().hand = 0;
     give(&mut s, 0, Race::Sorcerers, Power::Merchant);
     place(&mut s, 7, Race::Sorcerers, 1);
-    assert_eq!(s.moves(0).enchant, vec![6, 8]);
+    assert_eq!(s.moves(0).list(RegionMove::Enchant), vec![6, 8]);
     assert_eq!(s.apply(0, Action::Enchant { region: 5 }), Err(Error::NotAlone));
     s.apply(0, Action::Enchant { region: 6 }).unwrap();
     assert_eq!(s.regions[6].tokens.map(|t| (t.race, t.count)), Some((Race::Sorcerers, 1)));
@@ -721,7 +727,7 @@ fn fortresses_are_built_one_a_turn() {
     s.apply(0, Action::EndConquests).unwrap();
     s.apply(0, Action::Fortify { region: 7 }).unwrap();
     assert_eq!(s.apply(0, Action::Fortify { region: 6 }), Err(Error::PowerUsed));
-    assert_eq!(s.moves(0).fortify, Vec::<usize>::new());
+    assert_eq!(s.moves(0).list(RegionMove::Fortify), Vec::<usize>::new());
     assert_eq!(s.turn_coins(0), 2 + 1);
 }
 
@@ -790,7 +796,7 @@ fn berserk_rolls_before_each_conquest() {
         }
         give(&mut s, 0, Race::Ratmen, Power::Berserk);
         s.apply(0, Action::Conquer { region: 3 }).unwrap();
-        assert!(s.moves(0).gamble.is_empty());
+        assert!(s.moves(0).gamble().is_empty());
         s.apply(0, Action::Roll).unwrap();
         assert_eq!(s.apply(0, Action::Roll), Err(Error::PowerUsed));
         let die = s.this_turn.berserk.unwrap();
@@ -834,6 +840,7 @@ fn coins_stay_hidden_until_the_end() {
     assert_eq!(v.players[1].coins, None);
     assert_eq!(v.board, 3);
     assert_eq!(v.turns, 10);
+    assert_eq!(v.map().len(), 30);
     assert_eq!(v.actor, Some(0));
     assert!(!v.moves.pick.is_empty());
     assert!(s.view_for(1).moves.pick.is_empty(), "not their turn");
@@ -846,7 +853,7 @@ fn coins_stay_hidden_until_the_end() {
 fn views_survive_json() {
     let mut s = State::new(4, 3);
     s.apply(0, Action::Pick { offer: 1 }).unwrap();
-    let r = s.moves(0).conquer[0].0;
+    let r = s.moves(0).conquer()[0].0;
     s.apply(0, Action::Conquer { region: r }).unwrap();
     let v = s.view_for(2);
     let json = serde_json::to_string(&v).unwrap();
@@ -854,56 +861,154 @@ fn views_survive_json() {
     assert_eq!(back, v);
 }
 
+/// A small seeded generator for the bots.
+pub(crate) struct Dice(u64);
+
+impl Dice {
+    pub(crate) fn new(seed: u64) -> Dice {
+        Dice(seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407))
+    }
+
+    /// A number below `n` (0 when `n` is 0).
+    pub(crate) fn below(&mut self, n: usize) -> usize {
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((self.0 >> 33) as usize) % n.max(1)
+    }
+
+    fn any<T: Copy>(&mut self, items: &[T]) -> Option<T> {
+        (!items.is_empty()).then(|| items[self.below(items.len())])
+    }
+}
+
+/// What a bot that only sees `moves` does next.
+pub(crate) fn bot_move(s: &State, seat: usize, dice: &mut Dice) -> Action {
+    let m = s.moves(seat);
+    let army = s.players[seat].active;
+    let list = |kind: RegionMove| m.list(kind);
+    if let Some((offer, _)) = dice.any(&m.pick) {
+        return Action::Pick { offer };
+    }
+    match s.phase {
+        Phase::Conquest { .. } => {
+            if let Some(offer) = dice.any(&m.copy) {
+                if dice.below(3) == 0 {
+                    return Action::Copy { offer: Some(offer) };
+                }
+            }
+            if m.decline && army.is_some_and(|a| a.turns >= 2) && dice.below(3) == 0 {
+                if let Some(region) = dice.any(&list(RegionMove::Tower)) {
+                    return Action::Tower { region };
+                }
+                return Action::Decline;
+            }
+            if let Some(seat) = dice.any(&m.give_pact) {
+                if dice.below(4) == 0 {
+                    return Action::Pact { seat, give: true };
+                }
+            }
+            let specials = [
+                RegionMove::Dragon,
+                RegionMove::Lightning,
+                RegionMove::Zeppelin,
+                RegionMove::Enchant,
+                RegionMove::Wendigo,
+                RegionMove::Catapult,
+                RegionMove::Hire,
+                RegionMove::Fireball,
+                RegionMove::Behemoth,
+                RegionMove::Fire,
+            ];
+            for kind in specials {
+                if let Some(region) = dice.any(&list(kind)) {
+                    if dice.below(3) == 0 {
+                        return kind.action(region);
+                    }
+                }
+            }
+            if let Some(region) = dice.any(&list(RegionMove::Conquer)) {
+                if dice.below(8) != 0 {
+                    return Action::Conquer { region };
+                }
+            }
+            if m.roll && dice.below(2) == 0 {
+                return Action::Roll;
+            }
+            if let Some(region) = dice.any(&list(RegionMove::Gamble)) {
+                if dice.below(2) == 0 {
+                    return Action::Gamble { region };
+                }
+            }
+            if let Some(region) = dice.any(&list(RegionMove::Abandon)) {
+                if dice.below(20) == 0 {
+                    return Action::Abandon { region };
+                }
+            }
+            Action::EndConquests
+        }
+        Phase::Redeploy => {
+            let why = m.end_turn.as_deref();
+            if why == Some(Error::RestAmazons.message()) {
+                let take = army.is_some_and(|a| a.hand < AMAZON_EXTRA);
+                return match (take, dice.any(&list(RegionMove::Take)), dice.any(&list(RegionMove::Put))) {
+                    (true, Some(region), _) => Action::Take { region },
+                    (_, _, Some(region)) => Action::Put { region },
+                    (_, Some(region), None) => Action::Take { region },
+                    _ => Action::EndTurn,
+                };
+            }
+            if why == Some(Error::PlaceHeroes.message()) {
+                let free: Vec<usize> = list(RegionMove::Hero).into_iter().filter(|&r| !s.regions[r].hero).collect();
+                return Action::Hero { region: dice.any(&free).expect("a region for a Hero") };
+            }
+            if why == Some(Error::PlaceCannons.message()) {
+                let free: Vec<usize> =
+                    list(RegionMove::Cannon).into_iter().filter(|&r| s.regions[r].cannon.is_none()).collect();
+                return Action::Cannon { region: dice.any(&free).expect("a region for a Cannon") };
+            }
+            if !m.can_end_turn {
+                return Action::Put { region: dice.any(&list(RegionMove::Put)).expect("somewhere to put tokens") };
+            }
+            let optional = [
+                RegionMove::Camp,
+                RegionMove::Fortify,
+                RegionMove::Pot,
+                RegionMove::Winter,
+                RegionMove::Lava,
+                RegionMove::Herd,
+            ];
+            for kind in optional {
+                if let Some(region) = dice.any(&list(kind)) {
+                    if dice.below(4) == 0 {
+                        return kind.action(region);
+                    }
+                }
+            }
+            if let Some(ally) = dice.any(&m.allies) {
+                if army.is_some_and(|a| a.ally.is_none()) {
+                    return Action::Ally { seat: Some(ally) };
+                }
+            }
+            if m.decline && dice.below(4) == 0 {
+                return Action::Decline;
+            }
+            Action::EndTurn
+        }
+        Phase::Reinforce => Action::Put { region: dice.any(&list(RegionMove::Put)).expect("somewhere to put tokens") },
+        Phase::Pick | Phase::Over => Action::EndTurn,
+    }
+}
+
 /// Plays a whole game with a bot that only sees what `moves` offers,
-/// checking that no token is ever made out of nothing.
-fn play_out(players: usize, seed: u64) -> State {
-    let mut s = State::new(players, seed);
-    let mut rng = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-    let mut pick = |n: usize| {
-        rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        ((rng >> 33) as usize) % n.max(1)
-    };
-    for step in 0..20_000 {
+/// checking after every move that no token is ever made out of nothing.
+pub(crate) fn play_out(players: usize, seed: u64, options: Options) -> State {
+    let mut s = State::with_options(players, seed, options);
+    let mut dice = Dice::new(seed);
+    for step in 0..60_000 {
         if s.phase == Phase::Over {
             return s;
         }
         let seat = s.actor().expect("somebody acts");
-        let m = s.moves(seat);
-        let army = s.players[seat].active;
-        let action = if !m.pick.is_empty() {
-            Action::Pick { offer: m.pick[pick(m.pick.len())] }
-        } else if m.decline && s.phase != Phase::Redeploy && army.is_some_and(|a| a.turns >= 2) && pick(3) == 0 {
-            Action::Decline
-        } else if !m.conquer.is_empty() && pick(8) != 0 {
-            Action::Conquer { region: m.conquer[pick(m.conquer.len())].0 }
-        } else if !m.dragon.is_empty() {
-            Action::Dragon { region: m.dragon[pick(m.dragon.len())] }
-        } else if !m.enchant.is_empty() {
-            Action::Enchant { region: m.enchant[pick(m.enchant.len())] }
-        } else if m.roll && pick(2) == 0 {
-            Action::Roll
-        } else if !m.gamble.is_empty() && pick(2) == 0 {
-            Action::Gamble { region: m.gamble[pick(m.gamble.len())].0 }
-        } else if m.end_conquests {
-            Action::EndConquests
-        } else if m.end_turn.as_deref() == Some(Error::RestAmazons.message()) && army.is_some_and(|a| a.hand < 4) {
-            Action::Take { region: m.take[pick(m.take.len())] }
-        } else if m.end_turn.as_deref() == Some(Error::PlaceHeroes.message()) {
-            let free: Vec<usize> = m.hero.iter().copied().filter(|&r| !s.regions[r].hero).collect();
-            Action::Hero { region: free[pick(free.len())] }
-        } else if !m.put.is_empty() && !m.can_end_turn {
-            Action::Put { region: m.put[pick(m.put.len())] }
-        } else if !m.camp.is_empty() && pick(2) == 0 {
-            Action::Camp { region: m.camp[pick(m.camp.len())] }
-        } else if !m.fortify.is_empty() {
-            Action::Fortify { region: m.fortify[pick(m.fortify.len())] }
-        } else if !m.allies.is_empty() && army.is_some_and(|a| a.ally.is_none()) {
-            Action::Ally { seat: Some(m.allies[pick(m.allies.len())]) }
-        } else if m.decline && pick(4) == 0 {
-            Action::Decline
-        } else {
-            Action::EndTurn
-        };
+        let action = bot_move(&s, seat, &mut dice);
         if let Err(e) = s.apply(seat, action) {
             panic!("{players} players, seed {seed}, step {step}: seat {seat} {action:?} refused: {e:?} in {:?}", s.phase);
         }
@@ -913,18 +1018,20 @@ fn play_out(players: usize, seed: u64) -> State {
 }
 
 /// What must always hold.
-fn check(s: &State) {
+pub(crate) fn check(s: &State) {
     for race in Race::ALL {
         let owner = s.owner(race);
         let on_map = s.on_map(race);
         if on_map > 0 {
             assert!(owner.is_some(), "{race:?} on the map without an owner");
         }
-        let held = owner.and_then(|(seat, _)| {
-            let p = &s.players[seat];
-            p.active.iter().chain(&p.declined).find(|a| a.race == race).map(|a| a.hand + a.resting)
-        });
-        assert!(on_map + held.unwrap_or(0) <= race.supply(), "{race:?}: more tokens than the box holds");
+        let (held, extra) = owner
+            .and_then(|(seat, _)| {
+                let p = &s.players[seat];
+                p.active.iter().chain(&p.declined).find(|a| a.race == race).map(|a| (a.hand + a.resting, a.extra))
+            })
+            .unwrap_or((0, 0));
+        assert!(on_map + held <= race.supply() + extra, "{race:?}: more tokens than the box holds");
     }
     for r in &s.regions {
         if let Some(t) = r.tokens {
@@ -932,6 +1039,7 @@ fn check(s: &State) {
             assert!(!r.lost_tribe);
             assert_eq!(t.declined, s.owner(t.race).unwrap().1);
         }
+        assert!(!(r.loot && r.tokens.is_none() && r.lava.is_some()));
     }
     // Every banner is somewhere, once.
     let mut races: Vec<Race> = s.races.clone();
@@ -940,24 +1048,31 @@ fn check(s: &State) {
         races.extend(p.active.iter().chain(&p.declined).map(|a| a.race));
         assert!(p.declined.len() <= 2);
         assert!(p.declined.iter().filter(|a| a.power != Power::Spirit).count() <= 1);
+        for a in p.active.iter().chain(&p.declined) {
+            let standing: u8 = s.regions_of(a.race).iter().map(|&r| s.regions[r].behemoths).sum();
+            assert!(a.behemoths + standing <= BEHEMOTHS);
+        }
+        if let Some(a) = p.active {
+            assert!(s.regions_of(a.race).iter().filter(|&&r| s.regions[r].cannon.is_some()).count() <= CANNONS);
+        }
     }
     races.sort();
-    assert_eq!(races, Race::ALL.to_vec());
+    assert_eq!(races, s.options.races());
     assert!(s.regions.iter().filter(|r| r.fortress).count() <= FORTRESSES);
-    assert!(s.regions.iter().filter(|r| r.hero).count() <= HEROES);
-    assert!(s.regions.iter().map(|r| r.encampments).sum::<u8>() <= ENCAMPMENTS);
+    assert!(s.regions.iter().map(|r| r.encampments).sum::<u8>() <= 2 * ENCAMPMENTS);
+    assert!(s.pacts.iter().sum::<u8>() <= PACTS);
 }
 
 #[test]
 fn whole_games_can_be_played_to_the_end_on_every_board() {
     for players in 2..=5 {
         for seed in 0..12 {
-            let mut s = play_out(players, seed);
+            let mut s = play_out(players, seed, Options::default());
             assert_eq!(s.phase, Phase::Over);
-            assert_eq!(s.turn, s.map().turns);
+            assert_eq!(s.turn, s.turns());
             assert!(!s.winners().is_empty());
             // Every seat scored at least once a turn.
-            assert!(s.players.iter().all(|p| p.coins >= s.map().turns as u32 / 2));
+            assert!(s.players.iter().all(|p| p.coins >= s.turns() as u32 / 2));
             assert_eq!(s.log.last(), Some(&Event::GameOver));
             assert_eq!(s.apply(0, Action::EndTurn), Err(Error::GameOver));
         }
@@ -966,5 +1081,6 @@ fn whole_games_can_be_played_to_the_end_on_every_board() {
 
 #[test]
 fn the_same_seed_plays_the_same_game() {
-    assert_eq!(play_out(3, 7), play_out(3, 7));
+    assert_eq!(play_out(3, 7, Options::default()), play_out(3, 7, Options::default()));
+    assert_eq!(play_out(4, 7, Options::all()), play_out(4, 7, Options::all()));
 }

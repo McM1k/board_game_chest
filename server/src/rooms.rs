@@ -209,8 +209,10 @@ pub fn process(state: &Shared, tx: &Tx, ident: &mut Option<Ident>, msg: ClientMs
             if !r.is_host(&id.token) {
                 return Some("Only the host can start the game.".into());
             }
-            if r.seats.len() < r.kind.min_players() {
-                return Some("You need at least two players.".into());
+            let min = r.kind.min_players_with(r.options.as_ref());
+            if r.seats.len() < min {
+                let n = ["zero", "one", "two", "three", "four", "five"].get(min).copied().unwrap_or("more");
+                return Some(format!("You need at least {n} players."));
             }
             let game = games::game(r.kind);
             let mut rng = rand::thread_rng();

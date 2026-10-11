@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameMove};
-use smallworld_core::{Action, Army, Offer, Phase, View};
+use smallworld_core::{Action, Army, Board, Offer, Phase, Power, View};
 
 use super::look::{self, Tool};
 use super::map::map_svg;
@@ -22,6 +22,7 @@ use crate::app::{leave, send, App};
 struct Ctx {
     app: App,
     view: Arc<View>,
+    board: Arc<Board>,
     names: Arc<Vec<String>>,
     connected: Arc<Vec<bool>>,
     /// The tool a click on the map uses now.
@@ -47,6 +48,14 @@ impl Ctx {
     }
 }
 
+fn plural(n: u32) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
+}
+
 /// The running game, redrawn whenever the server sends a new state (or the
 /// tool in hand changes).
 pub fn board(app: App) -> AnyView {
@@ -63,7 +72,8 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
     let ui = app.games.smallworld.ui;
     let tool = look::effective_tool(&view, ui.tool.get());
     let pending = ui.gamble.get();
-    let ctx = Ctx { app, view: Arc::new(view), names: Arc::new(names), connected: Arc::new(connected), tool };
+    let board = Arc::new(view.map());
+    let ctx = Ctx { app, view: Arc::new(view), board, names: Arc::new(names), connected: Arc::new(connected), tool };
     let over = ctx.view.phase == Phase::Over;
 
     view! {
@@ -73,7 +83,7 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
             <div class="board-grid">
                 <div class="map-col">
                     <div class="map-frame">{map_svg(app, &ctx.view, &ctx.names, tool, pending)}</div>
-                    {legend()}
+                    {legend(&ctx)}
                 </div>
                 <aside class="side-col">
                     {over.then(|| results_panel(&ctx))}
@@ -118,10 +128,12 @@ fn status_band(ctx: &Ctx) -> AnyView {
     .into_any()
 }
 
-/// The key to the map's markers, drawn as they are on the map.
-fn legend() -> AnyView {
-    use super::map::{marker, CAMP, CAVERN, DRAGON, FORT, HERO, HOLE, LAIR, MAGIC, MINE};
-    let items = [
+/// The key to the map's markers, drawn as they are on the map: only those
+/// this game can show.
+fn legend(ctx: &Ctx) -> AnyView {
+    use super::map::*;
+    let o = ctx.view.options;
+    let mut items: Vec<(&'static str, &'static str, &'static str)> = vec![
         ("mine", MINE, "Mine"),
         ("magic", MAGIC, "Magic source"),
         ("cavern", CAVERN, "Cavern"),
@@ -132,6 +144,24 @@ fn legend() -> AnyView {
         ("hero", HERO, "Hero"),
         ("dragon", DRAGON, "Dragon"),
     ];
+    if o.be_not_afraid {
+        items.extend([("pot", POT, "Pot of Gold"), ("catapult", CATAPULT, "Catapult")]);
+    }
+    if o.royal_bonus {
+        items.push(("behemoth", BEHEMOTH, "Behemoth"));
+    }
+    if o.spiders_web {
+        items.extend([("winter", WINTER, "Winter"), ("loot", LOOT, "Loot"), ("lava", LAVA, "Lava")]);
+    }
+    if o.sky.is_some() {
+        items.extend([
+            ("beanstalk", BEANSTALK, "Beanstalk"),
+            ("stairway", STAIRWAY, "Stairway"),
+            ("captive", CAPTIVE, "Scavengers' captive"),
+            ("cannon", CANNON, "Cannon"),
+            ("burning", FIRE, "Burning"),
+        ]);
+    }
     let list = items
         .into_iter()
         .map(|(class, glyph, label)| {
@@ -148,7 +178,7 @@ fn legend() -> AnyView {
             {list}
             <li>
                 <svg class="key wide" viewBox="-16 -13 32 26" aria-hidden="true">
-                    <g class="tribe"><rect x="-15" y="-12" width="30" height="24" rx="7" /><path d=super::map::TRIBE /></g>
+                    <g class="tribe"><rect x="-15" y="-12" width="30" height="24" rx="7" /><path d=TRIBE /></g>
                 </svg>
                 "Lost Tribe"
             </li>
@@ -183,8 +213,13 @@ fn tool_buttons(ctx: &Ctx) -> AnyView {
         .map(|tool| {
             let class = if chosen == Some(tool) { "tool on" } else { "tool" };
             view! {
-                <button class=class title=tool.hint() aria-pressed=(chosen == Some(tool)).to_string() on:click=move |_| ui.tool.set(tool)>
-                    {tool.label()}
+                <button
+                    class=class
+                    title=look::tool_hint(tool)
+                    aria-pressed=(chosen == Some(tool)).to_string()
+                    on:click=move |_| ui.tool.set(tool)
+                >
+                    {look::tool_label(tool)}
                 </button>
             }
         })
@@ -195,7 +230,7 @@ fn tool_buttons(ctx: &Ctx) -> AnyView {
 /// The roll asked for by a click on a region marked "?".
 fn gamble_box(ctx: &Ctx) -> Option<AnyView> {
     let region = ctx.ui().gamble.get_untracked()?;
-    let (_, cost) = *ctx.view.moves.gamble.iter().find(|(r, _)| *r == region)?;
+    let (_, cost) = *ctx.view.moves.gamble().iter().find(|(r, _)| *r == region)?;
     let hand = look::hand(&ctx.view);
     let ui = ctx.ui();
     let go = ctx.clone();
@@ -205,7 +240,7 @@ fn gamble_box(ctx: &Ctx) -> Option<AnyView> {
                 <p>
                     {format!(
                         "{} costs {cost} and you have {hand}: roll the reinforcement die (0, 0, 0, 1, 2 or 3) for the rest? Win or lose, your conquests end.",
-                        look::region_name(ctx.view.board, region),
+                        look::region_name(&ctx.board, region),
                     )}
                 </p>
                 <div class="row">
@@ -215,6 +250,90 @@ fn gamble_box(ctx: &Ctx) -> Option<AnyView> {
                     }>"Roll the die"</button>
                     <button on:click=move |_| ui.gamble.set(None)>"Cancel"</button>
                 </div>
+            </div>
+        }
+        .into_any(),
+    )
+}
+
+/// The pieces the active race holds besides its tokens.
+fn held_pieces(army: &Army) -> String {
+    let mut parts = Vec::new();
+    for (n, what) in [
+        (army.fireballs, "Fireball"),
+        (army.winter, "Winter marker"),
+        (army.behemoths, "Behemoth"),
+        (army.resting, "sitting out"),
+    ] {
+        if n > 0 {
+            if what == "sitting out" {
+                parts.push(format!("{n} {what}"));
+            } else {
+                parts.push(format!("{n} {what}{}", plural(n as u32)));
+            }
+        }
+    }
+    parts.join(", ")
+}
+
+/// Copycat: which power to copy until the next turn.
+fn copy_picker(ctx: &Ctx) -> Option<AnyView> {
+    let v = &ctx.view;
+    if v.moves.copy.is_empty() {
+        return None;
+    }
+    let choices = v
+        .moves
+        .copy
+        .iter()
+        .map(|&i| {
+            let power = v.offers[i].power;
+            let c = ctx.clone();
+            view! {
+                <button class="tool" title=power.blurb() on:click=move |_| c.act(Action::Copy { offer: Some(i) })>
+                    {power.name()}
+                </button>
+            }
+        })
+        .collect_view();
+    Some(
+        view! {
+            <div class="copy">
+                <p class="caption">"Copy a power from the column until your next turn:"</p>
+                <div class="tools">{choices}</div>
+            </div>
+        }
+        .into_any(),
+    )
+}
+
+/// Haggling: hand Trade Pacts out, or take them back.
+fn pact_picker(ctx: &Ctx) -> Option<AnyView> {
+    let v = &ctx.view;
+    let m = &v.moves;
+    if m.give_pact.is_empty() && m.take_pact.is_empty() {
+        return None;
+    }
+    let rows = (0..v.players.len())
+        .filter(|&s| s != v.you)
+        .map(|seat| {
+            let held = v.players[seat].pacts;
+            let (give, take) = (m.give_pact.contains(&seat), m.take_pact.contains(&seat));
+            let (g, t) = (ctx.clone(), ctx.clone());
+            view! {
+                <li>
+                    <span>{format!("{}: {held}", ctx.who(seat))}</span>
+                    <button class="tool" disabled=!take on:click=move |_| t.act(Action::Pact { seat, give: false })>"\u{2212}"</button>
+                    <button class="tool" disabled=!give on:click=move |_| g.act(Action::Pact { seat, give: true })>"+"</button>
+                </li>
+            }
+        })
+        .collect_view();
+    Some(
+        view! {
+            <div class="pacts">
+                <p class="caption">"Trade Pacts (whoever holds them pays you a coin each if they take one of your regions on their turn, or is paid one each if they don't):"</p>
+                <ul>{rows}</ul>
             </div>
         }
         .into_any(),
@@ -235,20 +354,42 @@ fn action_panel(ctx: &Ctx) -> AnyView {
     }
     let m = &v.moves;
     let hand = look::hand(v);
+    let me = v.players[v.you].active;
+    let in_hand = {
+        let pieces = me.map(|a| held_pieces(&a)).unwrap_or_default();
+        let tokens = format!("{hand} token{} in hand", plural(hand as u32));
+        if pieces.is_empty() {
+            tokens
+        } else {
+            format!("{tokens} \u{b7} {pieces}")
+        }
+    };
+    let marauding = me.is_some_and(|a| a.has(Power::Marauding)) && !v.this_turn.marauded;
     let body = match v.phase {
         Phase::Pick => view! { <p>"Pick a race and power from the column below."</p> }.into_any(),
-        Phase::Conquest { ghouls } => view! {
-            <p class="in-hand">{format!("{hand} token{} in hand", if hand == 1 { "" } else { "s" })}</p>
-            {tool_buttons(ctx)}
-            {gamble_box(ctx)}
-            <div class="row">
-                {m.roll.then(|| button(ctx, "Roll the die (Berserk)", "", Action::Roll))}
-                {v.this_turn.berserk.map(|d| view! { <span class="die-face" title="Berserk's die">{format!("Die: {d}")}</span> })}
-                {m.decline.then(|| button(ctx, "Go into decline", "danger", Action::Decline))}
-                {button(ctx, if ghouls { "Done with the Ghouls" } else { "Done conquering" }, "primary", Action::EndConquests)}
-            </div>
+        Phase::Conquest { ghouls } => {
+            let done = if ghouls {
+                "Done with the Ghouls"
+            } else if marauding {
+                "Done: conquer again (Marauding)"
+            } else {
+                "Done conquering"
+            };
+            view! {
+                <p class="in-hand">{in_hand}</p>
+                {copy_picker(ctx)}
+                {tool_buttons(ctx)}
+                {gamble_box(ctx)}
+                {pact_picker(ctx)}
+                <div class="row">
+                    {m.roll.then(|| button(ctx, "Roll the die (Berserk)", "", Action::Roll))}
+                    {v.this_turn.berserk.map(|d| view! { <span class="die-face" title="Berserk's die">{format!("Die: {d}")}</span> })}
+                    {m.decline.then(|| button(ctx, "Go into decline", "danger", Action::Decline))}
+                    {button(ctx, done, "primary", Action::EndConquests)}
+                </div>
+            }
+            .into_any()
         }
-        .into_any(),
         Phase::Redeploy => {
             let allies = (!m.allies.is_empty()).then(|| peace_picker(ctx));
             let end = match &m.end_turn {
@@ -259,10 +400,11 @@ fn action_panel(ctx: &Ctx) -> AnyView {
                 None => button(ctx, "End turn", "primary", Action::EndTurn),
             };
             view! {
-                <p class="in-hand">{format!("{hand} token{} in hand", if hand == 1 { "" } else { "s" })}</p>
+                <p class="in-hand">{in_hand}</p>
                 {tool_buttons(ctx)}
                 {allies}
-                {v.coins_now.map(|c| view! { <p class="hint">{format!("Ending now scores {c} coin{}.", if c == 1 { "" } else { "s" })}</p> })}
+                {pact_picker(ctx)}
+                {v.coins_now.map(|c| view! { <p class="hint">{format!("Ending now scores {c} coin{}.", plural(c))}</p> })}
                 <div class="row">
                     {m.decline.then(|| button(ctx, "End turn and go into decline", "danger", Action::Decline))}
                     {end}
@@ -271,7 +413,7 @@ fn action_panel(ctx: &Ctx) -> AnyView {
             .into_any()
         }
         Phase::Reinforce => view! {
-            <p class="in-hand">{format!("{hand} token{} to put back", if hand == 1 { "" } else { "s" })}</p>
+            <p class="in-hand">{format!("{hand} token{} to put back", plural(hand as u32))}</p>
             <p class="hint">"Click your regions to put them back."</p>
         }
         .into_any(),
@@ -312,26 +454,27 @@ fn peace_picker(ctx: &Ctx) -> AnyView {
 
 fn army_line(army: &Army, declined: bool) -> AnyView {
     let name = if declined {
-        if army.power == smallworld_core::Power::Spirit {
-            format!("{} (Spirit)", army.race.name())
-        } else {
-            army.race.name().to_string()
+        match army.power {
+            Power::Spirit => format!("{} (Spirit)", army.race.name()),
+            _ => army.race.name().to_string(),
         }
     } else {
         look::combo_name(army.race, army.power)
     };
+    let copied = (!declined).then_some(army.copied).flatten().map(|p| format!(" \u{b7} copying {}", p.name()));
     let extra = match (declined, army.hand, army.resting) {
         (true, 0, _) => String::new(),
         (true, h, _) => format!(" \u{b7} {h} in hand"),
         (false, h, 0) => format!(" \u{b7} {h} in hand"),
-        (false, h, r) => format!(" \u{b7} {h} in hand, {r} resting"),
+        (false, h, r) => format!(" \u{b7} {h} in hand, {r} sitting out"),
     };
+    let title = if declined { String::new() } else { format!("{} {}", army.race.blurb(), army.power.blurb()) };
     view! {
-        <li class=if declined { "army declined" } else { "army" } title=if declined { String::new() } else { format!("{} {}", army.race.blurb(), army.power.blurb()) }>
+        <li class=if declined { "army declined" } else { "army" } title=title>
             <span class="army-name">{name}</span>
             {(!declined).then(|| view! { <span class="tag">"active"</span> })}
             {declined.then(|| view! { <span class="tag tag-off">"in decline"</span> })}
-            <span class="army-extra">{extra}</span>
+            <span class="army-extra">{copied}{extra}</span>
         </li>
     }
     .into_any()
@@ -346,7 +489,7 @@ fn races_panel(ctx: &Ctx) -> AnyView {
         .map(|(seat, p)| {
             let connected = ctx.connected.get(seat).copied().unwrap_or(true);
             let coins = match p.coins {
-                Some(c) => format!("{c} coin{}", if c == 1 { "" } else { "s" }),
+                Some(c) => format!("{c} coin{}", plural(c)),
                 None => "? coins".to_string(),
             };
             let armies = p
@@ -357,14 +500,26 @@ fn races_panel(ctx: &Ctx) -> AnyView {
                 .collect_view();
             let mine = (seat == v.you).then(|| {
                 p.active.map(|a| {
+                    let copied = a.copied.map(|c| view! { <p><b>{c.name()}</b>" (copied): "{c.blurb()}</p> });
                     view! {
                         <div class="powers">
                             <p><b>{a.race.name()}</b>": "{a.race.blurb()}</p>
                             <p><b>{a.power.name()}</b>": "{a.power.blurb()}</p>
+                            {copied}
                         </div>
                     }
                 })
             });
+            let notes = {
+                let mut n = vec![format!("{} token{} on the map", p.on_map, plural(p.on_map))];
+                if p.pacts > 0 {
+                    n.push(format!("{} Trade Pact{}", p.pacts, plural(p.pacts as u32)));
+                }
+                if p.free_pick {
+                    n.push("next race free".to_string());
+                }
+                n.join(" \u{b7} ")
+            };
             view! {
                 <li class=if seat == v.current { "player current" } else { "player" }>
                     <div class="player-head">
@@ -376,7 +531,7 @@ fn races_panel(ctx: &Ctx) -> AnyView {
                     </div>
                     <ul class="armies">{armies}</ul>
                     {mine}
-                    <p class="note">{format!("{} token{} on the map", p.on_map, if p.on_map == 1 { "" } else { "s" })}</p>
+                    <p class="note">{notes}</p>
                 </li>
             }
         })
@@ -393,15 +548,22 @@ fn races_panel(ctx: &Ctx) -> AnyView {
 // ----- the column of races and powers ------------------------------------------------------
 
 fn offer_row(ctx: &Ctx, i: usize, o: &Offer) -> AnyView {
-    let can = ctx.acting() && ctx.view.moves.pick.contains(&i);
-    let cost = if i == 0 { "Free".to_string() } else { format!("{i} coin{}", if i == 1 { "" } else { "s" }) };
-    let tokens = o.race.tokens() + o.power.tokens();
+    let pick = ctx.view.moves.pick.iter().find(|(p, _)| *p == i).copied();
+    let can = ctx.acting() && pick.is_some();
+    let price = pick.map_or_else(|| look::pick_cost(&ctx.view, i), |(_, c)| c);
+    let cost = if price == 0 { "Free".to_string() } else { format!("{price} coin{}", plural(price)) };
+    let tokens = o.race.tokens() + o.power.tokens() + o.tokens;
+    let sum = if o.tokens > 0 {
+        format!("{} + {} + {} = {tokens}", o.race.tokens(), o.power.tokens(), o.tokens)
+    } else {
+        format!("{} + {} = {tokens}", o.race.tokens(), o.power.tokens())
+    };
     let c = ctx.clone();
     view! {
         <li class="offer">
             <div class="offer-head">
                 <span class="offer-name">{look::combo_name(o.race, o.power)}</span>
-                <span class="offer-tokens" title="Tokens: race + power">{format!("{} + {} = {tokens}", o.race.tokens(), o.power.tokens())}</span>
+                <span class="offer-tokens" title="Tokens: race + power">{sum}</span>
             </div>
             <p class="offer-text"><b>{o.race.name()}</b>": "{o.race.blurb()}</p>
             <p class="offer-text"><b>{o.power.name()}</b>": "{o.power.blurb()}</p>
@@ -439,7 +601,7 @@ fn log_panel(ctx: &Ctx) -> AnyView {
         .iter()
         .rev()
         .take(14)
-        .map(|event| view! { <li>{look::describe_event(event, &ctx.names, v.you, v.board)}</li> })
+        .map(|event| view! { <li>{look::describe_event(event, &ctx.names, v.you, &ctx.board)}</li> })
         .collect_view();
     view! {
         <section class="panel log-panel">
@@ -480,15 +642,20 @@ fn results_panel(ctx: &Ctx) -> AnyView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::shows;
     use leptos::tachys::view::RenderHtml;
-    use smallworld_core::State;
+    use smallworld_core::{Options, RegionMove, State};
 
     fn names() -> Vec<String> {
-        ["Ann", "Bob", "Cy"].iter().map(|s| s.to_string()).collect()
+        ["Ann", "Bob", "Cy", "Di", "Ed", "Flo"].iter().map(|s| s.to_string()).collect()
     }
 
     fn render(app: App, state: &State, seat: usize) -> String {
-        game_screen(app, state.view_for(seat), names(), vec![true, true, false], "WXYZ".into()).to_html()
+        let mut connected = vec![true; state.seats()];
+        if let Some(c) = connected.get_mut(2) {
+            *c = false;
+        }
+        game_screen(app, state.view_for(seat), names(), connected, "WXYZ".into()).to_html()
     }
 
     #[test]
@@ -517,6 +684,20 @@ mod tests {
     }
 
     #[test]
+    fn the_sky_islands_are_drawn_above_the_board() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let s = State::with_options(6, 5, Options::all());
+            let html = render(app, &s, 3);
+            assert_eq!(html.matches("<polygon").count(), 47 + 9);
+            assert!(html.contains("Sky Islands") && html.contains("class=\"sky-band\""));
+            assert!(html.contains("marker beanstalk") && html.contains("marker stairway"));
+            assert!(html.contains("Pot of Gold") && shows(&html, "Scavengers' captive"), "the key lists the new pieces");
+        });
+    }
+
+    #[test]
     fn conquering_marks_the_regions_with_their_cost() {
         let owner = Owner::new();
         owner.with(|| {
@@ -524,11 +705,11 @@ mod tests {
             let mut s = State::new(3, 5);
             s.apply(0, Action::Pick { offer: 0 }).unwrap();
             let html = render(app, &s, 0);
-            let targets = s.moves(0).conquer.len();
+            let targets = s.moves(0).conquer().len();
             assert_eq!(html.matches("target").count(), targets, "{html}");
             assert!(html.contains("Done conquering"));
             assert!(!html.contains("Go into decline"), "nothing to decline yet");
-            let r = s.moves(0).conquer[0].0;
+            let r = s.moves(0).conquer()[0].0;
             s.apply(0, Action::Conquer { region: r }).unwrap();
             let html = render(app, &s, 0);
             assert!(html.contains("class=\"token\""));
@@ -551,7 +732,7 @@ mod tests {
             s.players[0].active.as_mut().unwrap().hand = 1;
             let html = render(app, &s, 0);
             assert!(html.contains("badge die") && !html.contains("Roll the die"));
-            let (region, _) = s.moves(0).gamble[0];
+            let (region, _) = s.moves(0).gamble()[0];
             app.games.smallworld.ui.gamble.set(Some(region));
             let html = render(app, &s, 0);
             assert!(html.contains("Roll the die") && html.contains("Cancel"), "{html}");
@@ -567,22 +748,23 @@ mod tests {
             let mut s = State::new(2, 5);
             for seat in [0, 1] {
                 s.apply(seat, Action::Pick { offer: 0 }).unwrap();
-                let region = s.moves(seat).conquer[0].0;
+                let region = s.moves(seat).conquer()[0].0;
                 s.apply(seat, Action::Conquer { region }).unwrap();
                 s.apply(seat, Action::EndConquests).unwrap();
                 while !s.moves(seat).can_end_turn {
                     let m = s.moves(seat);
-                    let action = if m.end_turn.as_deref().is_some_and(|w| w.contains("Amazons")) && !m.take.is_empty() {
-                        Action::Take { region: m.take[0] }
+                    let take = m.list(RegionMove::Take);
+                    let action = if m.end_turn.as_deref().is_some_and(|w| w.contains("Amazons")) && !take.is_empty() {
+                        Action::Take { region: take[0] }
                     } else {
-                        Action::Put { region: m.put[0] }
+                        Action::Put { region: m.list(RegionMove::Put)[0] }
                     };
                     s.apply(seat, action).unwrap();
                 }
                 s.apply(seat, Action::EndTurn).unwrap();
                 while s.phase == Phase::Reinforce {
                     let seat = s.actor().unwrap();
-                    s.apply(seat, Action::Put { region: s.moves(seat).put[0] }).unwrap();
+                    s.apply(seat, Action::Put { region: s.moves(seat).list(RegionMove::Put)[0] }).unwrap();
                 }
             }
             assert_eq!((s.turn, s.current), (2, 0));
@@ -593,43 +775,70 @@ mod tests {
     }
 
     #[test]
-    fn a_whole_game_renders_for_every_seat_to_the_end() {
+    fn copycats_and_hagglers_get_their_controls() {
         let owner = Owner::new();
         owner.with(|| {
             let app = App::new();
-            let mut s = State::new(3, 11);
-            let mut steps = 0;
-            while s.phase != Phase::Over {
-                let seat = s.actor().unwrap();
-                if steps % 7 == 0 {
-                    for viewer in 0..3 {
-                        let html = render(app, &s, viewer);
-                        assert!(html.contains("class=\"map\""));
+            let mut s = State::with_options(3, 5, Options { sky: None, ..Options::all() });
+            s.offers[0].power = Power::Copycat;
+            s.offers[1].power = Power::Commando;
+            s.apply(0, Action::Pick { offer: 0 }).unwrap();
+            let html = render(app, &s, 0);
+            assert!(html.contains("Copy a power from the column"), "{html}");
+            let mut s = State::with_options(3, 5, Options { sky: None, ..Options::all() });
+            s.offers[0].power = Power::Haggling;
+            s.apply(0, Action::Pick { offer: 0 }).unwrap();
+            let html = render(app, &s, 0);
+            assert!(html.contains("Trade Pacts (whoever holds them"), "{html}");
+        });
+    }
+
+    #[test]
+    fn whole_games_render_for_every_seat_to_the_end() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            for (players, options) in [(3, Options::default()), (4, Options::all())] {
+                let mut s = State::with_options(players, 11, options);
+                let mut steps = 0;
+                while s.phase != Phase::Over {
+                    let seat = s.actor().unwrap();
+                    if steps % 9 == 0 {
+                        for viewer in 0..players {
+                            let html = render(app, &s, viewer);
+                            assert!(html.contains("class=\"map\""));
+                        }
                     }
+                    let m = s.moves(seat);
+                    let first = |kind: RegionMove| m.list(kind).first().copied();
+                    let why = m.end_turn.as_deref().unwrap_or("");
+                    let action = if let Some(&(offer, _)) = m.pick.first() {
+                        Action::Pick { offer }
+                    } else if let Some(region) = first(RegionMove::Conquer) {
+                        Action::Conquer { region }
+                    } else if m.end_conquests {
+                        Action::EndConquests
+                    } else if why.contains("Heroes") {
+                        Action::Hero { region: *m.list(RegionMove::Hero).iter().find(|&&r| !s.regions[r].hero).unwrap() }
+                    } else if why.contains("Cannons") {
+                        Action::Cannon {
+                            region: *m.list(RegionMove::Cannon).iter().find(|&&r| s.regions[r].cannon.is_none()).unwrap(),
+                        }
+                    } else if why.contains("Amazons") && s.players[seat].active.is_some_and(|a| a.hand < 4) {
+                        Action::Take { region: first(RegionMove::Take).unwrap() }
+                    } else if !m.can_end_turn && first(RegionMove::Put).is_some() {
+                        Action::Put { region: first(RegionMove::Put).unwrap() }
+                    } else {
+                        Action::EndTurn
+                    };
+                    s.apply(seat, action).unwrap();
+                    steps += 1;
+                    assert!(steps < 40_000);
                 }
-                let m = s.moves(seat);
-                let action = if let Some(&offer) = m.pick.first() {
-                    Action::Pick { offer }
-                } else if let Some(&(region, _)) = m.conquer.first() {
-                    Action::Conquer { region }
-                } else if m.end_conquests {
-                    Action::EndConquests
-                } else if !m.can_end_turn && !m.put.is_empty() {
-                    Action::Put { region: m.put[0] }
-                } else if !m.can_end_turn && !m.take.is_empty() {
-                    Action::Take { region: m.take[0] }
-                } else if !m.can_end_turn && !m.hero.is_empty() {
-                    Action::Hero { region: *m.hero.iter().find(|&&r| !s.regions[r].hero).unwrap() }
-                } else {
-                    Action::EndTurn
-                };
-                s.apply(seat, action).unwrap();
-                steps += 1;
-                assert!(steps < 20_000);
+                let html = render(app, &s, 2);
+                assert!(html.contains("Final coins") && html.contains("The game is over"));
+                assert!(!html.contains("? coins"));
             }
-            let html = render(app, &s, 2);
-            assert!(html.contains("Final coins") && html.contains("The game is over"));
-            assert!(!html.contains("? coins"));
         });
     }
 }

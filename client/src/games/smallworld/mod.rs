@@ -16,8 +16,8 @@ pub mod shapes;
 
 use crate::app::{App, Lobby};
 use leptos::prelude::*;
-use protocol::{GameKind, GameView};
-use smallworld_core::View;
+use protocol::{GameKind, GameOptions, GameView};
+use smallworld_core::{Options, RegionMove, View};
 
 /// Interface state that survives the screen being rebuilt.
 #[derive(Clone, Copy)]
@@ -31,12 +31,12 @@ pub struct Ui {
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { tool: RwSignal::new(look::Tool::Conquer), gamble: RwSignal::new(None) }
+        Ui { tool: RwSignal::new(RegionMove::Conquer), gamble: RwSignal::new(None) }
     }
 
     /// Forget everything, e.g. when leaving the room.
     pub fn reset(&self) {
-        self.tool.set(look::Tool::Conquer);
+        self.tool.set(RegionMove::Conquer);
         self.gamble.set(None);
     }
 }
@@ -56,6 +56,8 @@ pub struct Signals {
     pub names: RwSignal<Vec<String>>,
     /// Who is connected, indexed by seat.
     pub connected: RwSignal<Vec<bool>>,
+    /// The expansions the host picked in the lobby (the server's echo).
+    pub options: RwSignal<Options>,
     pub ui: Ui,
 }
 
@@ -65,6 +67,7 @@ impl Signals {
             view: RwSignal::new(None),
             names: RwSignal::new(Vec::new()),
             connected: RwSignal::new(Vec::new()),
+            options: RwSignal::new(Options::default()),
             ui: Ui::new(),
         }
     }
@@ -74,6 +77,7 @@ impl Signals {
         self.view.set(None);
         self.names.set(Vec::new());
         self.connected.set(Vec::new());
+        self.options.set(Options::default());
         self.ui.reset();
     }
 }
@@ -96,7 +100,7 @@ impl crate::games::Game for SmallWorld {
     }
 
     fn blurb(&self) -> &'static str {
-        "Lead fantasy races to conquer a world too small for all of them, then send them into decline and pick a new one."
+        "Lead fantasy races to conquer a world too small for all of them, then send them into decline and pick a new one. With all six expansions."
     }
 
     fn frame(&self, _app: App, content: AnyView) -> AnyView {
@@ -109,6 +113,11 @@ impl crate::games::Game for SmallWorld {
 
     fn lobby(&self, app: App, lobby: &Lobby) -> AnyView {
         screens::lobby_screen(app, lobby.room.clone(), lobby.players.clone(), lobby.you, lobby.is_host).into_any()
+    }
+
+    fn options(&self, app: App, options: GameOptions) {
+        let GameOptions::SmallWorld(options) = options else { return };
+        app.games.smallworld.options.set(options);
     }
 
     fn board(&self, app: App) -> AnyView {

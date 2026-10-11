@@ -269,6 +269,58 @@
   margin-top: 0.6rem;
 }
 
+/* The expansions the host picks. */
+.smallworld .expansions {
+  margin: 0 0 1rem;
+}
+
+.smallworld .expansions h3 {
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.smallworld .expansions .option {
+  padding: 0.35rem 0;
+  border-bottom: 1px dotted var(--line);
+}
+
+.smallworld .option-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.smallworld .option-toggle input,
+.smallworld .side input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--wax);
+}
+
+.smallworld .option .hint {
+  margin-left: 1.55rem;
+  font-size: 0.8rem;
+}
+
+.smallworld .sides {
+  display: flex;
+  gap: 1.2rem;
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--parch-2);
+  border-radius: 0.6rem;
+}
+
+.smallworld .side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
 /* ---------- the game screen ---------- */
 
 .smallworld .top-bar {
@@ -434,6 +486,27 @@
   stroke-dasharray: 9 6;
 }
 
+/* Lava or a burning Zeppelin: nobody goes there for now. */
+.smallworld .region.molten polygon {
+  filter: sepia(0.6) saturate(2.4) hue-rotate(-30deg) brightness(0.9);
+}
+
+/* The Sky Islands, floating above the ground board. */
+.smallworld .sky-band rect {
+  fill: url(#sw-sky);
+}
+
+.smallworld .sky-band text {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  fill: #3e6e93;
+}
+
+.smallworld .region polygon {
+  transition: filter 0.12s;
+}
+
 .smallworld .region.pending polygon {
   stroke: #fff;
   stroke-width: 5;
@@ -467,6 +540,30 @@
 .smallworld .marker.hero path { fill: #b07a12; }
 .smallworld .marker.dragon circle { fill: #ffd2c4; }
 .smallworld .marker.dragon path { fill: #b52a1b; }
+.smallworld .marker.pot circle { fill: #ffe08a; }
+.smallworld .marker.pot path { fill: #3b2a10; }
+.smallworld .marker.catapult circle { fill: #e2c79a; }
+.smallworld .marker.catapult path { fill: #5b3a1a; }
+.smallworld .marker.winter circle { fill: #e3f3ff; }
+.smallworld .marker.winter path { fill: #3b7fc4; }
+.smallworld .marker.loot circle { fill: #d8b878; }
+.smallworld .marker.loot path { fill: #5a3a14; }
+.smallworld .marker.behemoth circle { fill: #c9c2b0; }
+.smallworld .marker.behemoth path { fill: #4a4033; }
+.smallworld .marker.cannon circle { fill: #d9d4cc; }
+.smallworld .marker.cannon path { fill: #2b2b2b; }
+.smallworld .marker.cannon.firing circle { fill: #ffb08a; }
+.smallworld .marker.cannon.firing path { fill: #a8261a; }
+.smallworld .marker.lava circle { fill: #ffcf9a; }
+.smallworld .marker.lava path { fill: #d2400f; }
+.smallworld .marker.burning circle { fill: #ffd9a8; }
+.smallworld .marker.burning path { fill: #e0561b; }
+.smallworld .marker.captive circle { fill: #cfcac0; }
+.smallworld .marker.captive path { fill: #6b6458; }
+.smallworld .marker.beanstalk circle { fill: #d8f0b8; }
+.smallworld .marker.beanstalk path { fill: #2f7d32; }
+.smallworld .marker.stairway circle { fill: #f4ede0; }
+.smallworld .marker.stairway path { fill: #8a7b62; }
 
 .smallworld .token rect {
   stroke: #1b130b;
@@ -608,8 +705,30 @@
   color: var(--parch);
 }
 
-.smallworld .peace {
+.smallworld .peace,
+.smallworld .copy,
+.smallworld .pacts {
   margin-top: 0.7rem;
+}
+
+.smallworld .copy {
+  margin-bottom: 0.6rem;
+}
+
+.smallworld .pacts li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+}
+
+.smallworld .pacts li span {
+  flex: 1;
+}
+
+.smallworld .pacts .tool {
+  min-width: 2rem;
+  padding: 0.15rem 0.5rem;
 }
 
 .smallworld .gamble {

@@ -52,6 +52,11 @@ impl GameKind {
     pub fn max_players_with(self, options: Option<&GameOptions>) -> usize {
         options.and_then(GameOptions::max_players).unwrap_or(self.max_players())
     }
+
+    /// The fewest players a game with these lobby options needs.
+    pub fn min_players_with(self, options: Option<&GameOptions>) -> usize {
+        options.and_then(GameOptions::min_players).unwrap_or(self.min_players())
+    }
 }
 
 /// What the host picked in the lobby, for a game that has options.
@@ -62,6 +67,8 @@ pub enum GameOptions {
     Hanabi(hanabi_core::GameRules),
     /// It's a Wonderful World's expansion.
     Wonderful(wonderful_core::Options),
+    /// Small World's expansions.
+    SmallWorld(smallworld_core::Options),
 }
 
 impl GameOptions {
@@ -69,15 +76,27 @@ impl GameOptions {
         match self {
             GameOptions::Hanabi(_) => GameKind::Hanabi,
             GameOptions::Wonderful(_) => GameKind::Wonderful,
+            GameOptions::SmallWorld(_) => GameKind::SmallWorld,
         }
     }
 
     /// The most players these options allow, when fewer than the game's
-    /// maximum (It's a Wonderful World seats 7 only with its expansion).
+    /// maximum (It's a Wonderful World seats 7 only with its expansion,
+    /// Small World 6 only with the Sky Islands).
     pub fn max_players(&self) -> Option<usize> {
         match self {
             GameOptions::Hanabi(_) => None,
             GameOptions::Wonderful(options) => Some(options.max_players()),
+            GameOptions::SmallWorld(options) => Some(options.max_players()),
+        }
+    }
+
+    /// The fewest players these options need, when more than the game's
+    /// minimum (Small World's Sky Islands need 3).
+    pub fn min_players(&self) -> Option<usize> {
+        match self {
+            GameOptions::SmallWorld(options) => Some(options.min_players()),
+            _ => None,
         }
     }
 }
@@ -198,7 +217,14 @@ mod tests {
         let hanabi = GameOptions::Hanabi(GameRules::default());
         assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabi)), 5);
         assert_eq!(GameKind::Catan.max_players_with(None), 4);
-        assert_eq!(GameKind::SmallWorld.max_players_with(None), 5);
+        assert_eq!(GameKind::SmallWorld.max_players(), 6);
+        let base = GameOptions::SmallWorld(smallworld_core::Options::default());
+        let sky = GameOptions::SmallWorld(smallworld_core::Options::all());
+        assert_eq!(GameKind::SmallWorld.max_players_with(Some(&base)), 5);
+        assert_eq!(GameKind::SmallWorld.max_players_with(Some(&sky)), 6);
+        assert_eq!(GameKind::SmallWorld.min_players_with(Some(&base)), 2);
+        assert_eq!(GameKind::SmallWorld.min_players_with(Some(&sky)), 3);
+        assert_eq!(GameKind::Hanabi.min_players_with(Some(&hanabi)), 2);
         assert_eq!(GameKind::ALL.len(), 4);
         for g in GameKind::ALL {
             assert_eq!(g.min_players(), 2);
@@ -237,6 +263,9 @@ mod tests {
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Conquer { region: 12 })),
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Ally { seat: Some(1) })),
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::EndTurn)),
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Copy { offer: Some(3) })),
+            ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Pact { seat: 2, give: true })),
+            ClientMsg::SetOptions(GameOptions::SmallWorld(smallworld_core::Options::all())),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -269,6 +298,7 @@ mod tests {
         }
         assert_eq!(GameOptions::Hanabi(GameRules::default()).game(), GameKind::Hanabi);
         assert_eq!(GameOptions::Wonderful(wonderful_core::Options::default()).game(), GameKind::Wonderful);
+        assert_eq!(GameOptions::SmallWorld(smallworld_core::Options::default()).game(), GameKind::SmallWorld);
     }
 
     /// Unwraps a `ServerMsg::Game` that went through JSON.
@@ -365,6 +395,19 @@ mod tests {
         assert_eq!(view.players[0].coins, None);
         assert!(view.players[0].active.is_some());
         assert_eq!(names.len(), 3);
+
+        // With every expansion: the Sky Islands beside the board, six seats.
+        let game = smallworld_core::State::with_options(6, 8, smallworld_core::Options::all());
+        let msg = ServerMsg::Game {
+            view: GameView::SmallWorld(Box::new(game.view_for(5))),
+            names: (0..6).map(|i| format!("P{i}")).collect(),
+            connected: vec![true; 6],
+        };
+        let (GameView::SmallWorld(view), _, _) = game_through_json(&msg) else {
+            panic!("not a Small World view");
+        };
+        assert_eq!(*view, game.view_for(5));
+        assert_eq!((view.board, view.access.len(), view.map().len()), (5, 2, 47 + 9));
     }
 
     #[test]

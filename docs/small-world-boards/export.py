@@ -152,6 +152,6 @@ for (p, q), cnt in pairs.items():
     adj.setdefault(ip, []).append(iq)
     adj.setdefault(iq, []).append(ip)
 for r in result:
-    r['adj'] = sorted(adj.get(r['id'], []), key=lambda s: int(s))
+    r['adj'] = sorted(adj.get(r['id'], []), key=lambda s: int(s) if s.isdigit() else 999)
 json.dump({'width': 1000, 'height': round(h * scale, 1), 'regions': result}, open(out_json, 'w'), indent=1)
 print(len(result), 'regions; height', round(h * scale, 1), '; multi-ring:', [r['id'] for r in result if r['rings'] > 1])

@@ -6,7 +6,7 @@
 use super::{Game, Running, WRONG_GAME};
 use protocol::{GameMove, GameOptions, GameView};
 use rand::{Rng, RngCore};
-use smallworld_core::State;
+use smallworld_core::{Options, State};
 
 pub struct SmallWorld;
 
@@ -16,8 +16,28 @@ impl Game for SmallWorld {
         true
     }
 
-    fn start(&self, names: Vec<String>, _options: Option<&GameOptions>, rng: &mut dyn RngCore) -> Box<dyn Running> {
-        Box::new(State::new(names.len(), rng.gen()))
+    /// The base game, until the host ticks some expansions.
+    fn default_options(&self) -> Option<GameOptions> {
+        Some(GameOptions::SmallWorld(Options::default()))
+    }
+
+    fn check_options(&self, options: GameOptions) -> Result<GameOptions, String> {
+        match options {
+            GameOptions::SmallWorld(_) => Ok(options),
+            _ => Err("Those options are for another game.".into()),
+        }
+    }
+
+    fn start(&self, names: Vec<String>, options: Option<&GameOptions>, rng: &mut dyn RngCore) -> Box<dyn Running> {
+        let mut options = match options {
+            Some(GameOptions::SmallWorld(options)) => *options,
+            _ => Options::default(),
+        };
+        // The rooms check the player count; this only guards the rules.
+        if names.len() < options.min_players() {
+            options.sky = None;
+        }
+        Box::new(State::with_options(names.len(), rng.gen(), options))
     }
 }
 
@@ -38,8 +58,8 @@ impl Running for State {
 mod tests {
     use crate::rooms::disconnect;
     use crate::testing::*;
-    use protocol::{ClientMsg, GameKind, GameMove, GameView};
-    use smallworld_core::{Action, Phase, State, View, START_COINS};
+    use protocol::{ClientMsg, GameKind, GameMove, GameOptions, GameView, ServerMsg};
+    use smallworld_core::{Action, Options, Phase, RegionMove, Sky, State, View, START_COINS};
 
     fn play(action: Action) -> ClientMsg {
         ClientMsg::Move(GameMove::SmallWorld(action))
@@ -58,24 +78,37 @@ mod tests {
     /// the first region on offer, put tokens back, end the turn.
     fn next_move(v: &View) -> Action {
         let m = &v.moves;
-        if let Some(&offer) = m.pick.first() {
+        let first = |kind: RegionMove| m.list(kind).first().copied();
+        let why = m.end_turn.as_deref();
+        if let Some(&(offer, _)) = m.pick.first() {
             Action::Pick { offer }
-        } else if let Some(&(region, _)) = m.conquer.first() {
+        } else if let Some(region) = first(RegionMove::Conquer) {
             Action::Conquer { region }
         } else if m.end_conquests {
             Action::EndConquests
-        } else if !m.can_end_turn && m.end_turn.as_deref() == Some("Place both your Heroes first.") {
-            let region = *m.hero.iter().find(|&&r| !v.regions[r].hero).unwrap();
+        } else if why == Some("Place both your Heroes first.") {
+            let region = *m.list(RegionMove::Hero).iter().find(|&&r| !v.regions[r].hero).unwrap();
             Action::Hero { region }
-        } else if !m.can_end_turn && !m.put.is_empty() && m.end_turn.as_deref() != Some("Keep 4 Amazons in hand: they rest until your next turn.") {
-            Action::Put { region: m.put[0] }
-        } else if !m.can_end_turn && !m.take.is_empty() {
-            Action::Take { region: m.take[0] }
-        } else if !m.can_end_turn && !m.put.is_empty() {
-            Action::Put { region: m.put[0] }
+        } else if why == Some("Place both your Cannons first.") {
+            let region = *m.list(RegionMove::Cannon).iter().find(|&&r| v.regions[r].cannon.is_none()).unwrap();
+            Action::Cannon { region }
+        } else if why == Some("Keep 4 Amazons in hand: they rest until your next turn.") {
+            let hand = v.players[v.you].active.map_or(0, |a| a.hand);
+            match (hand < 4, first(RegionMove::Take), first(RegionMove::Put)) {
+                (true, Some(region), _) => Action::Take { region },
+                (_, _, Some(region)) => Action::Put { region },
+                _ => Action::EndTurn,
+            }
+        } else if let (false, Some(region)) = (m.can_end_turn, first(RegionMove::Put)) {
+            Action::Put { region }
         } else {
             Action::EndTurn
         }
+    }
+
+    /// The host's message picking the expansions.
+    fn expansions(options: Options) -> ClientMsg {
+        ClientMsg::SetOptions(GameOptions::SmallWorld(options))
     }
 
     #[test]
@@ -147,10 +180,41 @@ mod tests {
     }
 
     #[test]
+    fn the_sky_islands_need_three_players_and_seat_six() {
+        let state = new_state();
+        let (code, mut clients) = lobby(&state, GameKind::SmallWorld, 2);
+        assert_eq!(clients[1].send(&state, expansions(Options::all())).as_deref(), Some("Only the host can change the options."));
+        assert_eq!(clients[0].send(&state, expansions(Options::all())), None);
+        for c in &mut clients {
+            let on = Some(GameOptions::SmallWorld(Options::all()));
+            assert!(matches!(c.drain().last(), Some(ServerMsg::Lobby { options, .. }) if *options == on));
+        }
+        assert_eq!(clients[0].send(&state, ClientMsg::Start).as_deref(), Some("You need at least three players."));
+        for i in 2..6 {
+            clients.push(join(&state, &code, &format!("P{i}")).unwrap());
+        }
+        assert_eq!(join(&state, &code, "P6").err().as_deref(), Some("That room is full."));
+        // Six seated: the Sky Islands can't go now.
+        let off = Options { sky: None, ..Options::all() };
+        assert_eq!(clients[0].send(&state, expansions(off)).as_deref(), Some("There are too many players here for that."));
+        assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+        with_game(&state, &code, |g: &mut State| {
+            assert_eq!((g.seats(), g.board.ground, g.board.sky), (6, 5, Some(Sky::Three)));
+            assert_eq!(g.options, Options::all());
+        });
+    }
+
+    #[test]
     fn whole_small_world_games_can_be_played_to_the_end_through_the_server() {
-        for n in 2..=5 {
+        let all = Options::all();
+        let packs = Options { sky: None, ..all };
+        for (n, options) in [(2, Options::default()), (3, packs), (4, Options::default()), (5, packs), (3, all), (6, all)] {
             let state = new_state();
-            let (code, mut clients) = lobby(&state, GameKind::SmallWorld, n);
+            let (code, mut clients) = lobby(&state, GameKind::SmallWorld, n.min(2));
+            assert_eq!(clients[0].send(&state, expansions(options)), None);
+            for i in 2..n {
+                clients.push(join(&state, &code, &format!("P{i}")).unwrap());
+            }
             assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
             let mut views: Vec<Option<Box<View>>> = vec![None; n];
             latest_views(&mut clients, &mut views);
@@ -163,7 +227,7 @@ mod tests {
                 assert_eq!(r, None, "{n} players: seat {actor} {action:?}");
                 latest_views(&mut clients, &mut views);
                 moves += 1;
-                assert!(moves < 20_000, "the game got stuck");
+                assert!(moves < 40_000, "the game got stuck");
             }
             for v in views.iter().flatten() {
                 // The coins are out on the table at the end.

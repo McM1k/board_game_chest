@@ -4,7 +4,8 @@ Four multiplayer, browser-based games in Rust, served by one server and played f
 one page: Catan, the Hanabi clone from
 [McM1k/hanabii](https://github.com/McM1k/hanabii) (merged from commit `c2d5fa6`), a
 card-drafting empire builder ("It's a Wonderful World", with its Corruption & Ascension
-expansion), and Small World, the fantasy conquest game, on the box's four boards.
+expansion), and Small World, the fantasy conquest game, on the box's four boards, with six
+of its expansions.
 All use the same rooms: one player creates a room and gets a 4-letter code, the
 others join with it, the host starts the game.
 
@@ -13,7 +14,7 @@ others join with it, the host starts the game.
 | `games/catan` (crate `catan-core`) | Catan rules: board, game, actions, per-player views. No I/O. |
 | `games/hanabi` (crate `hanabi-core`) | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
 | `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card tables (base game and Corruption & Ascension), drafting, planning, production, scoring, redacted per-player view. No I/O. |
-| `games/smallworld` (crate `smallworld-core`) | Small World rules: the four boards, the 14 races and 20 powers, conquest, decline, scoring, a view that hides the other players' coins. No I/O. |
+| `games/smallworld` (crate `smallworld-core`) | Small World rules: the four boards and the Sky Islands, the 37 races and 45 powers of the base game and six expansions, conquest, decline, scoring, a view that hides the other players' coins and the Skags' loot. No I/O. |
 | `protocol` | The WebSocket messages: the room flow every game shares (create, join, lobby options, start, leave), and one enum per thing that differs by game (`GameKind`, `GameOptions`, `GameMove`, `GameView`). |
 | `server` | Axum server: the room system (`rooms.rs`, which names no game), each game's server side in `src/games/`, one WebSocket per player; serves the client. |
 | `client` | Leptos (CSR/WASM) front end: a shell (`app.rs`, `menu.rs`, `main.rs`: the menu, the connection, the routing between screens) and each game's screens and stylesheet in `src/games/<name>/`. |
@@ -70,14 +71,16 @@ the game. It now runs on the room system Catan already had:
   end up in, whatever you picked in the menu.
 * **Host.** The first seat is the host. Only the host starts the game, and in Hanabi
   only the host picks the variant rules (everyone sees them, locked, as they change), as
-  in It's a Wonderful World whether to play with the Corruption & Ascension expansion.
+  in It's a Wonderful World whether to play with the Corruption & Ascension expansion, and
+  in Small World which expansions to play.
 * **Seats and reconnecting.** Every seat has a token kept in the browser tab. If the
   connection drops during a game the seat stays yours, shown as "offline" to the
   others, and a refresh or a reconnect takes it back. In a lobby, leaving frees the seat;
   a dropped connection (a reload, a phone switching apps) keeps it for 2 minutes first.
 * **Names** are trimmed, at most 20 characters, and unique in a room (ignoring case).
 * **Limits.** Catan 2–4 players, Hanabi 2–5, It's a Wonderful World 2–5, or 2–7 with its
-  expansion (which can't be switched off once more than five are seated), Small World 2–5. Joining a running
+  expansion (which can't be switched off once more than five are seated), Small World 2–5,
+  or 3–6 with the Sky Islands (which can't be switched off once six are seated). Joining a running
   game is refused unless you hold its token. A room nobody has connected to for 30 minutes is removed.
 * **Seat order.** Catan shuffles the seats when the game starts. Hanabi keeps join
   order, so the host plays first and the order round the table is who joined when.
@@ -105,34 +108,38 @@ cargo test --workspace
   from six players, duos, Empires dealt at random), what a view hides,
   JSON round trips, and whole games from a seed for 2 to 5 players. The ignored
   `economy_report` prints how a simple bot fares with the cards (see "The cards" below).
-* `smallworld-core` (30): the four boards (every border goes both ways, the board is in one
-  piece, as many mines as magic sources and caverns), the column and what a combo costs,
-  entering through the border, what a conquest costs and what each race and power takes
-  off, losses and redeploying, the reinforcement die, abandoning, decline (with Ghouls,
-  Spirit and Stout), every bonus that is scored, Amazons, Skeletons, Sorcerers, the Dragon,
-  Heroes and Holes, lairs, camps and fortresses, the Diplomat, Seafaring, Flying, Berserk,
-  hidden coins, JSON, and 48 whole games by a random bot on all four boards, checked after
-  every move (no token is ever made out of nothing, every banner is somewhere once).
+* `smallworld-core` (72): the four boards and both sides of the Sky Islands (every border
+  goes both ways, the board is in one piece, as many mines as magic sources and caverns, the
+  Beanstalk and the Stairway inland and apart), the column and what a combo costs, entering
+  through the border, what a conquest costs and what each race and power takes off, losses
+  and redeploying, the reinforcement die, abandoning, decline (with Ghouls, Spirit, Stout,
+  Priestesses and Soul-Touch), every bonus that is scored, every race and power of the base
+  game and the expansions, hidden coins and loot, JSON, and whole games by a random bot that
+  tries the powers' moves too: 48 base games on all four boards, 48 with every expansion
+  for 2 to 6 players, checked after every move (no token is ever made out of nothing, every
+  banner is somewhere once, no more pieces than the box holds).
 * `protocol` (9): every message survives JSON, including each game's view (the Hanabi
   maps are keyed by seat and color), every move, view and option names its game, and rule
   payloads from before "hanabii" existed still parse.
-* `server` (42): in `rooms.rs`, the room flows run for every game: starting with a full
+* `server` (43): in `rooms.rs`, the room flows run for every game: starting with a full
   table and a view for every seat, host-only start and options, seat order, fullness,
   reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
   for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
   Hanabi's rules options (hanabii locks the others, rules freeze once the game starts, …) and
   a whole game, It's a Wonderful World's hidden picks, seat checks, its expansion switch (up
   to seven seats) and whole games, one with the expansion at a full table, Small World's
-  turns, hidden coins, reconnecting and whole games for 2 to 5 players.
-* `client` (102): native render tests that build real games and render every screen to
+  turns, hidden coins, reconnecting, the Sky Islands' three to six seats, and whole games for
+  2 to 6 players with and without the expansions.
+* `client` (108): native render tests that build real games and render every screen to
   HTML. In the shell: every game is registered under its own kind and drawn in its own
   frame, and a state from the server puts its board on screen until you leave. In each
   game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
   set, whole games rendered move by move, the clue buttons, rings, drop zones, game-over
   line, flashes; It's a Wonderful World's waiting room and board for every seat, phase and
-  player count of a whole game; Small World's board through a whole game, the cost badges,
-  the die's confirmation and the decline button; the lobbies; and the pure helpers behind
-  what a click means. Animations, drag and drop and the CSS need a browser (see below).
+  player count of a whole game; Small World's board through whole games with and without the
+  expansions, the Sky Islands above the board, the cost badges, the die's confirmation, the
+  decline button, the Copycat and Trade Pact controls, the expansions' switches in the
+  lobby; the lobbies; and the pure helpers behind what a click means. Animations, drag and drop and the CSS need a browser (see below).
 
 ## What has been run in a browser
 
@@ -142,17 +149,19 @@ Wonderful World pick); reloading mid-game, which lands back on the board; leavin
 goes back to the menu; the page title throughout. It's a Wonderful World was also taken
 through its draft, planning and an Energy step (its kept cards also at phone width), and
 joining a room from a second tab was tried by hand. Small World was played to the end by
-script with two players, and its first turns with four and five; the opening was also run
-at phone width. Still to look at with people:
+script with two players, and with four and every expansion; its first turns with three,
+five and six (the Sky Islands); the opening was also run at phone width. Still to look at
+with people:
 
 * a whole game of each;
 * Hanabi's hand-slide animation, drag and drop onto the play/discard zones, and the
   flashes and spinning rings (these live in effects that only run in a browser);
 * phones: It's a Wonderful World's tray that sticks to the bottom of the screen, tap
   targets, and the other games' layouts (Small World's map scrolls sideways there);
-* Small World's powers that only a few combos use (Heroes, the Dragon, Bivouacking,
-  Fortified, Diplomat, Sorcerers) were tested in the rules and on the server, not clicked
-  through in a browser.
+* Small World's powers that have their own tools (Heroes, Dragons, Bivouacking, Fortified,
+  Diplomat, Sorcerers, and the expansions' Catapult, Mercenaries, Fireballs, Behemoths, Lava,
+  Winter, Pots of Gold, Cannons, Zeppelins, Copycat, Trade Pacts) were tested in the rules,
+  on the server and in render tests, but the browser script only conquers.
 
 ## Game menu
 
@@ -315,7 +324,8 @@ sends every seat its own view after every move.
 
 Lead fantasy races to conquer a world too small for all of them, 2 to 5 players, on the
 board for that many (23, 30, 40 or 47 regions; 10 turns with two or three players, 9 with
-four, 8 with five). The rules are the 2015 English rulebook's.
+four, 8 with five). The rules are the 2015 English rulebook's; the expansions' are their
+rule sheets'.
 
 * **Picking.** On your first turn, and whenever you have no active race, you pick a race and
   special power from the column of six. The top one is free; each one lower costs a coin,
@@ -342,20 +352,43 @@ four, 8 with five). The rules are the 2015 English rulebook's.
 All 14 races and 20 powers of the base game are in, with what each does shown on its combo
 and, for your own race, in the players' panel. The map highlights what a click does now
 (the cost of each region you can conquer, "?" for the die, "+" and "−" when redeploying),
-and the tool buttons in "Your move" switch between conquering and abandoning, or adding
-and taking tokens, encampments, the fortress and Heroes.
+and the tool buttons in "Your move" switch between what a click does: conquering,
+abandoning, the powers' own moves (a Dragon, the Catapult, a Zeppelin...), or while
+redeploying adding and taking tokens and placing the power's pieces.
+
+### The expansions
+
+The host ticks them in the waiting room; their races and powers are shuffled into the
+stacks:
+
+* **Cursed!**: Goblins and Kobolds; Cursed (skipping it costs 3 coins), Hordes of,
+  Marauding, Ransacking and Were-.
+* **Grand Dames of Small World**: Gypsies, Priestesses (their Ivory Tower) and White Ladies;
+  Historian and Peace-Loving.
+* **Be Not Afraid...**: Barbarians, Homunculi, Leprechauns (Pots of Gold), Pixies and
+  Pygmies; Barricade, Catapult, Corrupt, Imperial and Mercenary.
+* **Royal Bonus**: Fauns, Igors and Shrubmen; Aquatic, Behemoth and Fireball.
+* **A Spider's Web**: Ice Witches (Winter), Skags (Loot) and Slingmen; Copycat, Lava and
+  Soul-Touch.
+* **Sky Islands**: a second board of floating islands (the host picks the two- or
+  three-island side) beside the ground board for one player fewer, so for 3 to 6 players.
+  The Magical Beanstalk and the Stairway to Heaven join two ground regions to the islands,
+  no race starts up there (Storm Giants may), cloud bridges join the islands, and an island
+  held whole earns a coin. Its races and powers: Escargots, Scarecrows, Khans, Scavengers,
+  Storm Giants, Drakons and Wendigos; Goldsmith, Zeppelined, Airborne, Haggling (Trade
+  Pacts), Gunner (Cannons), Exploring and Racketeering.
 
 ### The boards
 
-The four boards were traced from photographs of the printed ones (Days of Wonder's own, on
-BoardGameGeek): every region's terrain, mine, magic source, cavern, Lost Tribe and
-neighbours, and its outline for the map on screen. `docs/small-world.md` says how, and
+The four boards and both sides of the Sky Islands were traced from photographs of the
+printed ones (Days of Wonder's own, on BoardGameGeek): every region's terrain, mine, magic
+source, cavern, Lost Tribe and neighbours, and its outline for the map on screen. `docs/small-world.md` says how, and
 what to check if a border looks wrong.
 
 ### What isn't in it
 
-The blank race and power, the expansions (Cursed!, Grand Dames, Be Not Afraid..., Royal
-Bonus, the 6-player board, Underground, Realms), and solo or team play.
+The blank races and powers, the other expansions (the 6-player board, Underground, Realms,
+Necromancer Island, Tales and Legends, Leaders), and solo or team play.
 
 ### Where it lives
 
@@ -380,5 +413,5 @@ right now, so the client never works the rules out for itself.
 * Catan always uses the random standard layout.
 * It's a Wonderful World plays side A of the Empires only, and without the campaign
   expansions (see its section above).
-* Small World plays the base game only, on boards traced from photographs (see its
-  section above).
+* Small World plays on boards traced from photographs, and without the expansions that
+  change the board or the turn (see its section above).

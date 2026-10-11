@@ -1,9 +1,11 @@
 //! What one seat is allowed to see: everything on the table, but only your
-//! own Victory coins until the game is over (the others keep theirs
-//! face down). The view has no maps, so it survives JSON.
+//! own Victory coins until the game is over (the others keep theirs face
+//! down), and only the Skags' owner knows what their Loot hides. The view
+//! has no maps, so it survives JSON.
 
+use crate::maps::{Board, Sky};
 use crate::races::Race;
-use crate::state::{Army, Event, Moves, Offer, Phase, RegionState, State, Turn};
+use crate::state::{Army, Event, Loot, Moves, Offer, Options, Phase, RegionState, State, Turn};
 use serde::{Deserialize, Serialize};
 
 /// What everybody can see about one player.
@@ -15,13 +17,23 @@ pub struct PlayerView {
     pub declined: Vec<Army>,
     /// Tokens on the map, every race together.
     pub on_map: u32,
+    /// Haggling: the Trade Pacts this player holds.
+    pub pacts: u8,
+    /// Racketeering: the next combo is free.
+    pub free_pick: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct View {
     pub you: usize,
-    /// Which board: the number of players it is for.
+    /// The expansions in play.
+    pub options: Options,
+    /// Which ground board: the number of players it is for.
     pub board: usize,
+    /// The Sky Islands' side, if they are played.
+    pub sky: Option<Sky>,
+    /// The ground regions of the Beanstalk and the Stairway.
+    pub access: Vec<usize>,
     pub turn: u8,
     pub turns: u8,
     /// Whose turn it is.
@@ -42,8 +54,17 @@ pub struct View {
     pub coins_now: Option<u32>,
     /// Tokens of each race still in the box, for the ones in play.
     pub supply: Vec<(Race, u8)>,
+    /// What the Loot in each region hides, if your Skags put it there.
+    pub loot: Vec<(usize, Loot)>,
     pub log: Vec<Event>,
     pub winners: Vec<usize>,
+}
+
+impl View {
+    /// The board the game is played on.
+    pub fn map(&self) -> Board {
+        Board::new(self.board, self.sky, &self.access)
+    }
 }
 
 impl State {
@@ -58,6 +79,8 @@ impl State {
                 active: p.active,
                 declined: p.declined.clone(),
                 on_map: self.tokens_on_map(i),
+                pacts: self.pacts[i],
+                free_pick: p.free_pick,
             })
             .collect();
         let supply = self
@@ -66,11 +89,20 @@ impl State {
             .flat_map(|p| p.active.iter().chain(&p.declined))
             .map(|a| (a.race, self.available(a.race)))
             .collect();
+        let skags = self.owner(Race::Skags).is_some_and(|(s, _)| s == seat);
+        let loot = if skags {
+            self.loot.iter().enumerate().filter_map(|(r, l)| l.map(|l| (r, l))).collect()
+        } else {
+            Vec::new()
+        };
         View {
             you: seat,
-            board: self.seats(),
+            options: self.options,
+            board: self.board.ground,
+            sky: self.board.sky,
+            access: self.board.access.iter().map(|&(g, _)| g).collect(),
             turn: self.turn,
-            turns: self.map().turns,
+            turns: self.turns(),
             current: self.current,
             actor: self.actor(),
             phase: self.phase,
@@ -84,6 +116,7 @@ impl State {
             coins_now: (self.current == seat && matches!(self.phase, Phase::Conquest { .. } | Phase::Redeploy))
                 .then(|| self.turn_coins(seat)),
             supply,
+            loot,
             log: self.log.clone(),
             winners: self.winners(),
         }
