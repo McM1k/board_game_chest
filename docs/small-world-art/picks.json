@@ -33,5 +33,6 @@
   "Goldsmith": ["sw_si_en", "2_316"], "Zeppelined": ["sw_si_en", "2_319"], "Airborne": ["sw_si_en", "2_323"],
   "Haggling": ["sw_si_en", "2_328"], "Gunner": ["sw_si_en", "2_332"], "Exploring": ["sw_si_en", "2_336"],
   "Racketeering": ["sw_si_en", "2_340"]
- }
+ },
+ "tribe": ["sw_rules_2015_en", "1_38", [51, 47.5, 34]]
 }

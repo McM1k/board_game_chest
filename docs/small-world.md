@@ -164,11 +164,23 @@ straightens it: `banner-scans.json` holds roughly where each banner lies, found 
 a template of what every banner shares. The rule sheets crop their banners a little tighter
 than the scans' outline (the top of the medallion is cut), which only shows side by side.
 
+The Lost Tribe's picture (`art/lost-tribe.webp`) is its token, from the base rule sheet's list
+of components (page 1, image `1_38`, next to "18 Lost Tribes"; nothing larger is printed).
+The token is square, 97 pixels across, framed in grey with the Lost Tribe symbol and a
+column in two corners. `make.py` cuts a circle out of it that keeps the silhouette against
+the sunset, head included, and leaves the grey out: centre (51, 47.5) and radius 34, in the
+export's pixels (`picks.json`, `tribe`).
+
 On the map a token is its race's portrait on a disc of its player's colour, with the token
-count beside it. A race in decline is drawn in grey, like the banner's grey side. In the
-column and the players' list, a combo is put together as in the box: the power's badge
-against the left end of the race's banner. What the race and the power do shows while the
-combo is hovered, or focused from the keyboard or by a tap.
+count beside it, and a Lost Tribe is its picture on a sand-coloured disc. Tokens are 46 board
+units across (1000 across the board), so a phone still shows the faces. The printed features
+sit in a row above a token, the pieces in a row under it, and the cost badge on its right;
+`map.rs` tests that none of them overlap. A race in decline is drawn in grey, like the
+banner's grey side.
+
+In the column and the players' list, a combo is put together as in the box: the power's
+badge against the left end of the race's banner. What the race and the power do shows while
+the combo is hovered, or focused from the keyboard or by a tap.
 
 ## Rules: what was chosen where the rulebook is silent
 

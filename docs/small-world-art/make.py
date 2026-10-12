@@ -11,6 +11,7 @@ edge is found where the white starts; the expansions' are the medallion on
 their banners, the same circle on every banner of a sheet
 (medallions.json: centre and radius, as fractions of the banner's width
 and height). A power gets its badge, the white around it made transparent.
+The Lost Tribe gets a round picture too, cut from its token.
 """
 import json, sys
 from pathlib import Path
@@ -77,6 +78,11 @@ def load(sheet, ref):
 
 (art / 'races').mkdir(parents=True, exist_ok=True)
 (art / 'powers').mkdir(parents=True, exist_ok=True)
+# The Lost Tribe's token is square, framed in grey with an icon in two
+# corners: the circle (centre and radius, in pixels) keeps the silhouette
+# against the sunset and leaves those out.
+sheet, ref, (cx, cy, r) = picks['tribe']
+round_crop(load(sheet, ref), cx, cy, r).save(art / 'lost-tribe.webp', quality=82, method=6)
 for race, (sheet, ref) in picks['races'].items():
     im = load(sheet, ref)
     if sheet in medallions:

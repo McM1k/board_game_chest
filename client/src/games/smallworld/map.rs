@@ -17,6 +17,21 @@ use smallworld_core::{Board, Terrain, View};
 /// Space between the Sky Islands and the ground board.
 const GAP: i32 = 40;
 
+// What stands in a region, around its anchor, in board units (1000 across):
+// a token's disc, with its picture inside a thin ring of the player's
+// colour, and the count chip on its lower right (x, y, radius)...
+const TOKEN_R: i32 = 23;
+const ART_R: i32 = TOKEN_R - 2;
+const CHIP: (i32, i32, i32) = (20, 14, 10);
+// ...the markers' size, the row of printed features above the token and the
+// row of pieces under it...
+const MARKER_R: i32 = 10;
+const ICONS_DY: i32 = -35;
+const PIECES_DY: i32 = 35;
+// ...and the cost badge on its right.
+const BADGE_DX: i32 = 46;
+const BADGE_R: i32 = 13;
+
 fn terrain_class(terrain: Terrain) -> &'static str {
     match terrain {
         Terrain::Farmland => "t-farm",
@@ -84,8 +99,25 @@ fn defs() -> AnyView {
 pub fn marker(x: i32, y: i32, class: &'static str, glyph: &'static str) -> AnyView {
     view! {
         <g class=format!("marker {class}") transform=format!("translate({x} {y})")>
-            <circle r="10" />
+            <circle r=MARKER_R />
             <path d=glyph />
+        </g>
+    }
+    .into_any()
+}
+
+/// Where the `k`th of `n` markers in a row goes, from the row's middle.
+fn row_x(k: i32, n: i32) -> i32 {
+    (2 * k - (n - 1)) * (MARKER_R + 1)
+}
+
+/// A Lost Tribe: its printed token's picture, on a plain disc the size of a
+/// race's token.
+pub fn tribe_token(x: i32, y: i32) -> AnyView {
+    view! {
+        <g class="tribe" transform=format!("translate({x} {y})")>
+            <circle class="disc" r=TOKEN_R />
+            <image href=look::tribe_art() x=-ART_R y=-ART_R width=2 * ART_R height=2 * ART_R />
         </g>
     }
     .into_any()
@@ -95,7 +127,6 @@ pub fn marker(x: i32, y: i32, class: &'static str, glyph: &'static str) -> AnyVi
 pub const MINE: &str = "M-7 -1 Q-2 -8 6 -6 L6.5 -4.5 Q-1 -5.5 -5.5 0.5 Z M-0.5 -5.5 L1.5 -6 L5.5 6.5 L3.5 7 Z";
 pub const MAGIC: &str = "M0 -7 L5 -1 L0 7 L-5 -1 Z";
 pub const CAVERN: &str = "M-7 5 Q-7 -6 0 -6 Q7 -6 7 5 L3 5 Q3 -2 0 -2 Q-3 -2 -3 5 Z";
-pub const TRIBE: &str = "M-1 -7 L1 -7 L1 7 L-1 7 Z M-4 -4 L0 -8 L4 -4 Z M-5 2 L5 2 L5 4 L-5 4 Z";
 pub const LAIR: &str = "M-7 5 L0 -6 L7 5 Z";
 pub const FORT: &str = "M-6 6 L-6 -3 L-4 -3 L-4 -6 L-1 -6 L-1 -3 L1 -3 L1 -6 L4 -6 L4 -3 L6 -3 L6 6 Z";
 pub const CAMP: &str = "M-7 6 L0 -6 L7 6 Z M-1 6 L0 1 L1 6 Z";
@@ -253,11 +284,13 @@ pub fn map_svg(
                 Some(false) => pieces.push(("cannon", CANNON)),
                 None => {}
             }
+            // The region's number goes under the row of pieces, if any.
+            let number_dy = if pieces.is_empty() { 44 } else { PIECES_DY + MARKER_R + 10 };
             let row = |list: Vec<(&'static str, &'static str)>, dy: i32| {
                 let n = list.len() as i32;
                 list.into_iter()
                     .enumerate()
-                    .map(|(k, (class, glyph))| marker(x + (2 * k as i32 - (n - 1)) * 11, y + dy, class, glyph))
+                    .map(|(k, (class, glyph))| marker(x + row_x(k as i32, n), y + dy, class, glyph))
                     .collect_view()
             };
             let token = r.tokens.map(|t| {
@@ -266,27 +299,21 @@ pub fn map_svg(
                 // The race's portrait on a disc of its player's colour, and
                 // how many tokens stand there.
                 let color = look::seat_color(seat);
+                let (cx, cy, cr) = CHIP;
                 view! {
                     <g class=class transform=format!("translate({x} {y})")>
-                        <circle class="disc" r="17" fill=color />
-                        <image href=look::race_art(t.race) x="-15" y="-15" width="30" height="30" />
-                        <g class="count" transform="translate(15 10)">
-                            <circle r="8.5" fill=color />
-                            <text y="4">{t.count}</text>
+                        <circle class="disc" r=TOKEN_R fill=color />
+                        <image href=look::race_art(t.race) x=-ART_R y=-ART_R width=2 * ART_R height=2 * ART_R />
+                        <g class="count" transform=format!("translate({cx} {cy})")>
+                            <circle r=cr fill=color />
+                            <text y="4.5">{t.count}</text>
                         </g>
                     </g>
                 }
             });
-            let tribe = (r.lost_tribe).then(|| {
-                view! {
-                    <g class="tribe" transform=format!("translate({x} {y})")>
-                        <rect x="-15" y="-12" width="30" height="24" rx="7" />
-                        <path d=TRIBE />
-                    </g>
-                }
-            });
+            let tribe = r.lost_tribe.then(|| tribe_token(x, y));
             // Beside what stands in the region, or in its middle.
-            let bx = if r.tokens.is_some() || r.lost_tribe { x + 40 } else { x };
+            let bx = if r.tokens.is_some() || r.lost_tribe { x + BADGE_DX } else { x };
             let badge = mark_of(i).and_then(|mark| {
                 let (text, class) = match mark {
                     Mark::Target(Some(text)) => (text, "badge"),
@@ -296,18 +323,18 @@ pub fn map_svg(
                 };
                 Some(view! {
                     <g class=class transform=format!("translate({bx} {y})")>
-                        <circle r="13" />
+                        <circle r=BADGE_R />
                         <text y="5">{text}</text>
                     </g>
                 })
             });
             view! {
                 <g class="pieces">
-                    <text class="number" x=x y=y + 44>{i + 1}</text>
-                    {row(icons, -24)}
+                    <text class="number" x=x y=y + number_dy>{i + 1}</text>
+                    {row(icons, ICONS_DY)}
                     {tribe}
                     {token}
-                    {row(pieces, 25)}
+                    {row(pieces, PIECES_DY)}
                     {badge}
                 </g>
             }
@@ -364,4 +391,30 @@ pub fn map_svg(
         </svg>
     }
     .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Whether two circles, (x, y, radius), keep clear of each other.
+    fn apart(a: (i32, i32, i32), b: (i32, i32, i32)) -> bool {
+        f64::from(a.0 - b.0).hypot(f64::from(a.1 - b.1)) >= f64::from(a.2 + b.2)
+    }
+
+    #[test]
+    fn nothing_around_a_token_covers_it() {
+        let token = (0, 0, TOKEN_R);
+        let badge = (BADGE_DX, 0, BADGE_R);
+        assert!(apart(token, badge) && apart(CHIP, badge));
+        // Rows of up to four markers above and under it.
+        for n in 1..=4 {
+            for k in 0..n {
+                for dy in [ICONS_DY, PIECES_DY] {
+                    let m = (row_x(k, n), dy, MARKER_R);
+                    assert!(apart(token, m) && apart(CHIP, m) && apart(badge, m), "{k} of {n} at {dy}");
+                }
+            }
+        }
+    }
 }

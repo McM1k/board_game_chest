@@ -21,6 +21,11 @@ pub fn race_art(race: Race) -> String {
     format!("{ART}/races/{}.webp", format!("{race:?}").to_lowercase())
 }
 
+/// A Lost Tribe's token: its silhouette, cut round like the portraits.
+pub fn tribe_art() -> String {
+    format!("{ART}/lost-tribe.webp")
+}
+
 /// The printed ground board for `players` players (2 to 5), photographed.
 pub fn board_art(players: usize) -> String {
     format!("{ART}/boards/{}.webp", players.clamp(2, 5))
@@ -622,6 +627,7 @@ mod tests {
         for side in [Sky::Three, Sky::Two] {
             assert!(file(sky_art(side)).is_file(), "{}", sky_art(side));
         }
+        assert!(file(tribe_art()).is_file(), "{}", tribe_art());
         assert_eq!(race_art(Race::StormGiants), "/smallworld-art/races/stormgiants.webp");
         assert_eq!(power_art(Power::HordesOf), "/smallworld-art/powers/hordesof.webp");
     }

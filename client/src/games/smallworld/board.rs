@@ -198,9 +198,7 @@ fn legend(ctx: &Ctx) -> AnyView {
         <ul class="legend" aria-label="Map key">
             {list}
             <li>
-                <svg class="key wide" viewBox="-16 -13 32 26" aria-hidden="true">
-                    <g class="tribe"><rect x="-15" y="-12" width="30" height="24" rx="7" /><path d=TRIBE /></g>
-                </svg>
+                <svg class="key" viewBox="-25 -25 50 50" aria-hidden="true">{tribe_token(0, 0)}</svg>
                 "Lost Tribe"
             </li>
             <li>
@@ -834,6 +832,35 @@ mod tests {
             let html = render(app, &s, 0);
             assert!(html.contains("redeploying") && html.contains("End turn"));
             assert!(html.contains("disabled"), "tokens still in hand: {html}");
+        });
+    }
+
+    #[test]
+    fn tokens_are_big_enough_to_make_out_and_the_lost_tribes_have_their_picture() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let mut s = State::new(5, 5);
+            let tribes = s.regions.iter().filter(|r| r.lost_tribe).count();
+            assert!(tribes > 0);
+            let html = render(app, &s, 0);
+            // Each Lost Tribe is its printed token's picture, and so is the key's.
+            let art = format!("<image href=\"{}\"", look::tribe_art());
+            assert_eq!(html.matches(&art).count(), tribes + 1, "{html}");
+            assert_eq!(html.matches("class=\"tribe\"").count(), tribes + 1);
+            for tribe in html.split("class=\"tribe\"").skip(1) {
+                let tribe = tribe.split("</g>").next().unwrap();
+                assert!(tribe.contains("class=\"disc\"") && tribe.contains(&art) && !tribe.contains("<rect"), "{tribe}");
+            }
+            // A race token's disc, on the map (the key's are smaller).
+            s.apply(0, Action::Pick { offer: 0 }).unwrap();
+            let r = s.moves(0).conquer()[0].0;
+            s.apply(0, Action::Conquer { region: r }).unwrap();
+            let html = render(app, &s, 0);
+            let map = html.split("class=\"legend\"").next().unwrap();
+            let token = map.split("class=\"token\"").nth(1).expect("a token");
+            let radius: f32 = token.split("r=\"").nth(1).and_then(|t| t.split('"').next()).unwrap().parse().unwrap();
+            assert!(radius >= 22.0, "{radius}");
         });
     }
 
