@@ -101,3 +101,5 @@ Then:
   classes, sizes, positions). Images cost a lot, and a done report can't show them.
 - Be very concise and write text only: a one- or two-sentence "Resolution", a few short
   bullets for "What was done", and a short final reply.
+- Work silently: no progress messages or narration between steps. Only the final reply
+  counts, since nothing else ends up in the done report.
