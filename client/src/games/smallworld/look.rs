@@ -325,12 +325,19 @@ pub fn hint(view: &View, names: &[String]) -> String {
         Phase::Conquest { ghouls } => {
             let n = hand(view);
             let mut s = if ghouls {
-                format!("Your Ghouls in decline conquer first, with {n} in hand.")
+                let then = match view.players[view.you].active {
+                    Some(a) => format!(", then your {}, with {}", combo_name(a.race, a.power), a.hand),
+                    None => String::new(),
+                };
+                format!("Your Ghouls in decline conquer first, with {n} in hand{then}.")
             } else {
                 format!("{n} tokens in hand. Click a region to conquer it; the number is its cost.")
             };
             if !m.gamble().is_empty() {
-                s.push_str(" Short of tokens? Click a region marked \u{201c}?\u{201d} to try the reinforcement die: it ends your conquests.");
+                let whose = if ghouls { "the Ghouls'" } else { "your" };
+                s.push_str(&format!(
+                    " Short of tokens? Click a region marked \u{201c}?\u{201d} to try the reinforcement die: it ends {whose} conquests."
+                ));
             }
             if m.decline {
                 s.push_str(" Or put your race in decline instead of conquering.");

@@ -196,8 +196,9 @@ fn legend(ctx: &Ctx) -> AnyView {
 
 // ----- what you can do now ------------------------------------------------------------
 
-fn button(ctx: &Ctx, label: &'static str, class: &'static str, action: Action) -> AnyView {
+fn button(ctx: &Ctx, label: impl Into<String>, class: &'static str, action: Action) -> AnyView {
     let ctx = ctx.clone();
+    let label = label.into();
     view! { <button class=class on:click=move |_| ctx.act(action)>{label}</button> }.into_any()
 }
 
@@ -232,6 +233,7 @@ fn gamble_box(ctx: &Ctx) -> Option<AnyView> {
     let region = ctx.ui().gamble.get_untracked()?;
     let (_, cost) = *ctx.view.moves.gamble().iter().find(|(r, _)| *r == region)?;
     let hand = look::hand(&ctx.view);
+    let whose = if ctx.view.phase == (Phase::Conquest { ghouls: true }) { "the Ghouls'" } else { "your" };
     let ui = ctx.ui();
     let go = ctx.clone();
     Some(
@@ -239,7 +241,7 @@ fn gamble_box(ctx: &Ctx) -> Option<AnyView> {
             <div class="gamble" role="dialog" aria-label="Roll the reinforcement die">
                 <p>
                     {format!(
-                        "{} costs {cost} and you have {hand}: roll the reinforcement die (0, 0, 0, 1, 2 or 3) for the rest? Win or lose, your conquests end.",
+                        "{} costs {cost} and you have {hand}: roll the reinforcement die (0, 0, 0, 1, 2 or 3) for the rest? Win or lose, {whose} conquests end.",
                         look::region_name(&ctx.board, region),
                     )}
                 </p>
@@ -368,12 +370,11 @@ fn action_panel(ctx: &Ctx) -> AnyView {
     let body = match v.phase {
         Phase::Pick => view! { <p>"Pick a race and power from the column below."</p> }.into_any(),
         Phase::Conquest { ghouls } => {
-            let done = if ghouls {
-                "Done with the Ghouls"
-            } else if marauding {
-                "Done: conquer again (Marauding)"
-            } else {
-                "Done conquering"
+            let done = match me {
+                Some(a) if ghouls => format!("Done with the Ghouls, on to the {}", a.race.name()),
+                _ if ghouls => "Done with the Ghouls".to_string(),
+                _ if marauding => "Done: conquer again (Marauding)".to_string(),
+                _ => "Done conquering".to_string(),
             };
             view! {
                 <p class="in-hand">{in_hand}</p>
@@ -644,7 +645,7 @@ mod tests {
     use super::*;
     use crate::testing::shows;
     use leptos::tachys::view::RenderHtml;
-    use smallworld_core::{Options, RegionMove, State};
+    use smallworld_core::{Options, Race, RegionMove, RegionState, State, Tokens};
 
     fn names() -> Vec<String> {
         ["Ann", "Bob", "Cy", "Di", "Ed", "Flo"].iter().map(|s| s.to_string()).collect()
@@ -771,6 +772,43 @@ mod tests {
             let html = render(app, &s, 0);
             assert!(html.contains("Go into decline") && html.contains("Done conquering"));
             assert!(html.contains("put your race in decline"));
+        });
+    }
+
+    #[test]
+    fn the_ghouls_in_decline_say_which_race_conquers_after_them() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let mut s = State::new(2, 5);
+            // Ann's Ghouls went into decline with the Spirit power.
+            s.offers.retain(|o| o.race != Race::Ghouls && o.power != Power::Spirit);
+            s.races.retain(|&r| r != Race::Ghouls);
+            s.players[0].declined.push(Army::new(Race::Ghouls, Power::Spirit, 0));
+            let ghouls = Tokens { race: Race::Ghouls, count: 4, declined: true };
+            s.regions[7] = RegionState { tokens: Some(ghouls), ..RegionState::default() };
+            let next = s.offers[0];
+            s.apply(0, Action::Pick { offer: 0 }).unwrap();
+            assert_eq!(s.phase, Phase::Conquest { ghouls: true });
+            let html = render(app, &s, 0);
+            let hand = s.players[0].active.unwrap().hand;
+            let then = format!("then your {}, with {hand}.", look::combo_name(next.race, next.power));
+            assert!(shows(&html, &then), "{html}");
+            assert!(shows(&html, &format!("Done with the Ghouls, on to the {}", next.race.name())), "{html}");
+
+            // Short of tokens: the die only ends the Ghouls' conquests.
+            s.players[0].declined[0].hand = 1;
+            let (region, _) = s.moves(0).gamble()[0];
+            app.games.smallworld.ui.gamble.set(Some(region));
+            let html = render(app, &s, 0);
+            assert!(shows(&html, "it ends the Ghouls' conquests"), "{html}");
+            assert!(shows(&html, "Win or lose, the Ghouls' conquests end."), "{html}");
+            app.games.smallworld.ui.gamble.set(None);
+
+            s.apply(0, Action::EndConquests).unwrap();
+            let html = render(app, &s, 0);
+            assert!(html.contains("You are conquering") && html.contains("Done conquering"), "{html}");
+            assert!(!html.contains("Done with the Ghouls"));
         });
     }
 
