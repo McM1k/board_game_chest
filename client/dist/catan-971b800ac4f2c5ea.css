@@ -57,10 +57,13 @@
 .theme-catan .topbar { display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: var(--panel); flex-wrap: wrap; }
 .theme-catan .brand { font-weight: 800; font-size: 1.1rem; color: var(--accent); }
 .theme-catan .status { flex: 1; min-width: 200px; font-weight: 600; }
-.theme-catan .dice { font-size: 1.1rem; }
 .theme-catan .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 1rem; padding: 1rem; flex: 1; }
 .theme-catan .board-wrap { min-width: 0; }
-.theme-catan .board { width: 100%; max-height: calc(100vh - 110px); border-radius: var(--radius); display: block; user-select: none; }
+/* The frame hugs the drawn sea (11.2 × 10 units of the board's viewBox), so
+   what sits on the map can be placed and sized in the map's own unit. */
+.theme-catan .board-frame { position: relative; width: min(100%, calc((100vh - 110px) * 1.12)); margin: 0 auto;
+  container-type: inline-size; }
+.theme-catan .board { width: 100%; height: auto; border-radius: var(--radius); display: block; user-select: none; }
 .theme-catan .sidebar { display: flex; flex-direction: column; gap: .8rem; }
 .theme-catan .panel { background: var(--panel); border-radius: var(--radius); padding: .8rem; }
 
@@ -107,7 +110,39 @@
 
 @media (max-width: 900px) {
   .theme-catan .layout { grid-template-columns: 1fr; padding: .5rem; }
-  .theme-catan .board { max-height: none; }
+  .theme-catan .board-frame { width: 100%; }
+}
+
+/* The dice in the sea's bottom-right corner, clear of the island and the
+   harbours on both boards (x > 3, y > 3.15 in board units). --u is one
+   board unit (a hex's side), capped on very large screens; --who is the
+   colour of the player whose roll it is. */
+.theme-catan .dice-tray { --u: min(100cqw / 11.2, 96px); position: absolute; right: calc(var(--u) * .12);
+  bottom: calc(var(--u) * .12); width: calc(var(--u) * 2.45); padding: calc(var(--u) * .1);
+  display: flex; flex-direction: column; gap: calc(var(--u) * .08);
+  background: rgba(15, 25, 35, .8); border: 2px solid var(--who); border-radius: calc(var(--u) * .22);
+  box-shadow: 0 4px 14px #0007; }
+.theme-catan .dice-row { display: flex; align-items: center; gap: calc(var(--u) * .08); }
+.theme-catan .die { width: calc(var(--u) * .72); height: calc(var(--u) * .72); flex: none; display: block;
+  filter: drop-shadow(0 2px 2px #0008); }
+.theme-catan .die rect { fill: #f6efdd; stroke: #6b5b3e; stroke-width: .35; }
+.theme-catan .die .pip { fill: #2a2118; }
+.theme-catan .die.blank { opacity: .35; }
+.theme-catan .dice-total { flex: none; margin-left: auto; font-size: calc(var(--u) * .46); font-weight: 800; line-height: 1;
+  color: var(--text); font-variant-numeric: tabular-nums; }
+.theme-catan .dice-total.seven { color: #ff6b6b; }
+.theme-catan .dice-caption { font-size: max(11px, calc(var(--u) * .24)); font-weight: 600; color: var(--muted);
+  text-align: center; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-catan .dice-tray button { width: 100%; min-height: 28px; font-size: max(12px, calc(var(--u) * .26)); line-height: 1.25;
+  padding: calc(var(--u) * .08) calc(var(--u) * .1); border-radius: calc(var(--u) * .12); }
+.theme-catan .die.rolling { animation: tumble .7s cubic-bezier(.25, .8, .35, 1.15) both; }
+@keyframes tumble {
+  0%   { transform: translate(-70%, -50%) rotate(-320deg) scale(.4); opacity: 0; }
+  40%  { opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-catan .die.rolling { animation: none; }
 }
 
 /* Ember contour on whatever just changed on the board: 2.4 s, then gone. */
