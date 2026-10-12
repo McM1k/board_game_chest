@@ -621,7 +621,7 @@
 
 .smallworld .token text {
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   fill: #fff;
   text-anchor: middle;
@@ -652,14 +652,11 @@
   stroke-width: 2.5px;
 }
 
-.smallworld .tribe rect {
+/* A Lost Tribe: no player's colour, a sand ring around its picture. */
+.smallworld .tribe .disc {
   fill: #cfc3a6;
   stroke: #4b3d29;
-  stroke-width: 1.4;
-}
-
-.smallworld .tribe path {
-  fill: #4b3d29;
+  stroke-width: 1.6;
 }
 
 .smallworld .badge circle {
@@ -714,10 +711,6 @@
 .smallworld .legend .key {
   width: 1.25rem;
   height: 1.25rem;
-}
-
-.smallworld .legend .key.wide {
-  width: 1.7rem;
 }
 
 /* ---------- your move ---------- */
