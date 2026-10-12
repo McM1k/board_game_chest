@@ -97,5 +97,7 @@ Then:
   `sed -n '1,/^## What the player.s screen/p' <file>`. The JSON below is long, so `grep` it
   for what you need.
 - Pipe build and test output through `tail` or `grep`, and read big files in parts.
-- Look at as few screenshots as the change needs, cropped to the part that changed.
-- Keep "What was done" to about ten lines.
+- No screenshots or images. Check the page through its DOM (`/execute/sync` returning text,
+  classes, sizes, positions). Images cost a lot, and a done report can't show them.
+- Be very concise and write text only: a one- or two-sentence "Resolution", a few short
+  bullets for "What was done", and a short final reply.
