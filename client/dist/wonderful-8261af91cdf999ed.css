@@ -775,6 +775,47 @@
   line-height: 1.15;
 }
 
+/* The printed card's picture, right under the band, with the card's name in
+   white over its foot, on a dark fade. */
+.wonderful .card-art {
+  position: relative;
+  display: block;
+  flex: none;
+  aspect-ratio: 2 / 1;
+  margin-top: -0.4rem;
+  overflow: hidden;
+  background: var(--felt-3);
+}
+
+.wonderful .card-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wonderful .card-art .card-name {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 1.4rem 0.7rem 0.35rem;
+  color: #fff;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.78));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* The narrow cards of the small grids: a taller picture and a smaller name,
+   so that a name on two lines still leaves some of it. */
+.wonderful .cards.kept .card-art,
+.wonderful .cards.finished .card-art {
+  aspect-ratio: 8 / 5;
+}
+
+.wonderful .cards.kept .card-art .card-name,
+.wonderful .cards.finished .card-art .card-name {
+  padding-top: 1rem;
+  font-size: 0.95rem;
+}
+
 .wonderful .card-cost {
   display: block;
   padding: 0 0.7rem;
@@ -1192,6 +1233,68 @@
   margin-bottom: 0;
 }
 
+/* Your Empire's heading sits on its board's picture, across the top of the
+   panel, darkened behind the words on the left and the points on the right. */
+.wonderful .panel.empire .empire-head {
+  position: relative;
+  isolation: isolate;
+  min-height: 8.5rem;
+  margin: -1rem -1.1rem 0.9rem;
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+  background: var(--felt-3);
+  border-radius: calc(1rem - 1px) calc(1rem - 1px) 0 0;
+}
+
+.wonderful .panel.empire .empire-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to right,
+    rgba(11, 42, 42, 0.92) 0%,
+    rgba(11, 42, 42, 0.55) 38%,
+    rgba(11, 42, 42, 0.1) 62%,
+    rgba(11, 42, 42, 0.8) 100%
+  );
+}
+
+.wonderful .empire-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 60%;
+}
+
+.wonderful .panel.empire .empire-head :is(h2, p, .points) {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.wonderful .panel.empire .empire-head :is(.empire-name, .empire-points, .points-word) {
+  color: #e6eee9;
+}
+
+.wonderful .empire-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.15rem;
+}
+
+/* An Empire's crest: by your Empire's title, each rival's name, and each
+   player in the standings. */
+.wonderful .crest {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
 .wonderful .empire-name {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1262,9 +1365,11 @@
   margin-top: 0.9rem;
 }
 
+/* One column per type, never wider than it would be with all five, so that
+   a lone card's picture doesn't fill the panel. */
 .wonderful .kinds {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.4rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(9.4rem, 1fr));
   gap: 0.4rem 0.9rem;
 }
 
@@ -1302,6 +1407,22 @@
 
 .wonderful .rival h3 {
   font-size: 1.1rem;
+}
+
+.wonderful .rival-head {
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+
+.wonderful .rival-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.wonderful .rival .crest {
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-top: 0.1rem;
 }
 
 .wonderful .rival .points-num {
@@ -1486,6 +1607,13 @@
 
 .wonderful .standings tbody th {
   font-weight: 600;
+}
+
+.wonderful .standings .crest {
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
 }
 
 .wonderful .standings .total {
