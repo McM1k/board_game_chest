@@ -1,4 +1,4 @@
-use crate::{Board, Hand, Resource};
+use crate::{Board, Hand, Layout, Resource};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,14 @@ impl Default for Rules {
             largest_army_min: 3,
         }
     }
+}
+
+/// What the host picks in the lobby.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Options {
+    /// The island the game is played on.
+    #[serde(default)]
+    pub layout: Layout,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,9 +141,15 @@ fn err<T>(msg: &str) -> Result<T, String> {
 }
 
 impl Game {
+    /// A game on a random island.
     pub fn new(rules: Rules, names: Vec<String>, rng: &mut impl Rng) -> Game {
+        Game::with_options(rules, Options::default(), names, rng)
+    }
+
+    /// A game on the island the lobby picked.
+    pub fn with_options(rules: Rules, options: Options, names: Vec<String>, rng: &mut impl Rng) -> Game {
         assert!((2..=4).contains(&names.len()), "2 to 4 players");
-        let board = Board::generate(rng);
+        let board = Board::new(options.layout, rng);
         let mut deck = Vec::new();
         for (card, n) in [
             (DevCard::Knight, 14),
@@ -1104,9 +1118,9 @@ mod tests {
 
     #[test]
     fn board_has_standard_shape() {
-        for seed in 0..20 {
-            let (g, _) = new_game(3, seed);
-            let b = &g.board;
+        let random = (0..20).map(|seed| new_game(3, seed).0.board);
+        for b in random.chain([Board::beginner()]) {
+            let b = &b;
             assert_eq!(b.tiles.len(), 19);
             assert_eq!(b.vertices.len(), 54);
             assert_eq!(b.edges.len(), 72);
@@ -1122,6 +1136,77 @@ mod tests {
                     assert!(!(hot(&b.tiles[i]) && hot(&b.tiles[j])));
                 }
             }
+            // Every harbor has a stretch of coast of its own.
+            let ports = b.vertex_ports();
+            assert_eq!(ports.iter().filter(|p| p.is_some()).count(), 18);
+        }
+    }
+
+    /// The rulebook's "Starting Set-up for Beginners" (Illustration A of
+    /// the base game's rules, page 3): the same island whatever the seed.
+    #[test]
+    fn the_beginner_island_is_the_rulebooks() {
+        use crate::{Layout, Resource::*, Terrain, Terrain::*};
+        assert_eq!(Options::default().layout, Layout::Random);
+        // Rows of 3, 4, 5, 4 and 3 tiles from the top, left to right.
+        let rows: [&[(Terrain, Option<u8>)]; 5] = [
+            &[(Mountains, Some(10)), (Pasture, Some(2)), (Forest, Some(9))],
+            &[(Fields, Some(12)), (Hills, Some(6)), (Pasture, Some(4)), (Hills, Some(10))],
+            &[(Fields, Some(9)), (Forest, Some(11)), (Desert, None), (Forest, Some(3)), (Mountains, Some(8))],
+            &[(Forest, Some(8)), (Mountains, Some(3)), (Fields, Some(4)), (Pasture, Some(5))],
+            &[(Hills, Some(5)), (Fields, Some(6)), (Pasture, Some(11))],
+        ];
+        // The harbors, clockwise from the top left: the tile each one
+        // touches (counted as above, from 0), the tile's side and the trade.
+        let mut harbors = vec![
+            (0, "north-west", None),
+            (1, "north-east", Some(Wheat)),
+            (6, "north-east", Some(Ore)),
+            (11, "east", None),
+            (15, "south-east", Some(Sheep)),
+            (17, "south-east", None),
+            (16, "south-west", None),
+            (12, "west", Some(Brick)),
+            (3, "west", Some(Wood)),
+        ];
+        harbors.sort_by_key(|h| format!("{h:?}"));
+
+        for seed in 0..5 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let names = vec!["A".into(), "B".into(), "C".into()];
+            let g = Game::with_options(Rules::default(), Options { layout: Layout::Beginner }, names, &mut rng);
+            let b = &g.board;
+            let mut order: Vec<usize> = (0..b.tiles.len()).collect();
+            order.sort_by(|&i, &j| {
+                let (a, c) = (b.tiles[i].center, b.tiles[j].center);
+                (a.1, a.0).partial_cmp(&(c.1, c.0)).unwrap()
+            });
+            let tiles: Vec<_> = order.iter().map(|&i| (b.tiles[i].terrain, b.tiles[i].number)).collect();
+            assert_eq!(tiles, rows.concat(), "seed {seed}");
+            // The robber starts in the desert, in the middle.
+            assert_eq!(b.tiles[g.robber].terrain, Desert);
+            assert_eq!(b.tiles[g.robber].center, (0.0, 0.0));
+
+            let mut ports: Vec<_> = b
+                .ports
+                .iter()
+                .map(|p| {
+                    let e = &b.edges[p.edge];
+                    assert!(e.coastal, "a harbor on the coast");
+                    let k = order
+                        .iter()
+                        .position(|&t| b.tiles[t].vertices.contains(&e.a) && b.tiles[t].vertices.contains(&e.b))
+                        .unwrap();
+                    let (c, pa, pb) = (b.tiles[order[k]].center, b.vertices[e.a].pos, b.vertices[e.b].pos);
+                    let (dx, dy) = ((pa.0 + pb.0) / 2.0 - c.0, (pa.1 + pb.1) / 2.0 - c.1);
+                    // Clockwise from the east, with y pointing down the screen.
+                    let sixth = (dy.atan2(dx).to_degrees() / 60.0).round().rem_euclid(6.0) as usize;
+                    let side = ["east", "south-east", "south-west", "west", "north-west", "north-east"][sixth];
+                    (k, side, p.kind)
+                })
+                .collect();
+            ports.sort_by_key(|h| format!("{h:?}"));
+            assert_eq!(ports, harbors, "seed {seed}");
         }
     }
 

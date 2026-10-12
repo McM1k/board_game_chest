@@ -2,8 +2,9 @@
 //! waiting room.
 
 use crate::app::{create_room, join_room, leave, send, App, Screen};
+use catan_core::{Layout, Options};
 use leptos::prelude::*;
-use protocol::{ClientMsg, GameKind, LobbyPlayer};
+use protocol::{ClientMsg, GameKind, GameOptions, LobbyPlayer};
 
 pub fn home_screen(app: App) -> impl IntoView {
     let create = move |_| create_room(app, GameKind::Catan);
@@ -31,6 +32,38 @@ pub fn home_screen(app: App) -> impl IntoView {
     }
 }
 
+/// The island's picker: a random one, or the rulebook's beginner map. The
+/// host picks, everybody sees it (locked for the others). As in the other
+/// games' lobbies, a pick only asks the server, whose echo is what the
+/// picker shows.
+fn layout_option(app: App, is_host: bool) -> impl IntoView {
+    let options = app.games.catan.options;
+    let pick = move |ev: leptos::ev::Event| {
+        let layout = if event_target_value(&ev) == "beginner" { Layout::Beginner } else { Layout::Random };
+        send(app, &ClientMsg::SetOptions(GameOptions::Catan(Options { layout })));
+    };
+    let choice = move |layout: Layout, value: &'static str, label: &'static str| {
+        view! { <option value=value prop:selected=move || options.get().layout == layout>{label}</option> }
+    };
+    let hint = move || match options.get().layout {
+        Layout::Random => "Tiles, numbers and harbors are shuffled for every game.",
+        Layout::Beginner => {
+            "The rulebook's starting map for beginners: the same tiles, numbers and harbors every game. You still place your own first settlements and roads."
+        }
+    };
+    view! {
+        <div class="option">
+            <label>"Board"
+                <select disabled=!is_host on:change=pick>
+                    {choice(Layout::Random, "random", "Random")}
+                    {choice(Layout::Beginner, "beginner", "Beginner (the rulebook's map)")}
+                </select>
+            </label>
+            <p class="muted small-text">{hint}</p>
+        </div>
+    }
+}
+
 pub fn lobby_screen(app: App, room: String, players: Vec<LobbyPlayer>, is_host: bool) -> impl IntoView {
     let can_start = players.len() >= 2;
     let rows = players
@@ -54,6 +87,7 @@ pub fn lobby_screen(app: App, room: String, players: Vec<LobbyPlayer>, is_host: 
             <p class="muted">"Share this code with your friends:"</p>
             <div class="room-code">{room}</div>
             <ul class="lobby-list">{rows}</ul>
+            {layout_option(app, is_host)}
             {if is_host {
                 view! {
                     <button class="primary" disabled=!can_start on:click=move |_| send(app, &ClientMsg::Start)>
@@ -116,6 +150,31 @@ mod tests {
             assert!(html.contains("offline"));
             let alone = lobby_screen(app, "WXYZ".into(), players(&["Ann"]), true).to_html();
             assert!(alone.contains("Need at least 2 players"));
+        });
+    }
+
+    #[test]
+    fn the_lobby_shows_the_island_the_host_picked() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let catan = crate::games::game(GameKind::Catan);
+            // A random island until the server says otherwise.
+            let host = lobby_screen(app, "WXYZ".into(), players(&["Ann", "Bob"]), true).to_html();
+            assert!(host.contains("Board") && host.contains("Beginner (the rulebook"));
+            assert!(host.contains("shuffled for every game"));
+            assert!(!host.contains("disabled"), "the host can pick");
+            let guest = lobby_screen(app, "WXYZ".into(), players(&["Ann", "Bob"]), false).to_html();
+            assert!(guest.contains("disabled"), "only the host picks");
+
+            catan.options(app, GameOptions::Catan(Options { layout: Layout::Beginner }));
+            assert_eq!(app.games.catan.options.get_untracked().layout, Layout::Beginner);
+            let html = lobby_screen(app, "WXYZ".into(), players(&["Ann", "Bob"]), false).to_html();
+            assert!(html.contains("starting map for beginners"));
+            assert_eq!(catan.snapshot(app)["options"]["layout"], "Beginner");
+            // Leaving the room forgets the pick.
+            catan.reset(app);
+            assert_eq!(app.games.catan.options.get_untracked(), Options::default());
         });
     }
 }

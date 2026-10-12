@@ -378,7 +378,7 @@ mod tests {
                 assert_eq!(*game, GameKind::Catan);
                 assert_eq!(players.len(), 1);
                 assert_eq!((*you, *is_host), (0, true));
-                assert!(options.is_none(), "Catan has no lobby options");
+                assert_eq!(options, &Some(GameOptions::Catan(catan_core::Options::default())), "a random island");
             }
             other => panic!("expected the lobby, got {other:?}"),
         }

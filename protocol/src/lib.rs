@@ -62,6 +62,8 @@ impl GameKind {
 /// What the host picked in the lobby, for a game that has options.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum GameOptions {
+    /// Catan's island: a random one or the rulebook's beginner map.
+    Catan(catan_core::Options),
     /// Hanabi's variant rules. The server normalizes them: the "hanabii"
     /// mode replaces every other option.
     Hanabi(hanabi_core::GameRules),
@@ -74,6 +76,7 @@ pub enum GameOptions {
 impl GameOptions {
     pub fn game(&self) -> GameKind {
         match self {
+            GameOptions::Catan(_) => GameKind::Catan,
             GameOptions::Hanabi(_) => GameKind::Hanabi,
             GameOptions::Wonderful(_) => GameKind::Wonderful,
             GameOptions::SmallWorld(_) => GameKind::SmallWorld,
@@ -85,7 +88,7 @@ impl GameOptions {
     /// Small World 6 only with the Sky Islands).
     pub fn max_players(&self) -> Option<usize> {
         match self {
-            GameOptions::Hanabi(_) => None,
+            GameOptions::Catan(_) | GameOptions::Hanabi(_) => None,
             GameOptions::Wonderful(options) => Some(options.max_players()),
             GameOptions::SmallWorld(options) => Some(options.max_players()),
         }
@@ -274,6 +277,9 @@ mod tests {
         let hanabi = GameOptions::Hanabi(GameRules::default());
         assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabi)), 5);
         assert_eq!(GameKind::Catan.max_players_with(None), 4);
+        let catan = GameOptions::Catan(catan_core::Options { layout: catan_core::Layout::Beginner });
+        assert_eq!(GameKind::Catan.max_players_with(Some(&catan)), 4);
+        assert_eq!(GameKind::Catan.min_players_with(Some(&catan)), 2);
         assert_eq!(GameKind::SmallWorld.max_players(), 6);
         let base = GameOptions::SmallWorld(smallworld_core::Options::default());
         let sky = GameOptions::SmallWorld(smallworld_core::Options::all());
@@ -323,6 +329,7 @@ mod tests {
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Copy { offer: Some(3) })),
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Pact { seat: 2, give: true })),
             ClientMsg::SetOptions(GameOptions::SmallWorld(smallworld_core::Options::all())),
+            ClientMsg::SetOptions(GameOptions::Catan(catan_core::Options { layout: catan_core::Layout::Beginner })),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -353,6 +360,7 @@ mod tests {
         for ((view, mv), kind) in views.iter().zip(&moves).zip(GameKind::ALL) {
             assert_eq!((view.game(), mv.game()), (kind, kind));
         }
+        assert_eq!(GameOptions::Catan(catan_core::Options::default()).game(), GameKind::Catan);
         assert_eq!(GameOptions::Hanabi(GameRules::default()).game(), GameKind::Hanabi);
         assert_eq!(GameOptions::Wonderful(wonderful_core::Options::default()).game(), GameKind::Wonderful);
         assert_eq!(GameOptions::SmallWorld(smallworld_core::Options::default()).game(), GameKind::SmallWorld);

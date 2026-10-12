@@ -14,7 +14,7 @@ pub mod screens;
 
 use crate::app::{App, Lobby};
 use leptos::prelude::*;
-use protocol::{GameKind, GameView};
+use protocol::{GameKind, GameOptions, GameView};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -80,6 +80,8 @@ pub struct Signals {
     pub view: RwSignal<Option<catan_core::GameView>>,
     /// Who is connected, indexed by seat.
     pub connected: RwSignal<Vec<bool>>,
+    /// What the host picked in the lobby (the server's echo).
+    pub options: RwSignal<catan_core::Options>,
     pub ui: Ui,
     /// Board changes still showing their ember contour.
     pub fresh: RwSignal<Vec<look::Fresh>>,
@@ -92,6 +94,7 @@ impl Signals {
         Signals {
             view: RwSignal::new(None),
             connected: RwSignal::new(vec![]),
+            options: RwSignal::new(catan_core::Options::default()),
             ui: Ui::new(),
             fresh: RwSignal::new(vec![]),
             snap: StoredValue::new(None),
@@ -102,6 +105,7 @@ impl Signals {
     pub fn reset(&self) {
         self.view.set(None);
         self.connected.set(vec![]);
+        self.options.set(catan_core::Options::default());
         self.ui.reset();
         self.fresh.set(vec![]);
         self.snap.set_value(None);
@@ -141,6 +145,11 @@ impl crate::games::Game for Catan {
         screens::lobby_screen(app, lobby.room.clone(), lobby.players.clone(), lobby.is_host).into_any()
     }
 
+    fn options(&self, app: App, options: GameOptions) {
+        let GameOptions::Catan(options) = options else { return };
+        app.games.catan.options.set(options);
+    }
+
     fn board(&self, app: App) -> AnyView {
         board::board(app)
     }
@@ -162,6 +171,7 @@ impl crate::games::Game for Catan {
         serde_json::json!({
             "view": catan.view.get_untracked(),
             "connected": catan.connected.get_untracked(),
+            "options": catan.options.get_untracked(),
         })
     }
 }

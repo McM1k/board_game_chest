@@ -68,9 +68,94 @@ pub struct Board {
     pub ports: Vec<Port>,
 }
 
+/// Which island a game is played on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Layout {
+    /// Tiles, numbers and harbors shuffled for every game.
+    #[default]
+    Random,
+    /// The rulebook's "Starting Set-up for Beginners": the same island
+    /// every game.
+    Beginner,
+}
+
 const HEX_RADIUS: i32 = 2;
 
+/// The rulebook's "Starting Set-up for Beginners" (Illustration A of the
+/// base game's rules): each tile's terrain and number, in rows of 3, 4, 5,
+/// 4 and 3 from the top, left to right (the order of [`Board::tiles`]).
+const BEGINNER_TILES: [(Terrain, Option<u8>); 19] = [
+    (Terrain::Mountains, Some(10)),
+    (Terrain::Pasture, Some(2)),
+    (Terrain::Forest, Some(9)),
+    (Terrain::Fields, Some(12)),
+    (Terrain::Hills, Some(6)),
+    (Terrain::Pasture, Some(4)),
+    (Terrain::Hills, Some(10)),
+    (Terrain::Fields, Some(9)),
+    (Terrain::Forest, Some(11)),
+    (Terrain::Desert, None),
+    (Terrain::Forest, Some(3)),
+    (Terrain::Mountains, Some(8)),
+    (Terrain::Forest, Some(8)),
+    (Terrain::Mountains, Some(3)),
+    (Terrain::Fields, Some(4)),
+    (Terrain::Pasture, Some(5)),
+    (Terrain::Hills, Some(5)),
+    (Terrain::Fields, Some(6)),
+    (Terrain::Pasture, Some(11)),
+];
+
+/// The same island's 9 harbors, clockwise from the top left: the tile each
+/// one touches, which side of it (0 east, then clockwise: 1 south-east,
+/// 2 south-west, 3 west, 4 north-west, 5 north-east) and what it trades.
+const BEGINNER_PORTS: [(usize, usize, Option<Resource>); 9] = [
+    (0, 4, None),
+    (1, 5, Some(Resource::Wheat)),
+    (6, 5, Some(Resource::Ore)),
+    (11, 0, None),
+    (15, 1, Some(Resource::Sheep)),
+    (17, 1, None),
+    (16, 2, None),
+    (12, 3, Some(Resource::Brick)),
+    (3, 3, Some(Resource::Wood)),
+];
+
 impl Board {
+    /// The island `layout` names: a random one, or the rulebook's.
+    pub fn new(layout: Layout, rng: &mut impl Rng) -> Board {
+        match layout {
+            Layout::Random => Board::generate(rng),
+            Layout::Beginner => Board::beginner(),
+        }
+    }
+
+    /// The rulebook's island for a first game (see [`BEGINNER_TILES`]).
+    pub fn beginner() -> Board {
+        let terrains: Vec<Terrain> = BEGINNER_TILES.iter().map(|&(t, _)| t).collect();
+        let mut board = Board::island(&terrains);
+        for (tile, &(_, number)) in board.tiles.iter_mut().zip(&BEGINNER_TILES) {
+            tile.number = number;
+        }
+        board.ports = BEGINNER_PORTS
+            .iter()
+            .map(|&(tile, side, kind)| {
+                let v = board.tiles[tile].vertices;
+                let edge = board.vertices[v[side]]
+                    .edges
+                    .iter()
+                    .copied()
+                    .find(|&e| {
+                        let e = &board.edges[e];
+                        e.a == v[(side + 1) % 6] || e.b == v[(side + 1) % 6]
+                    })
+                    .expect("a tile's side is an edge");
+                Port { edge, kind }
+            })
+            .collect();
+        board
+    }
+
     /// Generates a random standard-sized board (19 land hexes, 9 ports).
     pub fn generate(rng: &mut impl Rng) -> Board {
         let mut terrains = Vec::new();
@@ -87,7 +172,38 @@ impl Board {
             }
         }
         terrains.shuffle(rng);
+        let mut board = Board::island(&terrains);
+        assign_numbers(&mut board.tiles, rng);
+        let Board { edges, vertices, .. } = &board;
 
+        // Ports: spread 9 around the 30 coastal edges, ordered by angle.
+        let mut coastal: Vec<usize> = (0..edges.len()).filter(|&i| edges[i].coastal).collect();
+        coastal.sort_by(|&x, &y| {
+            let ang = |i: usize| {
+                let e = &edges[i];
+                let (pa, pb) = (vertices[e.a].pos, vertices[e.b].pos);
+                ((pa.1 + pb.1) / 2.0).atan2((pa.0 + pb.0) / 2.0)
+            };
+            ang(x).partial_cmp(&ang(y)).unwrap()
+        });
+        let mut kinds: Vec<Option<Resource>> = vec![None, None, None, None];
+        kinds.extend(Resource::ALL.iter().map(|&r| Some(r)));
+        kinds.shuffle(rng);
+        let n = coastal.len();
+        board.ports = kinds
+            .into_iter()
+            .enumerate()
+            .map(|(i, kind)| Port {
+                edge: coastal[(i * n / 9) % n],
+                kind,
+            })
+            .collect();
+        board
+    }
+
+    /// The island's shape with these terrains, row by row from the top:
+    /// its tiles (without numbers), corners and sides, and no harbors yet.
+    fn island(terrains: &[Terrain]) -> Board {
         let mut coords = Vec::new();
         for r in -HEX_RADIUS..=HEX_RADIUS {
             for q in -HEX_RADIUS..=HEX_RADIUS {
@@ -101,7 +217,7 @@ impl Board {
         let mut tiles: Vec<Tile> = coords
             .iter()
             .zip(terrains)
-            .map(|(&(q, r), terrain)| Tile {
+            .map(|(&(q, r), &terrain)| Tile {
                 q,
                 r,
                 center: (sqrt3 * (q as f64 + r as f64 / 2.0), 1.5 * r as f64),
@@ -166,36 +282,11 @@ impl Board {
             vertices[e.b].edges.push(ei);
         }
 
-        assign_numbers(&mut tiles, rng);
-
-        // Ports: spread 9 around the 30 coastal edges, ordered by angle.
-        let mut coastal: Vec<usize> = (0..edges.len()).filter(|&i| edges[i].coastal).collect();
-        coastal.sort_by(|&x, &y| {
-            let ang = |i: usize| {
-                let e = &edges[i];
-                let (pa, pb) = (vertices[e.a].pos, vertices[e.b].pos);
-                ((pa.1 + pb.1) / 2.0).atan2((pa.0 + pb.0) / 2.0)
-            };
-            ang(x).partial_cmp(&ang(y)).unwrap()
-        });
-        let mut kinds: Vec<Option<Resource>> = vec![None, None, None, None];
-        kinds.extend(Resource::ALL.iter().map(|&r| Some(r)));
-        kinds.shuffle(rng);
-        let n = coastal.len();
-        let ports = kinds
-            .into_iter()
-            .enumerate()
-            .map(|(i, kind)| Port {
-                edge: coastal[(i * n / 9) % n],
-                kind,
-            })
-            .collect();
-
         Board {
             tiles,
             vertices,
             edges,
-            ports,
+            ports: Vec::new(),
         }
     }
 
