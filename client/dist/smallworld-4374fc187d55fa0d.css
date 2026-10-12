@@ -565,14 +565,16 @@
 .smallworld .marker.stairway circle { fill: #f4ede0; }
 .smallworld .marker.stairway path { fill: #8a7b62; }
 
-.smallworld .token rect {
+.smallworld .token .disc,
+.smallworld .token .count circle {
   stroke: #1b130b;
   stroke-width: 1.6;
 }
 
 .smallworld .token text {
   font-family: "Inter", system-ui, sans-serif;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   fill: #fff;
   text-anchor: middle;
   paint-order: stroke;
@@ -580,16 +582,13 @@
   stroke-width: 2px;
 }
 
-.smallworld .token .tag {
-  font-size: 11px;
-}
-
-.smallworld .token .count {
-  font-size: 14px;
-}
-
 /* A race in decline: its tokens turned over, grey side up. */
-.smallworld .token.declined rect {
+.smallworld .token.declined image {
+  filter: grayscale(1) brightness(0.9);
+}
+
+.smallworld .token.declined .disc,
+.smallworld .token.declined .count circle {
   filter: saturate(0.25) brightness(0.8);
   stroke-dasharray: 4 3;
 }
@@ -635,6 +634,16 @@
 
 .smallworld .badge.die text {
   font-size: 12px;
+}
+
+/* Out of reach for now: the price, to plan ahead, but nothing to click. */
+.smallworld .badge.price {
+  opacity: 0.6;
+}
+
+.smallworld .badge.price circle {
+  fill: var(--parch);
+  stroke-dasharray: 3 2;
 }
 
 /* ---------- the key under the map ---------- */
@@ -793,8 +802,40 @@
   font-size: 0.88rem;
 }
 
+.smallworld .army {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.3rem;
+  margin: 0.15rem 0;
+}
+
 .smallworld .army .tag {
-  margin-left: 0.35rem;
+  margin-left: 0.05rem;
+}
+
+.smallworld .army-art {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.smallworld .army-art img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.smallworld .army-art .power-art {
+  width: 22px;
+  height: 22px;
+  margin-right: -4px;
+  position: relative;
+  z-index: 1;
+}
+
+.smallworld .army.declined .race-art {
+  filter: grayscale(1) brightness(0.95);
 }
 
 .smallworld .army.declined .army-name {
@@ -830,8 +871,43 @@
 }
 
 .smallworld .offer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--line);
+}
+
+.smallworld .offer-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The power's badge slotted against the race's medallion. */
+.smallworld .offer-art {
+  position: relative;
+  flex: none;
+  width: 104px;
+  height: 66px;
+}
+
+.smallworld .offer-art .race-art {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 64px;
+  height: 64px;
+}
+
+.smallworld .offer-art .power-art {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
 }
 
 .smallworld .offer:last-child {
