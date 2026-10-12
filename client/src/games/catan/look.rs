@@ -1,5 +1,6 @@
-//! The ember contour on whatever just changed on the island: spotting what
-//! changed since the previous state, and how long it glows.
+//! The ember contour on whatever just changed on the island, and the dice
+//! tumbling after a roll: spotting what changed since the previous state,
+//! and how long it glows.
 
 use crate::app::App;
 use catan_core::{Building, GameView};
@@ -16,6 +17,8 @@ pub enum FreshKind {
     Piece(usize),
     /// The robber's new tile.
     Robber(usize),
+    /// The dice, rolled again.
+    Roll,
 }
 
 #[derive(Clone, Copy)]
@@ -31,6 +34,7 @@ pub struct Snap {
     buildings: Vec<Option<Building>>,
     roads: Vec<Option<usize>>,
     robber: usize,
+    dice: Option<(u8, u8)>,
 }
 
 impl Snap {
@@ -39,11 +43,12 @@ impl Snap {
             buildings: v.buildings.clone(),
             roads: v.roads.clone(),
             robber: v.robber,
+            dice: v.dice,
         }
     }
 }
 
-/// Everything on the board that differs between `prev` and `v`.
+/// Everything on the board, and the dice, that differs between `prev` and `v`.
 pub fn diff(prev: &Snap, v: &GameView) -> Vec<FreshKind> {
     if prev.buildings.len() != v.buildings.len() || prev.roads.len() != v.roads.len() {
         return vec![]; // a different board: nothing to compare
@@ -61,6 +66,11 @@ pub fn diff(prev: &Snap, v: &GameView) -> Vec<FreshKind> {
     }
     if prev.robber != v.robber {
         out.push(FreshKind::Robber(v.robber));
+    }
+    // The dice are cleared at the end of every turn, so equal numbers on
+    // the next turn still count as a new roll.
+    if v.dice.is_some() && prev.dice != v.dice {
+        out.push(FreshKind::Roll);
     }
     out
 }
@@ -163,5 +173,26 @@ mod tests {
             .unwrap();
         g.apply(0, Action::MoveRobber { tile, victim: None }, &mut rng).unwrap();
         assert_eq!(diff(&before, &g.view_for(Some(1))), vec![FreshKind::Robber(tile)]);
+    }
+
+    #[test]
+    fn diff_flags_a_new_roll_once() {
+        let (mut g, mut rng) = game_after_setup();
+        let snap = |g: &Game| Snap::of(&g.view_for(Some(1)));
+        let before = snap(&g);
+        g.do_roll(2, 3, &mut rng).unwrap();
+        assert_eq!(diff(&before, &g.view_for(Some(1))), vec![FreshKind::Roll]);
+        // Building after the roll doesn't roll the dice again.
+        let before = snap(&g);
+        g.players[0].hand = Hand([1, 1, 0, 0, 0]);
+        let e = g.legal_roads(0, None)[0];
+        g.apply(0, Action::BuildRoad { edge: e }, &mut rng).unwrap();
+        assert_eq!(diff(&before, &g.view_for(Some(1))), vec![FreshKind::Road(e)]);
+        // The same numbers on the next turn are a new roll all the same.
+        g.apply(0, Action::EndTurn, &mut rng).unwrap();
+        let before = snap(&g);
+        assert!(diff(&before, &g.view_for(Some(1))).is_empty());
+        g.do_roll(2, 3, &mut rng).unwrap();
+        assert_eq!(diff(&before, &g.view_for(Some(1))), vec![FreshKind::Roll]);
     }
 }

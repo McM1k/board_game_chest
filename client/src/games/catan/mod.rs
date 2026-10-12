@@ -1,6 +1,7 @@
-//! Catan: the island (`map.rs`, with the tiles drawn in `art.rs`), the game
-//! screen around it (`board.rs`), the screens before the game
-//! (`screens.rs`) and the ember contour on what just changed (`look.rs`).
+//! Catan: the island (`map.rs`, with the tiles drawn in `art.rs`), the dice
+//! and the turn's button in its corner (`dice.rs`), the game screen around
+//! it (`board.rs`), the screens before the game (`screens.rs`) and the
+//! ember contour on what just changed (`look.rs`).
 //! Styles in `catan.css`, scoped under `.theme-catan`.
 //!
 //! The game screen is redrawn on every server update; what has to outlive
@@ -8,6 +9,7 @@
 
 pub mod art;
 pub mod board;
+pub mod dice;
 pub mod look;
 pub mod map;
 pub mod screens;

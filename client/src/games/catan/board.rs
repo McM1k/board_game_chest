@@ -1,6 +1,7 @@
-//! The game screen: the island in the middle, the players, your hand, the
-//! actions, trades and the log around it.
+//! The game screen: the island in the middle with the dice in its corner,
+//! the players, your hand, the actions, trades and the log around it.
 
+use super::dice::dice_tray;
 use super::map::{board_svg, robber_victims, PLAYER_COLORS};
 use super::{Mode, Picker};
 use crate::app::{leave, send, App};
@@ -80,10 +81,7 @@ pub fn board(app: App) -> AnyView {
 pub fn game_screen(app: App, v: GameView, connected: Vec<bool>, room: String) -> impl IntoView {
     let board = board_svg(app, &v);
     let status = status_text(&v);
-    let dice = v
-        .dice
-        .map(|(a, b)| format!("🎲 {a} + {b} = {}", a + b))
-        .unwrap_or_default();
+    let tray = dice_tray(app, &v);
     let my_vp = v.me.as_ref().map(|m| m.vp).unwrap_or(0);
     let modal_view = v.clone();
 
@@ -93,12 +91,11 @@ pub fn game_screen(app: App, v: GameView, connected: Vec<bool>, room: String) ->
                 <div class="brand">"Catan"</div>
                 <div class="room">"Room " <b>{room}</b></div>
                 <div class="status">{status}</div>
-                <div class="dice">{dice}</div>
                 <div class="myvp">"Your points: " <b>{my_vp}</b> " / " {v.rules.victory_points}</div>
                 <button class="link" on:click=move |_| leave(app)>"Leave"</button>
             </header>
             <div class="layout">
-                <div class="board-wrap">{board}</div>
+                <div class="board-wrap"><div class="board-frame">{board}{tray}</div></div>
                 <aside class="sidebar">
                     {players_panel(&v, &connected)}
                     {hand_panel(app, &v)}
@@ -219,17 +216,13 @@ fn hand_panel(app: App, v: &GameView) -> AnyView {
     .into_any()
 }
 
+/// What you can build on your turn. Rolling the dice and ending the turn
+/// are on the map, with the dice (`dice.rs`).
 fn actions_panel(app: App, v: &GameView) -> AnyView {
     let (Some(me), true) = (&v.me, v.seat == Some(v.current)) else {
         return ().into_any();
     };
     match &v.phase {
-        Phase::Roll => view! {
-            <section class="panel">
-                <button class="primary big" on:click=move |_| act(app, Action::Roll)>"Roll dice"</button>
-            </section>
-        }
-        .into_any(),
         Phase::Main => {
             let p = &v.players[v.current];
             let has = |items: &[(Resource, u8)]| me.hand.contains(&Hand::of(items));
@@ -268,10 +261,6 @@ fn actions_panel(app: App, v: &GameView) -> AnyView {
                         </button>
                     </div>
                     <p class="muted small-text">"Costs: road = wood+brick · settlement = wood+brick+sheep+wheat · city = 2 wheat+3 ore · dev card = sheep+wheat+ore"</p>
-                    <button class="primary" on:click=move |_| {
-                        app.games.catan.ui.mode.set(Mode::None);
-                        act(app, Action::EndTurn);
-                    }>"End turn"</button>
                 </section>
             }
             .into_any()
@@ -635,6 +624,86 @@ mod tests {
         assert!(render(&g, Some(0)).contains("Your offer"));
         g.phase = Phase::Finished { winner: 2 };
         assert!(render(&g, Some(2)).contains("You win"));
+    }
+
+    /// The dice tray drawn over the map's corner, cut out of the screen.
+    fn tray(html: &str) -> Option<&str> {
+        let start = html.find("class=\"dice-tray")?;
+        let end = html[start..].find("<aside").map_or(html.len(), |e| start + e);
+        Some(&html[start..end])
+    }
+
+    /// The last roll sits on the map as two die faces with its total and
+    /// whose roll it is; the turn's Roll dice / End turn button sits with
+    /// it, for the player whose turn it is, and nowhere else.
+    #[test]
+    fn the_dice_and_the_turn_button_sit_on_the_map() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let names = (0..3).map(|i| format!("P{i}")).collect();
+        let setup = Game::new(Rules::default(), names, &mut rng);
+        assert!(tray(&render(&setup, Some(0))).is_none(), "no dice while placing the first pieces");
+
+        // Before the roll: P0 rolls from the map, the others see whose roll it is.
+        let (mut g, mut rng) = game_after_setup(3);
+        let html = render(&g, Some(0));
+        let t = tray(&html).expect("a dice tray on the map");
+        assert!(t.contains("Roll dice"));
+        assert_eq!(html.matches("Roll dice").count(), 1, "the button only sits on the map");
+        assert_eq!(t.matches("class=\"pip\"").count(), 0, "no faces before the roll");
+        for seat in [Some(1), None] {
+            let html = render(&g, seat);
+            let t = tray(&html).unwrap();
+            assert!(t.contains("P0 to roll") && !t.contains("<button"));
+        }
+
+        // After a 2 and a 3: both faces, the total, and End turn for P0.
+        g.do_roll(2, 3, &mut rng).unwrap();
+        let html = render(&g, Some(0));
+        assert!(!html.contains("🎲"), "no more dice text in the top bar");
+        let t = tray(&html).unwrap();
+        assert_eq!(t.matches("class=\"pip\"").count(), 5);
+        assert!(t.contains("class=\"dice-total\">5<"));
+        assert!(t.contains("End turn"));
+        assert_eq!(html.matches("End turn").count(), 1, "the button only sits on the map");
+        assert!(t.contains(PLAYER_COLORS[0]), "framed in the roller's colour");
+        for seat in [Some(1), None] {
+            let html = render(&g, seat);
+            let t = tray(&html).unwrap();
+            assert!(t.contains("P0 rolled") && !t.contains("<button"));
+            assert_eq!(t.matches("class=\"pip\"").count(), 5);
+        }
+
+        // A 7 stands out; while the robber moves, nobody ends the turn.
+        g.phase = Phase::Roll;
+        g.do_roll(3, 4, &mut rng).unwrap();
+        g.phase = Phase::MoveRobber { back_to_roll: false };
+        let t = render(&g, Some(0));
+        let t = tray(&t).unwrap();
+        assert!(t.contains("dice-total seven") && t.contains("You rolled") && !t.contains("<button"));
+
+        // The game over: no tray.
+        g.phase = Phase::Finished { winner: 2 };
+        assert!(tray(&render(&g, Some(0))).is_none());
+    }
+
+    /// A fresh roll tumbles the dice; a redraw later on doesn't.
+    #[test]
+    fn a_fresh_roll_tumbles_the_dice() {
+        let (mut g, mut rng) = game_after_setup(3);
+        g.do_roll(6, 6, &mut rng).unwrap();
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let view = g.view_for(Some(1));
+            let render = |app: App| game_screen(app, view.clone(), vec![true; 3], "ABCD".into()).to_html();
+            assert!(!render(app).contains("rolling"));
+            app.games.catan.fresh.set(vec![Fresh { kind: FreshKind::Roll, at: now_ms() - 100.0 }]);
+            let html = render(app);
+            assert_eq!(tray(&html).unwrap().matches("die rolling").count(), 2);
+            assert!(html.contains("animation-delay:-"));
+            app.games.catan.fresh.set(vec![Fresh { kind: FreshKind::Roll, at: now_ms() - 2000.0 }]);
+            assert!(!render(app).contains("rolling"));
+        });
     }
 
     #[test]

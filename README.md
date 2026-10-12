@@ -203,6 +203,10 @@ create/join screen; "← All games" and leaving a game bring you back.
   (`EMBER_MS` in `client/src/games/catan/look.rs`, animation in `catan.css` beside it). Changes are
   found by diffing each new game state against the previous one on the client, so every
   player sees them. The first state after joining or reconnecting isn't highlighted.
+* The last roll sits in the sea's bottom-right corner as two die faces with its total
+  (a 7 in red), framed in the colour of the player whose roll it is, with the turn's
+  Roll dice / End turn button for that player (`client/src/games/catan/dice.rs`). A new roll
+  tumbles the dice in, found by the same diff.
 
 ### Rules implemented
 

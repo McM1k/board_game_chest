@@ -207,7 +207,7 @@ pub fn board_svg(app: App, v: &GameView) -> impl IntoView {
                                 .into_any(),
                             )
                         }
-                        FreshKind::Road(_) => None,
+                        FreshKind::Road(_) | FreshKind::Roll => None,
                     }
                 })
                 .collect_view()
