@@ -42,6 +42,10 @@ async fn main() {
     let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "client/dist".into());
     let reports_dir = PathBuf::from(std::env::var("REPORTS_DIR").unwrap_or_else(|_| "reports".into()));
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());
+    let top = games::smallworld::top_combo().unwrap_or_else(|e| {
+        eprintln!("{}: {e}", games::smallworld::TOP_VAR);
+        std::process::exit(1);
+    });
 
     let files = ServeDir::new(&static_dir).fallback(ServeFile::new(format!("{static_dir}/index.html")));
     let app = Router::new()
@@ -57,6 +61,10 @@ async fn main() {
         "Games server listening on http://{addr} (static files from {static_dir}, bug reports to {})",
         reports_dir.display()
     );
+    if let Some((race, power)) = top {
+        let combo: Vec<&str> = race.map(|r| r.name()).into_iter().chain(power.map(|p| p.name())).collect();
+        println!("Small World: every new game has {} on top of the column", combo.join(" + "));
+    }
     axum::serve(listener, app).await.expect("serve");
 }
 

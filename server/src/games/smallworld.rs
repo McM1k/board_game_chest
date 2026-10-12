@@ -6,7 +6,7 @@
 use super::{Game, Running, WRONG_GAME};
 use protocol::{GameMove, GameOptions, GameView};
 use rand::{Rng, RngCore};
-use smallworld_core::{Options, State};
+use smallworld_core::{Options, Power, Race, State};
 
 pub struct SmallWorld;
 
@@ -37,8 +37,53 @@ impl Game for SmallWorld {
         if names.len() < options.min_players() {
             options.sky = None;
         }
-        Box::new(State::with_options(names.len(), rng.gen(), options))
+        let mut state = State::with_options(names.len(), rng.gen(), options);
+        if let Ok(Some((race, power))) = top_combo() {
+            if !state.put_on_top(race, power) {
+                eprintln!("{TOP_VAR}: not in this game (is its expansion on?), so the column is left as dealt");
+            }
+        }
+        Box::new(state)
     }
+}
+
+/// For trying a combo out: `SMALLWORLD_TOP=Ghouls,Spirit` puts it on top
+/// of the column, the free combo, in every new game. A race alone
+/// (`Ghouls`) or a power alone (`,Spirit`) works too.
+pub const TOP_VAR: &str = "SMALLWORLD_TOP";
+
+/// A race, a power, or both.
+pub type Combo = (Option<Race>, Option<Power>);
+
+/// The combo `SMALLWORLD_TOP` asks for, if it is set.
+pub fn top_combo() -> Result<Option<Combo>, String> {
+    match std::env::var(TOP_VAR) {
+        Ok(spec) if !spec.trim().is_empty() => parse_combo(&spec).map(Some),
+        _ => Ok(None),
+    }
+}
+
+/// Reads `race,power`, either of them left out. Case, spaces and hyphens
+/// don't matter: `storm giants,hordes of` and `Trolls,Were` are fine.
+fn parse_combo(spec: &str) -> Result<Combo, String> {
+    let key = |s: &str| s.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+    let (race, power) = spec.split_once(',').unwrap_or((spec, ""));
+    let race = match key(race) {
+        k if k.is_empty() => None,
+        k => Some(
+            Race::ALL.into_iter().find(|r| key(r.name()) == k).ok_or(format!("no race called \"{}\"", race.trim()))?,
+        ),
+    };
+    let power = match key(power) {
+        k if k.is_empty() => None,
+        k => Some(
+            Power::ALL.into_iter().find(|p| key(p.name()) == k).ok_or(format!("no power called \"{}\"", power.trim()))?,
+        ),
+    };
+    if race.is_none() && power.is_none() {
+        return Err("name a race, a power or both, as in Ghouls,Spirit".into());
+    }
+    Ok((race, power))
 }
 
 impl Running for State {
@@ -109,6 +154,22 @@ mod tests {
     /// The host's message picking the expansions.
     fn expansions(options: Options) -> ClientMsg {
         ClientMsg::SetOptions(GameOptions::SmallWorld(options))
+    }
+
+    #[test]
+    fn the_combo_to_try_out_is_read_from_its_names() {
+        use super::parse_combo;
+        use smallworld_core::{Power, Race};
+        assert_eq!(parse_combo("Ghouls,Spirit"), Ok((Some(Race::Ghouls), Some(Power::Spirit))));
+        assert_eq!(parse_combo(" ghouls , SPIRIT "), Ok((Some(Race::Ghouls), Some(Power::Spirit))));
+        assert_eq!(parse_combo("storm giants,hordes of"), Ok((Some(Race::StormGiants), Some(Power::HordesOf))));
+        assert_eq!(parse_combo("Trolls,Were"), Ok((Some(Race::Trolls), Some(Power::Were))));
+        assert_eq!(parse_combo("Ghouls"), Ok((Some(Race::Ghouls), None)));
+        assert_eq!(parse_combo(",Peace-Loving"), Ok((None, Some(Power::PeaceLoving))));
+        assert!(parse_combo("Gouls,Spirit").unwrap_err().contains("Gouls"));
+        assert!(parse_combo("Ghouls,Spirt").unwrap_err().contains("Spirt"));
+        assert!(parse_combo("Spirit").unwrap_err().contains("Spirit"), "a race comes first");
+        assert!(parse_combo(",").is_err());
     }
 
     #[test]

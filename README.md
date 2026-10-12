@@ -48,7 +48,13 @@ you back in your seat automatically (a token is kept in the tab's `sessionStorag
 two tabs of one browser are two players).
 
 Env vars: `PORT` (default 3000), `STATIC_DIR` (default `client/dist`), `REPORTS_DIR` (default
-`reports`, where bug reports are saved).
+`reports`, where bug reports are saved), `SMALLWORLD_TOP` (unset by default; for testing, e.g.
+`Ghouls,Spirit` deals that combo on top of the column, the free one, in every new Small World
+game. A race alone, `Ghouls`, or a power alone, `,Spirit`, works too).
+
+```sh
+SMALLWORLD_TOP=Ghouls,Spirit cargo run -p server --release
+```
 
 Development with live reload: run `cargo run -p server` and, in `client/`,
 `trunk serve` (its `Trunk.toml` proxies `/ws` to the server on port 3000).

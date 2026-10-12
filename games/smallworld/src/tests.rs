@@ -87,6 +87,37 @@ fn a_new_game_sets_up_the_board_and_the_column() {
 }
 
 #[test]
+fn a_combo_can_be_put_on_top_of_the_column_to_try_it_out() {
+    for options in [Options::default(), Options::all()] {
+        for seed in 0..20 {
+            let mut s = State::with_options(options.min_players(), seed, options);
+            assert!(s.put_on_top(Some(Race::Ghouls), Some(Power::Spirit)));
+            assert_eq!((s.offers[0].race, s.offers[0].power), (Race::Ghouls, Power::Spirit));
+            assert_eq!(s.offers.len(), OFFERS);
+            // What was on top went where they came from: every badge is
+            // still somewhere, once (`check` does the banners).
+            check(&s);
+            let mut powers: Vec<Power> = s.powers.iter().copied().chain(s.offers.iter().map(|o| o.power)).collect();
+            powers.sort();
+            assert_eq!(powers, options.powers());
+            s.apply(0, Action::Pick { offer: 0 }).unwrap();
+            let army = s.players[0].active.unwrap();
+            assert_eq!((army.race, army.power, army.hand), (Race::Ghouls, Power::Spirit, 5 + 5));
+        }
+    }
+    // Only the power: the race on top stays.
+    let mut s = State::new(2, 1);
+    let race = s.offers[0].race;
+    assert!(s.put_on_top(None, Some(Power::Spirit)));
+    assert_eq!((s.offers[0].race, s.offers[0].power), (race, Power::Spirit));
+    // Not in this game (Cursed! is off): nothing changes.
+    let mut s = State::new(2, 1);
+    let before = s.clone();
+    assert!(!s.put_on_top(Some(Race::Goblins), Some(Power::Spirit)));
+    assert_eq!(s, before);
+}
+
+#[test]
 fn the_boards_are_consistent() {
     for map in &MAPS {
         let n = map.regions.len();

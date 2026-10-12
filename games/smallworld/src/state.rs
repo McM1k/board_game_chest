@@ -872,6 +872,36 @@ impl State {
         state
     }
 
+    /// For trying a combo out: puts `race` and `power` (either, or both) on
+    /// the top combo of the column, the free one, swapping them with what
+    /// was there. Meant for a game nobody has picked in yet. Returns false,
+    /// and changes nothing, if one of them isn't in this game.
+    pub fn put_on_top(&mut self, race: Option<Race>, power: Option<Power>) -> bool {
+        let has_race = |r: Race| self.races.contains(&r) || self.offers.iter().any(|o| o.race == r);
+        let has_power = |p: Power| self.powers.contains(&p) || self.offers.iter().any(|o| o.power == p);
+        if self.offers.is_empty() || !race.is_none_or(has_race) || !power.is_none_or(has_power) {
+            return false;
+        }
+        let top = self.offers[0];
+        if let Some(race) = race {
+            if let Some(r) = self.races.iter_mut().find(|r| **r == race) {
+                *r = top.race;
+            } else if let Some(o) = self.offers.iter_mut().find(|o| o.race == race) {
+                o.race = top.race;
+            }
+            self.offers[0].race = race;
+        }
+        if let Some(power) = power {
+            if let Some(p) = self.powers.iter_mut().find(|p| **p == power) {
+                *p = top.power;
+            } else if let Some(o) = self.offers.iter_mut().find(|o| o.power == power) {
+                o.power = top.power;
+            }
+            self.offers[0].power = power;
+        }
+        true
+    }
+
     pub fn seats(&self) -> usize {
         self.players.len()
     }
