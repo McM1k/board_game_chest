@@ -89,11 +89,10 @@ the game. It now runs on the room system Catan already had:
   expansion (which can't be switched off once more than five are seated), Small World 2–5,
   or 3–6 with the Sky Islands (which can't be switched off once six are seated). Joining a running
   game is refused unless you hold its token. A room nobody has connected to for 30 minutes is removed.
-* **Seat order.** Catan shuffles the seats when the game starts. Hanabi keeps join
-  order, so the host plays first and the order round the table is who joined when.
-  It's a Wonderful World shuffles the seats like Catan; there are no turns, so the
-  seat only decides who passes cards to whom. Its Empires are dealt at random.
-  Small World shuffles the seats too: seat 1 plays first.
+* **Seat order.** Every game shuffles the seats when it starts, so the host doesn't
+  always go first. In Catan, Hanabi and Small World seat 1 plays first. It's a
+  Wonderful World has no turns, so the seat only decides who passes cards to whom.
+  Its Empires are dealt at random.
 
 Rooms live in memory only; a server restart ends every game.
 

@@ -377,17 +377,21 @@ mod tests {
         assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
         let token = clients[2].token();
         let rooms = state.lock().unwrap();
+        // The seats were shuffled at the start.
+        let names: Vec<&str> = rooms.map[&code].seats.iter().map(|s| s.name.as_str()).collect();
+        let seat = names.iter().position(|n| *n == "P2").unwrap();
         // Someone else's room stays out of reach.
         assert_eq!(room_info(&rooms, &code, Some("not-a-token")), None);
         assert_eq!(room_info(&rooms, &code, None), None);
         let info = room_info(&rooms, &code.to_lowercase(), Some(&token)).unwrap();
-        assert_eq!((info.code.as_str(), info.game.as_str(), info.started, info.seat), (code.as_str(), "Hanabi", true, 2));
+        assert_eq!((info.code.as_str(), info.game.as_str(), info.started, info.seat), (code.as_str(), "Hanabi", true, seat));
         assert_eq!(info.seats.len(), 3);
         assert!(info.options.is_some() && info.view.is_some());
         let text = render(&report("Stuck"), Some(&info), at(0));
         assert!(text.contains(&format!("- **Room:** {code} (game running)")));
-        assert!(text.contains("- **Reported by:** P2, seat 3"));
-        assert!(text.contains("- **Seats:** 1. P0; 2. P1; 3. P2"), "no host once seats are shuffled");
+        assert!(text.contains(&format!("- **Reported by:** P2, seat {}", seat + 1)));
+        let listed = format!("- **Seats:** 1. {}; 2. {}; 3. {}", names[0], names[1], names[2]);
+        assert!(text.contains(&listed), "no host once seats are shuffled");
         assert!(text.contains("## The game as the server holds it for that seat"));
         drop(rooms);
 

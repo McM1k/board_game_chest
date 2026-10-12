@@ -86,7 +86,7 @@ redo production or scoring.
 **Server.** The seat comes from the connection's token, never from the message. A refused move
 sends an error to the sender only. An accepted one sends every connected seat its full view
 (not a diff), so a reconnect is just a rejoin. Seats are shuffled at Start (`shuffles_seats`,
-like Catan, unlike Hanabi) because seat order decides passing direction and Empire; after Start, seat 0
+like every other game) because seat order decides passing direction and Empire; after Start, seat 0
 need not be the host.
 
 **Protocol.**

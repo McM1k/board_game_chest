@@ -79,6 +79,15 @@ pub fn lobby(state: &Shared, game: GameKind, n: usize) -> (String, Vec<Client>) 
     (code, clients)
 }
 
+/// `clients` sorted by the seat they hold, for a game whose seats were
+/// shuffled when it started.
+pub fn in_seat_order(state: &Shared, code: &str, mut clients: Vec<Client>) -> Vec<Client> {
+    let rooms = state.lock().unwrap();
+    let seats = &rooms.map[code].seats;
+    clients.sort_by_key(|c| seats.iter().position(|s| s.token == c.token()));
+    clients
+}
+
 /// Runs `f` on the game running in room `code`, as the rules crate's own
 /// type `T` (a test may look inside, or set up a position).
 pub fn with_game<T: Running, R>(state: &Shared, code: &str, f: impl FnOnce(&mut T) -> R) -> R {

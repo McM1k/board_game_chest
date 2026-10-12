@@ -1,5 +1,5 @@
-//! Hanabi on the server: the variant rules picked in the lobby, seats kept
-//! in join order, and the rules' refusals put into words.
+//! Hanabi on the server: the variant rules picked in the lobby, seats
+//! shuffled at the start, and the rules' refusals put into words.
 
 use super::{Game, Running, WRONG_GAME};
 use hanabi_core::{ActionError, GameRules, GameState, PlayerId};
@@ -9,9 +9,10 @@ use rand::{Rng, RngCore};
 pub struct Hanabi;
 
 impl Game for Hanabi {
-    /// Seats keep their join order: the host plays first.
+    /// Seats are shuffled for a random first player (the rules let anyone
+    /// start) and a random order round the table.
     fn shuffles_seats(&self) -> bool {
-        false
+        true
     }
 
     fn default_options(&self) -> Option<GameOptions> {
@@ -108,23 +109,45 @@ mod tests {
     }
 
     #[test]
-    fn hanabi_seats_follow_join_order() {
+    fn hanabi_deals_every_seat_its_own_view_in_a_shuffled_order() {
         let state = new_state();
         let (_code, mut clients) = lobby(&state, GameKind::Hanabi, 3);
         clients[0].send(&state, ClientMsg::Start);
+        let mut seen_names = Vec::new();
         for (i, c) in clients.iter_mut().enumerate() {
             let Some((GameView::Hanabi(view), names, connected)) = c.latest_game() else {
                 panic!("expected a Hanabi state");
             };
-            assert_eq!(view.you, PlayerId(i as u8));
-            assert_eq!(names, ["P0", "P1", "P2"]);
+            // The names are listed by seat, and this view is for this client's seat.
+            assert_eq!(names[view.you.0 as usize], format!("P{i}"));
             assert_eq!(connected, [true, true, true]);
-            assert_eq!(view.current_turn, PlayerId(0), "the host plays first");
+            assert_eq!(view.current_turn, PlayerId(0), "seat 1 plays first");
             // Your own cards are hidden, everyone else's are shown.
             for (pid, hand) in &view.hands {
                 assert_eq!(hand.iter().all(|c| c.card.is_none()), *pid == view.you);
             }
+            seen_names = names;
         }
+        seen_names.sort();
+        assert_eq!(seen_names, ["P0", "P1", "P2"]);
+    }
+
+    #[test]
+    fn the_host_does_not_always_play_first() {
+        // With three players the host would sit first in all 60 games with
+        // a chance of (1/3)^60 if the seats really are shuffled.
+        let host_first = (0..60)
+            .filter(|_| {
+                let state = new_state();
+                let (_code, mut clients) = lobby(&state, GameKind::Hanabi, 3);
+                assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+                let Some((GameView::Hanabi(view), _, _)) = clients[0].latest_game() else {
+                    panic!("expected a Hanabi state");
+                };
+                view.current_turn == view.you
+            })
+            .count();
+        assert!(host_first < 60, "the seats are shuffled at the start, so anyone can play first");
     }
 
     #[test]
@@ -240,14 +263,16 @@ mod tests {
         }
     }
 
-    /// Starts a two-player Hanabi game and gives the second player a hand of
-    /// `card`s, then forgets everything sent so far.
+    /// Starts a two-player Hanabi game and gives the second seat a hand of
+    /// `card`s, then forgets everything sent so far. The clients come back
+    /// in seat order: the first one plays first.
     fn hanabi_game_with_second_hand(state: &Shared, rules: GameRules, card: Card) -> (String, Vec<Client>) {
         let (code, mut clients) = lobby(state, GameKind::Hanabi, 2);
         if rules != GameRules::default() {
             assert_eq!(set_rules(state, &mut clients[0], rules), None);
         }
         assert_eq!(clients[0].send(state, ClientMsg::Start), None);
+        let mut clients = in_seat_order(state, &code, clients);
         with_game(state, &code, |game: &mut GameState| {
             for hc in game.hands.get_mut(&PlayerId(1)).unwrap().iter_mut() {
                 hc.card = card;
@@ -306,7 +331,8 @@ mod tests {
             GameRules::default(),
             Card { color: Color::Blue, number: 3 },
         );
-        // The guest tries to act on the host's turn, and to clue themselves.
+        // The second seat tries to act on the first one's turn, and the first
+        // one to clue themselves.
         let clue = play(Action::Clue { target: PlayerId(0), clue: Clue::Number(1) });
         assert_eq!(clients[1].send(&state, clue.clone()).as_deref(), Some("It's not your turn."));
         assert_eq!(clients[0].send(&state, clue).as_deref(), Some("You can't give a clue to yourself."));
@@ -317,6 +343,7 @@ mod tests {
         let state = new_state();
         let (code, mut clients) = lobby(&state, GameKind::Hanabi, 2);
         clients[0].send(&state, ClientMsg::Start);
+        let mut clients = in_seat_order(&state, &code, clients);
         let in_progress = |g: &GameState| g.status == hanabi_core::GameStatus::InProgress;
         for _ in 0..200 {
             let (playing, current, card) = with_game(&state, &code, |g: &mut GameState| {

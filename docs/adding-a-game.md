@@ -48,7 +48,7 @@ The game implements the two traits of `server/src/games/mod.rs`:
 pub struct Nim;
 
 impl Game for Nim {
-    /// Shuffled seats; `false` keeps the join order, host first.
+    /// Shuffled seats, as in every game so far; `false` keeps the join order, host first.
     fn shuffles_seats(&self) -> bool {
         true
     }
