@@ -1,5 +1,5 @@
-//! The bug report button: round, red, with an exclamation mark, in the
-//! bottom left corner of every screen. It asks what went wrong and sends the
+//! The report button: round, red, with an exclamation mark, in the bottom
+//! left corner of every screen. It asks for a bug or an idea and sends the
 //! answer to the server's `POST /report` with where the player was: the
 //! screen, the game, the room, the page, the browser, the last error shown
 //! and what the screen held (the waiting room, or the game as their seat
@@ -186,8 +186,8 @@ pub fn widget(app: App) -> impl IntoView {
             <button
                 class="report-button"
                 type="button"
-                title="Report a bug"
-                aria-label="Report a bug"
+                title="Report a bug or suggest an idea"
+                aria-label="Report a bug or suggest an idea"
                 aria-haspopup="dialog"
                 aria-expanded=move || r.open.get().to_string()
                 on:click=move |_| toggle(app)
@@ -219,9 +219,9 @@ fn dialog(app: App) -> impl IntoView {
     };
     let body = move || match r.status.get() {
         Status::Sent(file) => view! {
-            <p class="report-done" role="status">"Thanks! Your report was saved (" <code>{file}</code> ")."</p>
+            <p class="report-done" role="status">"Thanks! Your message was saved (" <code>{file}</code> ")."</p>
             <div class="report-actions">
-                <button type="button" on:click=move |_| r.status.set(Status::Writing)>"Report something else"</button>
+                <button type="button" on:click=move |_| r.status.set(Status::Writing)>"Send something else"</button>
                 <button type="button" class="report-send" on:click=move |_| close()>"Close"</button>
             </div>
         }
@@ -233,13 +233,13 @@ fn dialog(app: App) -> impl IntoView {
                 _ => None,
             };
             view! {
-                <label for="report-text">"What bug or error do you want to report?"</label>
+                <label for="report-text">"Something went wrong, or something you'd like changed or added?"</label>
                 <textarea
                     id="report-text"
                     node_ref=input
                     rows="5"
                     maxlength=MAX_MESSAGE
-                    placeholder="What happened, and what did you expect?"
+                    placeholder="A bug: what happened, and what did you expect? An idea: what would you like?"
                     prop:value=move || r.text.get()
                     on:input=move |ev| r.text.set(event_target_value(&ev))
                     disabled=sending
@@ -263,7 +263,7 @@ fn dialog(app: App) -> impl IntoView {
     };
     view! {
         <div class="report-panel" role="dialog" aria-labelledby="report-title" on:keydown=on_key>
-            <h2 id="report-title">"Report a bug"</h2>
+            <h2 id="report-title">"Report a bug or suggest an idea"</h2>
             {body}
         </div>
     }
@@ -278,22 +278,24 @@ mod tests {
     use protocol::{GameKind, ServerMsg};
 
     #[test]
-    fn the_button_opens_a_dialog_asking_what_went_wrong() {
+    fn the_button_opens_a_dialog_for_a_bug_or_a_suggestion() {
         let owner = Owner::new();
         owner.with(|| {
             let app = App::new();
             let html = widget(app).to_html();
             assert!(html.contains("class=\"report-button\"") && html.contains(">!<"));
-            assert!(html.contains("aria-label=\"Report a bug\"") && !html.contains("report-panel"));
+            assert!(html.contains("aria-label=\"Report a bug or suggest an idea\"") && !html.contains("report-panel"));
             toggle(app);
             let html = widget(app).to_html();
-            assert!(html.contains("What bug or error do you want to report?") && html.contains("<textarea"));
+            assert!(html.contains("Report a bug or suggest an idea") && html.contains("<textarea"));
+            assert!(shows(&html, "Something went wrong, or something you'd like changed or added?"), "{html}");
             assert!(html.contains("disabled"), "nothing to send yet: {html}");
             app.report.status.set(Status::Failed("The server couldn't be reached.".into()));
             assert!(shows(&widget(app).to_html(), "The server couldn't be reached."));
             app.report.status.set(Status::Sent("2026-10-12T09-41-07Z-k3f9.md".into()));
             let html = widget(app).to_html();
-            assert!(html.contains("Thanks! Your report was saved") && html.contains("2026-10-12T09-41-07Z-k3f9.md"));
+            assert!(html.contains("Thanks! Your message was saved") && html.contains("2026-10-12T09-41-07Z-k3f9.md"));
+            assert!(html.contains("Send something else"));
             // Closing and opening again starts a new report.
             toggle(app);
             toggle(app);
