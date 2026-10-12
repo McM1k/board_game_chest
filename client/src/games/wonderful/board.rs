@@ -245,39 +245,50 @@ fn built_row(card: &'static Card) -> Option<AnyView> {
     ))
 }
 
+/// Two arrows chasing each other: what recycling the card gives.
+fn recycle_icon() -> AnyView {
+    view! {
+        <svg class="recycle-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+                d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+                fill="currentColor"
+            />
+        </svg>
+    }
+    .into_any()
+}
+
 /// What a card shows inside its frame. `cost` is the row of spaces (static
-/// for a card in hand, live for a building); `foot` adds what recycling gives.
-fn card_body(card: &'static Card, cost: Option<AnyView>, foot: bool) -> AnyView {
+/// for a card in hand, live for a building). Its band names the type, the
+/// expansion's mark if it has one, and the cube recycling it gives.
+fn card_body(card: &'static Card, cost: Option<AnyView>) -> AnyView {
     let cost = cost.map(|c| view! { <span class="card-cost">{c}</span> });
-    let foot = foot.then(|| {
-        view! {
-            <span class="card-foot">
-                <span class="row-label">"Recycles to"</span>
-                {res_cube(card.recycle)}
-            </span>
-        }
-    });
     view! {
         <span class="card-head">
             {kind_icon(card.kind)}
             <span class="card-kind">{card.kind.name()}</span>
-            {card.ascension.then(|| view! { <span class="card-deck" title="Corruption & Ascension">"C&A"</span> })}
+            <span class="card-tags">
+                {card.ascension.then(|| view! { <span class="card-deck" title="Corruption & Ascension">"C&A"</span> })}
+                <span class="card-recycle" title=format!("Recycles into {}", look::recycle_cube(card))>
+                    {recycle_icon()}
+                    {res_cube(card.recycle)}
+                </span>
+            </span>
         </span>
         <span class="card-name">{card.name}</span>
         {cost}
         <span class="card-rows">{makes_row(card)}{worth_row(card)}{built_row(card)}</span>
-        {foot}
     }
     .into_any()
 }
 
 /// A card that isn't a button: in the draft area, in the Empire, in a list.
-fn card_static(card: &'static Card, with_cost: bool, foot: bool, extra: &str) -> AnyView {
+fn card_static(card: &'static Card, with_cost: bool, extra: &str) -> AnyView {
     let cost = with_cost.then(|| requirement_sockets(&card.cost));
     let summary = look::card_summary(card);
     view! {
         <div class=card_class(card, extra) role="group" aria-label=summary.clone() title=summary>
-            {card_body(card, cost, foot)}
+            {card_body(card, cost)}
         </div>
     }
     .into_any()
@@ -352,7 +363,7 @@ fn draft_panel(ctx: &Ctx) -> AnyView {
 
     let pick = picked.map(|card| {
         view! {
-            <div class="your-pick">{card_static(card.def(), true, false, "picked")}</div>
+            <div class="your-pick">{card_static(card.def(), true, "picked")}</div>
         }
     });
 
@@ -372,7 +383,7 @@ fn draft_panel(ctx: &Ctx) -> AnyView {
                         title=summary
                         on:click=move |_| ctx.act(Action::Draft { card })
                     >
-                        {card_body(def, Some(requirement_sockets(&def.cost)), true)}
+                        {card_body(def, Some(requirement_sockets(&def.cost)))}
                     </button>
                 </li>
             }
@@ -384,12 +395,11 @@ fn draft_panel(ctx: &Ctx) -> AnyView {
         view! { <p class="caption">{format!("Passing on to {to}")}</p> }
     });
 
-    // Kept cards show what recycling them gives, to help plan the rest of the draft.
     let kept = (!view.drafted.is_empty()).then(|| {
         let cards = view
             .drafted
             .iter()
-            .map(|&card| view! { <li>{card_static(card.def(), false, true, "")}</li> })
+            .map(|&card| view! { <li>{card_static(card.def(), false, "")}</li> })
             .collect_view();
         view! {
             <h3 class="subhead">
@@ -434,7 +444,7 @@ fn planning_panel(ctx: &Ctx) -> AnyView {
             };
             view! {
                 <li class="plan-card">
-                    {card_static(def, true, false, "")}
+                    {card_static(def, true, "")}
                     <div class="plan-actions">
                         <button class="primary" on:click=build>
                             "Build"
@@ -738,7 +748,7 @@ fn building_card(ctx: &Ctx, building: &Building) -> AnyView {
     view! {
         <li>
             <div class=card_class(def, "building") role="group" aria-label=summary.clone() title=summary>
-                {card_body(def, Some(view! { <span class="sockets">{sockets}</span> }.into_any()), false)}
+                {card_body(def, Some(view! { <span class="sockets">{sockets}</span> }.into_any()))}
                 <span class="card-foot">
                     <span class="progress">{format!("{placed} of {needed} placed")}</span>
                     <button class="link" on:click=scrap>
@@ -820,7 +830,7 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
                 .empire
                 .iter()
                 .filter(|id| id.def().kind == kind)
-                .map(|id| view! { <li>{card_static(id.def(), false, false, "")}</li> })
+                .map(|id| view! { <li>{card_static(id.def(), false, "")}</li> })
                 .collect_view();
             view! {
                 <section class="kind-col">
@@ -1271,7 +1281,7 @@ mod tests {
         let html = render(&state, 0);
         let kept = &html[html.find("Kept so far").expect("the kept cards")..];
         let kept = &kept[..kept.find("</ul>").unwrap()];
-        assert!(kept.contains(hand[2].def().name) && kept.contains("Recycles to"), "{kept}");
+        assert!(kept.contains(hand[2].def().name) && kept.contains("Recycles into"), "{kept}");
     }
 
     #[test]
@@ -1590,6 +1600,33 @@ mod tests {
         // Border Patrol makes a Gold and corrupts an Exploration.
         assert!(html.contains("cube corrupt res-exploration"));
         assert!(html.contains("9 VP per Research + Project"));
+    }
+
+    #[test]
+    fn every_cards_header_shows_what_recycling_it_gives() {
+        for ascension in [false, true] {
+            let mut state = State::with_options(3, 1, wonderful_core::Options { ascension });
+            let (hand, kept, building, finished) =
+                ([id("Zeppelin"), id("Border Patrol")], id("Neuroscience"), id("Juggernaut"), id("Recycling Plant"));
+            state.players[0].hand = hand.to_vec();
+            state.players[0].drafted = vec![kept];
+            state.players[0].buildings = vec![wonderful_core::Building { card: building, filled: Cost::default() }];
+            state.players[0].empire = vec![finished];
+            let html = render(&state, 0);
+            for card in [hand[0], hand[1], kept, building, finished] {
+                let def = card.def();
+                let name = html.find(&format!("class=\"card-name\">{}<", def.name)).expect(def.name);
+                let head = &html[html[..name].rfind("class=\"card-head\"").unwrap()..name];
+                let res = def.recycle.name();
+                let article = if res.starts_with(['A', 'E', 'I', 'O', 'U']) { "an" } else { "a" };
+                assert!(head.contains(&format!("title=\"Recycles into {article} {res} cube\"")), "{}: {head}", def.name);
+                assert!(head.contains(&format!("cube {}", look::res_class(def.recycle))), "{}: {head}", def.name);
+                // Next to the expansion's mark, when the card has one.
+                assert_eq!(head.contains("card-deck"), def.ascension, "{}", def.name);
+            }
+            // The header says it all: no line at the foot of the card repeats it.
+            assert!(!html.contains("Recycles to"));
+        }
     }
 
     #[test]

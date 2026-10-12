@@ -435,8 +435,13 @@ pub fn card_summary(card: &Card) -> String {
     if let Some(bonus) = bonus_text(card) {
         parts.push(format!("gives {bonus} when built"));
     }
-    parts.push(format!("recycles into {} {} cube", article(card.recycle.name()), card.recycle.name()));
+    parts.push(format!("recycles into {}", recycle_cube(card)));
     parts.join("; ")
+}
+
+/// The cube that recycling (or scrapping) the card gives, e.g. "an Energy cube".
+pub fn recycle_cube(card: &Card) -> String {
+    format!("{} {} cube", article(card.recycle.name()), card.recycle.name())
 }
 
 /// "a" or "an", for a word that starts with a capital: "an Energy cube".

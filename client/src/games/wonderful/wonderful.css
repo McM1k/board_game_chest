@@ -655,8 +655,9 @@
 
 .wonderful .card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.2rem 0.4rem;
   padding: 0.28rem 0.7rem;
   font-size: 0.74rem;
   font-weight: 600;
@@ -670,9 +671,18 @@
   flex: none;
 }
 
+/* The right end of the band: the expansion's mark, then what recycling gives.
+   On a narrow card they wrap to a line of their own, still on the right. */
+.wonderful .card-tags {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+
 /* A card of the Corruption & Ascension deck says so in its band. */
 .wonderful .card-deck {
-  margin-left: auto;
   padding: 0.02rem 0.4rem;
   font-size: 0.62rem;
   font-weight: 700;
@@ -680,6 +690,30 @@
   color: #fff;
   background: #6b3fa0;
   border-radius: 999px;
+}
+
+/* The cube a card recycles into, on a pale chip so that it shows on a band of its own colour. */
+.wonderful .card-recycle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.1rem 0.12rem 0.1rem 0.22rem;
+  color: var(--card-soft);
+  background: var(--pearl);
+  border-radius: 999px;
+}
+
+.wonderful .recycle-icon {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: none;
+}
+
+.wonderful .card .card-recycle .cube {
+  width: 0.95rem;
+  height: 0.95rem;
+  font-size: 0.52rem;
+  border-radius: 0.26rem;
 }
 
 /* A corrupted resource: its cube under a red "no" sign. */
