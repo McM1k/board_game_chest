@@ -14,7 +14,7 @@ pub mod map;
 pub mod screens;
 pub mod shapes;
 
-use crate::app::{App, Lobby};
+use crate::app::{load, save, App, Lobby};
 use leptos::prelude::*;
 use protocol::{GameKind, GameOptions, GameView};
 use smallworld_core::{Options, RegionMove, View};
@@ -27,14 +27,27 @@ pub struct Ui {
     /// A region picked for the last conquest with the die, waiting for the
     /// player to confirm the roll.
     pub gamble: RwSignal<Option<usize>>,
+    /// The map drawn in flat colours rather than the printed board's
+    /// picture. A preference, kept by the browser.
+    pub drawn: RwSignal<bool>,
 }
+
+/// Where the map style is kept.
+const KEY_MAP: &str = "games.pref.smallworld.map";
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { tool: RwSignal::new(RegionMove::Conquer), gamble: RwSignal::new(None) }
+        let drawn = load(KEY_MAP).as_deref() == Some("drawn");
+        Ui { tool: RwSignal::new(RegionMove::Conquer), gamble: RwSignal::new(None), drawn: RwSignal::new(drawn) }
     }
 
-    /// Forget everything, e.g. when leaving the room.
+    /// Switches between the printed board and the drawn map, and remembers it.
+    pub fn set_drawn(&self, drawn: bool) {
+        self.drawn.set(drawn);
+        save(KEY_MAP, if drawn { "drawn" } else { "printed" });
+    }
+
+    /// Forget everything, e.g. when leaving the room (but the map style).
     pub fn reset(&self) {
         self.tool.set(RegionMove::Conquer);
         self.gamble.set(None);

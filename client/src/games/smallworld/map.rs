@@ -1,7 +1,11 @@
-//! The map: the board's regions in their terrain (the Sky Islands above the
-//! ground board when they are played), what stands in each, and the regions
-//! the tool in hand can act on, marked with what they cost. A click on a
-//! region goes through `look::click`.
+//! The map: the board's regions (the Sky Islands above the ground board when
+//! they are played), what stands in each, and the regions the tool in hand
+//! can act on, marked with what they cost. A click on a region goes through
+//! `look::click`.
+//!
+//! The regions lie on a picture of the printed board, invisible but for
+//! what the tool in hand can act on; or, drawn, each is filled with its
+//! terrain.
 
 use super::look::{self, Click, Mark};
 use super::shapes::{self, Shape};
@@ -141,8 +145,15 @@ impl Layout {
     }
 }
 
-/// The whole map, for one state.
-pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>, pending: Option<usize>) -> AnyView {
+/// The whole map, for one state: on the printed board's picture, or drawn.
+pub fn map_svg(
+    app: App,
+    view: &View,
+    names: &[String],
+    tool: Option<look::Tool>,
+    pending: Option<usize>,
+    drawn: bool,
+) -> AnyView {
     let layout = Layout::new(view);
     let board: Board = view.map();
     let marks = tool.map(|t| look::marks(view, t)).unwrap_or_default();
@@ -193,19 +204,22 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
             let (x, y) = (shape.at.0, shape.at.1 + dy);
             let def = &board.regions[i];
             let r = &view.regions[i];
+            // What is printed on the board (the picture shows it itself).
             let mut icons: Vec<(&'static str, &'static str)> = Vec::new();
-            if def.mine() {
-                icons.push(("mine", MINE));
-            }
-            if def.magic() {
-                icons.push(("magic", MAGIC));
-            }
-            if def.cavern() {
-                icons.push(("cavern", CAVERN));
-            }
-            for (k, &(g, l)) in board.access.iter().enumerate() {
-                if g == i || l == i {
-                    icons.push(if k == 0 { ("beanstalk", BEANSTALK) } else { ("stairway", STAIRWAY) });
+            if drawn {
+                if def.mine() {
+                    icons.push(("mine", MINE));
+                }
+                if def.magic() {
+                    icons.push(("magic", MAGIC));
+                }
+                if def.cavern() {
+                    icons.push(("cavern", CAVERN));
+                }
+                for (k, &(g, l)) in board.access.iter().enumerate() {
+                    if g == i || l == i {
+                        icons.push(if k == 0 { ("beanstalk", BEANSTALK) } else { ("stairway", STAIRWAY) });
+                    }
                 }
             }
             let mut pieces: Vec<(&'static str, &'static str)> = Vec::new();
@@ -301,17 +315,40 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
         .collect_view();
 
     let sky_band = layout.sky.map(|sky| {
+        if drawn {
+            view! {
+                <g class="sky-band">
+                    <rect x="0" y="0" width="1000" height=sky.height rx="14" />
+                    <text x="16" y="28">"Sky Islands"</text>
+                </g>
+            }
+            .into_any()
+        } else {
+            let side = view.sky.expect("the Sky Islands are played");
+            view! {
+                <image class="board-art" href=look::sky_art(side) x="0" y="0" width="1000" height=sky.height preserveAspectRatio="none" />
+            }
+            .into_any()
+        }
+    });
+    // The printed ground board, under its regions.
+    let ground_art = (!drawn).then(|| {
         view! {
-            <g class="sky-band">
-                <rect x="0" y="0" width="1000" height=sky.height rx="14" />
-                <text x="16" y="28">"Sky Islands"</text>
-            </g>
+            <image
+                class="board-art"
+                href=look::board_art(view.board)
+                x="0"
+                y=layout.ground_y()
+                width=layout.ground.width
+                height=layout.ground.height
+                preserveAspectRatio="none"
+            />
         }
     });
 
     view! {
         <svg
-            class="map"
+            class=if drawn { "map" } else { "map printed" }
             viewBox=format!("0 0 {} {}", layout.ground.width, layout.height())
             role="img"
             aria-label=match view.sky {
@@ -321,6 +358,7 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
         >
             {defs()}
             {sky_band}
+            {ground_art}
             <g class="regions">{regions}</g>
             <g class="overlay">{pieces}</g>
         </svg>

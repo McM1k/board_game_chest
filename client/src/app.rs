@@ -15,6 +15,9 @@ use web_sys::{MessageEvent, WebSocket};
 const KEY_ROOM: &str = "games.room";
 pub const KEY_TOKEN: &str = "games.token";
 pub const KEY_NAME: &str = "games.name";
+/// Preferences, shared by every tab like the name, start with this.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub const KEY_PREF: &str = "games.pref.";
 
 #[derive(Clone)]
 pub enum Screen {
@@ -77,14 +80,15 @@ impl App {
     }
 }
 
-/// Where `key` is kept. The name is shared by every tab, as a convenience.
-/// The room and the seat token belong to one tab (and survive its reloads):
+/// Where `key` is kept. The name and the preferences are shared by every
+/// tab, as a convenience. The room and the seat token belong to one tab
+/// (and survive its reloads):
 /// shared, a second tab - another player on the same machine - would
 /// reconnect into the first tab's seat instead of reaching the join screen.
 #[cfg(target_arch = "wasm32")]
 fn storage(key: &str) -> Option<web_sys::Storage> {
     let window = web_sys::window()?;
-    if key == KEY_NAME {
+    if key == KEY_NAME || key.starts_with(KEY_PREF) {
         window.local_storage().ok()?
     } else {
         window.session_storage().ok()?

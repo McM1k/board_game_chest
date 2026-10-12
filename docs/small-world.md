@@ -87,6 +87,49 @@ written in `gen_sky.py`:
 | Three islands | 9 | 2, 4 and 3 regions (the rulebook's example) | 1–3, 2–8, 5–9 | 9 (Forest), 6 (Hill) |
 | Two islands | 10, one a lake | 4 and 6 regions | 2–5, 4–9 | 4 (Swamp), 10 (Forest) |
 
+## The printed boards
+
+The map shows a picture of the printed board by default (a switch under it goes back to the
+drawn map). The regions lie on it, invisible but for what the tool in hand can act on, and
+the picture shows the mines, magic sources and caverns itself. The pictures, in
+`client/src/games/smallworld/art/boards`, come from BoardGameGeek:
+
+| Board | Picture | |
+|---|---|---|
+| 2 players | [4530242](https://boardgamegeek.com/image/4530242) | flat scan, sharp |
+| 3 players | [845685](https://boardgamegeek.com/image/845685), the corner it cuts off from [455937](https://boardgamegeek.com/image/455937) | photo at an angle, upside down |
+| 4 players | [4530241](https://boardgamegeek.com/image/4530241) | flat scan, sharp |
+| 5 players | [455940](https://boardgamegeek.com/image/455940) | Days of Wonder's small photo: soft |
+| Sky Islands | [3740949](https://boardgamegeek.com/image/3740949), [3740951](https://boardgamegeek.com/image/3740951) | Days of Wonder's |
+
+No better 3- or 5-player picture was found; a flat photo of a physical copy would replace
+them as they are (`boards.json`).
+
+Each picture was fitted to the outlines (`docs/small-world-art/boards/`). The board's four
+corners were read off the picture (an angled photo's from zoomed crops; the 3-player board's
+hidden corner from its edges). Then a scale and offset was searched that puts the borders
+between regions on the picture's white lines. Only thin white lines count, so a white table
+or the clouds don't. A photo at an angle then gets its perspective refined the same way, and
+the picture is resampled into board units.
+
+The traced outlines only followed the painted borders to a few units (they were simplified
+on a grid, and some borders were drawn by hand). So they were moved onto the white lines: a
+smooth field of small shifts, each found near a point of a 90-unit grid. Shared points move
+together, so neighbours stay neighbours, and the rules' tables don't change. `shapes.rs`
+holds the moved outlines.
+
+To redo it, with the pictures in `<work>/boards/<id>.jpg`:
+
+```sh
+cd docs/small-world-art/boards
+git show 592d6e4:client/src/games/smallworld/shapes.rs > <work>/shapes.rs   # the traced outlines
+python3 -I export_shapes.py <work>/shapes.rs <work>/map/shapes.json
+python3 -I boards.py <work>                    # pictures and moved outlines in <work>/map/out
+python3 -I write_shapes.py ../../../client/src/games/smallworld/shapes.rs <work>/map/out SHAPES_2 SHAPES_3 SHAPES_4 SHAPES_5 SKY_THREE SKY_TWO
+```
+
+The pictures in `art/boards` are `<work>/map/out/<KEY>.png` saved as WebP (quality 80).
+
 ## The pictures
 
 The race portraits and power badges (`client/src/games/smallworld/art`, served at

@@ -2,7 +2,7 @@
 //! colours of the seats, which tools are in hand and what a click on a
 //! region does. Native tests at the bottom.
 
-use smallworld_core::{Action, Board, Event, Foe, How, Loot, Phase, Power, Race, RegionMove, View, Why, CURSED_SKIP};
+use smallworld_core::{Action, Board, Event, Foe, How, Loot, Phase, Power, Race, RegionMove, Sky, View, Why, CURSED_SKIP};
 
 /// One colour per seat, for its tokens and its name.
 pub const SEAT_COLORS: [&str; 6] = ["#d6453a", "#2f78d4", "#e6a321", "#2f9e57", "#8c57cf", "#d0679d"];
@@ -19,6 +19,20 @@ pub const ART: &str = "/smallworld-art";
 /// A race's portrait: the medallion from its banner.
 pub fn race_art(race: Race) -> String {
     format!("{ART}/races/{}.webp", format!("{race:?}").to_lowercase())
+}
+
+/// The printed ground board for `players` players (2 to 5), photographed.
+pub fn board_art(players: usize) -> String {
+    format!("{ART}/boards/{}.webp", players.clamp(2, 5))
+}
+
+/// A printed side of the Sky Islands.
+pub fn sky_art(side: Sky) -> String {
+    let name = match side {
+        Sky::Three => "sky-three",
+        Sky::Two => "sky-two",
+    };
+    format!("{ART}/boards/{name}.webp")
 }
 
 /// A race's banner, which a power's badge slots against.
@@ -601,6 +615,12 @@ mod tests {
         }
         for power in Power::ALL {
             assert!(file(power_art(power)).is_file(), "{power:?}: {}", power_art(power));
+        }
+        for players in 2..=5 {
+            assert!(file(board_art(players)).is_file(), "{}", board_art(players));
+        }
+        for side in [Sky::Three, Sky::Two] {
+            assert!(file(sky_art(side)).is_file(), "{}", sky_art(side));
         }
         assert_eq!(race_art(Race::StormGiants), "/smallworld-art/races/stormgiants.webp");
         assert_eq!(power_art(Power::HordesOf), "/smallworld-art/powers/hordesof.webp");

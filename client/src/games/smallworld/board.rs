@@ -72,6 +72,7 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
     let ui = app.games.smallworld.ui;
     let tool = look::effective_tool(&view, ui.tool.get());
     let pending = ui.gamble.get();
+    let drawn = ui.drawn.get();
     let board = Arc::new(view.map());
     let ctx = Ctx { app, view: Arc::new(view), board, names: Arc::new(names), connected: Arc::new(connected), tool };
     let over = ctx.view.phase == Phase::Over;
@@ -82,7 +83,8 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
             {status_band(&ctx)}
             <div class="board-grid">
                 <div class="map-col">
-                    <div class="map-frame">{map_svg(app, &ctx.view, &ctx.names, tool, pending)}</div>
+                    <div class="map-frame">{map_svg(app, &ctx.view, &ctx.names, tool, pending, drawn)}</div>
+                    {map_style(&ctx, drawn)}
                     {legend(&ctx)}
                 </div>
                 <aside class="side-col">
@@ -124,6 +126,25 @@ fn status_band(ctx: &Ctx) -> AnyView {
                 <p class="hint">{look::hint(v, &ctx.names)}</p>
             </div>
         </section>
+    }
+    .into_any()
+}
+
+/// The printed board's picture, or the map drawn in flat colours.
+fn map_style(ctx: &Ctx, drawn: bool) -> AnyView {
+    let ui = ctx.ui();
+    let choice = move |label: &'static str, on: bool| {
+        view! {
+            <button class=if on == drawn { "tool on" } else { "tool" } aria-pressed=(on == drawn).to_string() on:click=move |_| ui.set_drawn(on)>
+                {label}
+            </button>
+        }
+    };
+    view! {
+        <div class="tools map-style" role="group" aria-label="Map style">
+            {choice("Printed board", false)}
+            {choice("Drawn map", true)}
+        </div>
     }
     .into_any()
 }
@@ -687,7 +708,16 @@ mod tests {
             let app = App::new();
             let s = State::new(3, 5);
             let html = render(app, &s, 0);
-            assert!(html.contains("class=\"map\"") && html.contains("WXYZ"));
+            // The printed board by default, its picture under the regions.
+            assert!(html.contains("class=\"map printed\"") && html.contains("WXYZ"));
+            assert!(html.contains(&format!("href=\"{}\"", look::board_art(3))), "{html}");
+            assert!(html.contains("Printed board") && html.contains("Drawn map"));
+            assert_eq!(html.matches("marker mine").count(), 1, "the picture shows the mines; the key, its sign");
+            app.games.smallworld.ui.drawn.set(true);
+            let drawn = render(app, &s, 0);
+            assert!(drawn.contains("class=\"map\"") && !drawn.contains("board-art"));
+            assert!(drawn.matches("marker mine").count() > 1);
+            app.games.smallworld.ui.drawn.set(false);
             assert!(html.contains("You pick a race"));
             assert_eq!(html.matches("class=\"offer\"").count(), 6);
             assert_eq!(html.matches("Take (").count(), 6, "five coins: every combo is affordable");
@@ -722,6 +752,12 @@ mod tests {
             let s = State::with_options(6, 5, Options::all());
             let html = render(app, &s, 3);
             assert_eq!(html.matches("<polygon").count(), 47 + 9);
+            // Printed: both boards' pictures; drawn: the sky band, and the
+            // Beanstalk's and the Stairway's markers.
+            assert!(html.contains(&format!("href=\"{}\"", look::sky_art(s.board.sky.unwrap()))), "{html}");
+            assert!(html.contains(&format!("href=\"{}\"", look::board_art(5))));
+            app.games.smallworld.ui.drawn.set(true);
+            let html = render(app, &s, 3);
             assert!(html.contains("Sky Islands") && html.contains("class=\"sky-band\""));
             assert!(html.contains("marker beanstalk") && html.contains("marker stairway"));
             assert!(html.contains("Pot of Gold") && shows(&html, "Scavengers' captive"), "the key lists the new pieces");
@@ -887,7 +923,7 @@ mod tests {
                     if steps % 9 == 0 {
                         for viewer in 0..players {
                             let html = render(app, &s, viewer);
-                            assert!(html.contains("class=\"map\""));
+                            assert!(html.contains("class=\"map printed\""));
                         }
                     }
                     let m = s.moves(seat);

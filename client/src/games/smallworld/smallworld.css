@@ -514,6 +514,54 @@
   filter: brightness(1.2);
 }
 
+/* The printed board: its picture shows through the regions, which only
+   outline what the tool in hand can act on and dim the rest. */
+.smallworld .map.printed .region polygon {
+  fill: transparent;
+  stroke: none;
+}
+
+.smallworld .map.printed .regions:has(.target, .gamble) .region:not(.target, .gamble) polygon {
+  fill: rgba(20, 12, 4, 0.45);
+}
+
+.smallworld .map.printed .region.target polygon {
+  stroke: var(--target);
+  stroke-width: 3.5;
+}
+
+.smallworld .map.printed .region.target:hover polygon {
+  fill: rgba(255, 243, 168, 0.25);
+}
+
+.smallworld .map.printed .region.gamble polygon {
+  stroke: #ffd36a;
+  stroke-width: 3;
+  stroke-dasharray: 9 6;
+}
+
+.smallworld .map.printed .region.pending polygon {
+  stroke: #fff;
+  stroke-width: 4.5;
+  stroke-dasharray: none;
+  fill: rgba(255, 255, 255, 0.18);
+}
+
+.smallworld .map.printed .region.molten polygon {
+  fill: rgba(224, 86, 27, 0.42);
+}
+
+.smallworld .map.printed .number {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.75);
+  stroke-width: 3px;
+}
+
+/* Printed board or drawn map. */
+.smallworld .map-style {
+  margin: 0.6rem 0 0.2rem;
+}
+
 .smallworld .overlay {
   pointer-events: none;
 }
@@ -913,8 +961,9 @@
 
 .smallworld .offer-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0 0.5rem;
 }
 
 .smallworld .offer-name {
