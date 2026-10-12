@@ -11,47 +11,19 @@ pub fn seat_color(seat: usize) -> &'static str {
     SEAT_COLORS[seat % SEAT_COLORS.len()]
 }
 
-/// A race's short name, on its tokens.
-pub fn race_tag(race: Race) -> &'static str {
-    match race {
-        Race::Amazons => "Ama",
-        Race::Dwarves => "Dwa",
-        Race::Elves => "Elf",
-        Race::Ghouls => "Gho",
-        Race::Giants => "Gia",
-        Race::Halflings => "Hal",
-        Race::Humans => "Hum",
-        Race::Orcs => "Orc",
-        Race::Ratmen => "Rat",
-        Race::Skeletons => "Ske",
-        Race::Sorcerers => "Sor",
-        Race::Tritons => "Tri",
-        Race::Trolls => "Tro",
-        Race::Wizards => "Wiz",
-        Race::Goblins => "Gob",
-        Race::Kobolds => "Kob",
-        Race::Gypsies => "Gyp",
-        Race::Priestesses => "Pri",
-        Race::WhiteLadies => "WLa",
-        Race::Barbarians => "Bar",
-        Race::Homunculi => "Hom",
-        Race::Leprechauns => "Lep",
-        Race::Pixies => "Pix",
-        Race::Pygmies => "Pyg",
-        Race::Fauns => "Fau",
-        Race::Igors => "Igo",
-        Race::Shrubmen => "Shr",
-        Race::IceWitches => "Ice",
-        Race::Skags => "Ska",
-        Race::Slingmen => "Sli",
-        Race::Escargots => "Esc",
-        Race::Scarecrows => "Sca",
-        Race::Khans => "Kha",
-        Race::Scavengers => "Scv",
-        Race::StormGiants => "Sto",
-        Race::Drakons => "Dra",
-        Race::Wendigos => "Wen",
-    }
+/// Where the pictures are served: `art/` next to this file, which Trunk
+/// copies into the build (see `client/index.html`). They come from Days of
+/// Wonder's rule sheets.
+pub const ART: &str = "/smallworld-art";
+
+/// A race's portrait: the medallion from its banner.
+pub fn race_art(race: Race) -> String {
+    format!("{ART}/races/{}.webp", format!("{race:?}").to_lowercase())
+}
+
+/// A power's badge.
+pub fn power_art(power: Power) -> String {
+    format!("{ART}/powers/{}.webp", format!("{power:?}").to_lowercase())
 }
 
 /// "Merchant Skeletons": the power, then the race, as the rules call combos
@@ -612,6 +584,20 @@ mod tests {
         assert!(marks.contains(&(r, Mark::Target(Some(cost.to_string())))));
         // The other tools don't show prices.
         assert!(super::marks(&v, RegionMove::Abandon).is_empty());
+    }
+
+    #[test]
+    fn every_race_and_power_has_its_picture() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/games/smallworld/art");
+        let file = |url: String| dir.join(url.strip_prefix(&format!("{ART}/")).unwrap());
+        for race in Race::ALL {
+            assert!(file(race_art(race)).is_file(), "{race:?}: {}", race_art(race));
+        }
+        for power in Power::ALL {
+            assert!(file(power_art(power)).is_file(), "{power:?}: {}", power_art(power));
+        }
+        assert_eq!(race_art(Race::StormGiants), "/smallworld-art/races/stormgiants.webp");
+        assert_eq!(power_art(Power::HordesOf), "/smallworld-art/powers/hordesof.webp");
     }
 
     #[test]

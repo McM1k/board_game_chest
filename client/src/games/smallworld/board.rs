@@ -183,8 +183,8 @@ fn legend(ctx: &Ctx) -> AnyView {
                 "Lost Tribe"
             </li>
             <li>
-                <svg class="key wide" viewBox="-25 -13 50 26" aria-hidden="true">
-                    <g class="token declined"><rect x="-24" y="-12" width="48" height="24" rx="7" fill="#8c57cf" /></g>
+                <svg class="key" viewBox="-13 -13 26 26" aria-hidden="true">
+                    <g class="token declined"><circle class="disc" r="11" fill="#8c57cf" /></g>
                 </svg>
                 "In decline"
             </li>
@@ -470,8 +470,14 @@ fn army_line(army: &Army, declined: bool) -> AnyView {
         (false, h, r) => format!(" \u{b7} {h} in hand, {r} sitting out"),
     };
     let title = if declined { String::new() } else { format!("{} {}", army.race.blurb(), army.power.blurb()) };
+    // In decline the power is lost, unless it is Spirit.
+    let badge = (!declined || army.power == Power::Spirit).then(|| look::power_art(army.power));
     view! {
         <li class=if declined { "army declined" } else { "army" } title=title>
+            <span class="army-art" aria-hidden="true">
+                {badge.map(|src| view! { <img class="power-art" src=src alt="" /> })}
+                <img class="race-art" src=look::race_art(army.race) alt="" />
+            </span>
             <span class="army-name">{name}</span>
             {(!declined).then(|| view! { <span class="tag">"active"</span> })}
             {declined.then(|| view! { <span class="tag tag-off">"in decline"</span> })}
@@ -562,19 +568,26 @@ fn offer_row(ctx: &Ctx, i: usize, o: &Offer) -> AnyView {
     let c = ctx.clone();
     view! {
         <li class="offer">
-            <div class="offer-head">
-                <span class="offer-name">{look::combo_name(o.race, o.power)}</span>
-                <span class="offer-tokens" title="Tokens: race + power">{sum}</span>
+            // The power's badge beside the race's banner, as in the box.
+            <div class="offer-art" aria-hidden="true">
+                <img class="power-art" src=look::power_art(o.power) alt="" />
+                <img class="race-art" src=look::race_art(o.race) alt="" />
             </div>
-            <p class="offer-text"><b>{o.race.name()}</b>": "{o.race.blurb()}</p>
-            <p class="offer-text"><b>{o.power.name()}</b>": "{o.power.blurb()}</p>
-            <div class="offer-foot">
-                {(o.coins > 0).then(|| view! { <span class="on-it">{format!("+{} on it", o.coins)}</span> })}
-                {if can {
-                    view! { <button class="primary" on:click=move |_| c.act(Action::Pick { offer: i })>{format!("Take ({cost})")}</button> }.into_any()
-                } else {
-                    view! { <span class="offer-cost">{cost}</span> }.into_any()
-                }}
+            <div class="offer-body">
+                <div class="offer-head">
+                    <span class="offer-name">{look::combo_name(o.race, o.power)}</span>
+                    <span class="offer-tokens" title="Tokens: race + power">{sum}</span>
+                </div>
+                <p class="offer-text"><b>{o.race.name()}</b>": "{o.race.blurb()}</p>
+                <p class="offer-text"><b>{o.power.name()}</b>": "{o.power.blurb()}</p>
+                <div class="offer-foot">
+                    {(o.coins > 0).then(|| view! { <span class="on-it">{format!("+{} on it", o.coins)}</span> })}
+                    {if can {
+                        view! { <button class="primary" on:click=move |_| c.act(Action::Pick { offer: i })>{format!("Take ({cost})")}</button> }.into_any()
+                    } else {
+                        view! { <span class="offer-cost">{cost}</span> }.into_any()
+                    }}
+                </div>
             </div>
         </li>
     }
@@ -671,6 +684,10 @@ mod tests {
             assert_eq!(html.matches("class=\"offer\"").count(), 6);
             assert_eq!(html.matches("Take (").count(), 6, "five coins: every combo is affordable");
             assert!(html.contains("Take (Free)"));
+            // Each combo shows its power's badge and its race's portrait.
+            assert_eq!(html.matches("class=\"power-art\"").count(), 6);
+            assert_eq!(html.matches("class=\"race-art\"").count(), 6);
+            assert!(html.contains(&look::race_art(s.offers[0].race)) && html.contains(&look::power_art(s.offers[0].power)));
             // Every region of the 3-player board is drawn.
             assert_eq!(html.matches("<polygon").count(), 30);
             assert!(html.contains("Turn") && html.contains("of 10"));
@@ -714,6 +731,10 @@ mod tests {
             s.apply(0, Action::Conquer { region: r }).unwrap();
             let html = render(app, &s, 0);
             assert!(html.contains("class=\"token\""));
+            // The token is the race's portrait; the player lists it too.
+            let race = s.players[0].active.unwrap().race;
+            assert!(html.contains(&format!("<image href=\"{}\"", look::race_art(race))), "{html}");
+            assert!(html.contains("class=\"army-art\""));
             // Now the regions out of reach show their price, faded.
             let m = s.moves(0);
             let far = |&&(r, _): &&(usize, u8)| !m.can(RegionMove::Conquer, r) && !m.can(RegionMove::Gamble, r);

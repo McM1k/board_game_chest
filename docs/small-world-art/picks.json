@@ -1,0 +1,37 @@
+{
+ "races": {
+  "Amazons": ["sw_rules_2015_en", "9_2"], "Dwarves": ["sw_rules_2015_en", "9_8"], "Elves": ["sw_rules_2015_en", "9_29"],
+  "Ghouls": ["sw_rules_2015_en", "9_37"], "Giants": ["sw_rules_2015_en", "9_17"], "Halflings": ["sw_rules_2015_en", "9_5"],
+  "Humans": ["sw_rules_2015_en", "9_20"], "Orcs": ["sw_rules_2015_en", "9_11"], "Ratmen": ["sw_rules_2015_en", "9_23"],
+  "Skeletons": ["sw_rules_2015_en", "9_26"], "Sorcerers": ["sw_rules_2015_en", "9_14"], "Tritons": ["sw_rules_2015_en", "10_12"],
+  "Trolls": ["sw_rules_2015_en", "10_2"], "Wizards": ["sw_rules_2015_en", "10_15"],
+  "Goblins": ["sw_cu_rules_en", "1_2"], "Kobolds": ["sw_cu_rules_en", "1_3"],
+  "Gypsies": ["sw_gd_rules_en", "1_2"], "Priestesses": ["sw_gd_rules_en", "1_8"], "WhiteLadies": ["sw_gd_rules_en", "1_7"],
+  "Barbarians": ["sw_bna_en", "1_2"], "Homunculi": ["sw_bna_en", "1_3"], "Leprechauns": ["sw_bna_en", "1_4"],
+  "Pixies": ["sw_bna_en", "1_5"], "Pygmies": ["sw_bna_en", "1_6"],
+  "Fauns": ["sw_royal_en", "1_2"], "Igors": ["sw_royal_en", "1_3"], "Shrubmen": ["sw_royal_en", "1_4"],
+  "IceWitches": ["sw_spider_en", "1_3"], "Skags": ["sw_spider_en", "1_5"], "Slingmen": ["sw_spider_en", "1_7"],
+  "Escargots": ["sw_si_en", "2_98"], "Drakons": ["sw_si_en", "2_101"], "Scarecrows": ["sw_si_en", "2_134"],
+  "Khans": ["sw_si_en", "2_170"], "Scavengers": ["sw_si_en", "2_214"], "Wendigos": ["sw_si_en", "2_258"],
+  "StormGiants": ["sw_si_en", "2_297"]
+ },
+ "powers": {
+  "Alchemist": ["sw_rules_2015_en", "10_7"], "Berserk": ["sw_rules_2015_en", "10_11"], "Bivouacking": ["sw_rules_2015_en", "10_8"],
+  "Commando": ["sw_rules_2015_en", "10_9"], "Diplomat": ["sw_rules_2015_en", "10_10"], "DragonMaster": ["sw_rules_2015_en", "11_2"],
+  "Flying": ["sw_rules_2015_en", "11_3"], "Forest": ["sw_rules_2015_en", "11_15"], "Fortified": ["sw_rules_2015_en", "11_23"],
+  "Heroic": ["sw_rules_2015_en", "11_22"], "Hill": ["sw_rules_2015_en", "11_18"], "Merchant": ["sw_rules_2015_en", "11_4"],
+  "Mounted": ["sw_rules_2015_en", "11_11"], "Pillaging": ["sw_rules_2015_en", "11_6"], "Seafaring": ["sw_rules_2015_en", "11_5"],
+  "Spirit": ["sw_rules_2015_en", "11_7"], "Stout": ["sw_rules_2015_en", "11_8"], "Swamp": ["sw_rules_2015_en", "11_21"],
+  "Underworld": ["sw_rules_2015_en", "12_2"], "Wealthy": ["sw_rules_2015_en", "12_4"],
+  "Cursed": ["sw_cu_rules_en", "1_9"], "HordesOf": ["sw_cu_rules_en", "1_4"], "Marauding": ["sw_cu_rules_en", "1_5"],
+  "Ransacking": ["sw_cu_rules_en", "1_7"], "Were": ["sw_cu_rules_en", "1_6"],
+  "Historian": ["sw_gd_rules_en", "1_4"], "PeaceLoving": ["sw_gd_rules_en", "1_3"],
+  "Barricade": ["sw_bna_en", "2_2"], "Catapult": ["sw_bna_en", "2_3"], "Corrupt": ["sw_bna_en", "2_4"],
+  "Imperial": ["sw_bna_en", "2_5"], "Mercenary": ["sw_bna_en", "2_6"],
+  "Aquatic": ["sw_royal_en", "1_5"], "Behemoth": ["sw_royal_en", "1_6"], "Fireball": ["sw_royal_en", "1_7"],
+  "Copycat": ["sw_spider_en", "2_2"], "Lava": ["sw_spider_en", "2_3"], "SoulTouch": ["sw_spider_en", "2_4"],
+  "Goldsmith": ["sw_si_en", "2_316"], "Zeppelined": ["sw_si_en", "2_319"], "Airborne": ["sw_si_en", "2_323"],
+  "Haggling": ["sw_si_en", "2_328"], "Gunner": ["sw_si_en", "2_332"], "Exploring": ["sw_si_en", "2_336"],
+  "Racketeering": ["sw_si_en", "2_340"]
+ }
+}

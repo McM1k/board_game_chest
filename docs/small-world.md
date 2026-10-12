@@ -87,6 +87,32 @@ written in `gen_sky.py`:
 | Three islands | 9 | 2, 4 and 3 regions (the rulebook's example) | 1–3, 2–8, 5–9 | 9 (Forest), 6 (Hill) |
 | Two islands | 10, one a lake | 4 and 6 regions | 2–5, 4–9 | 4 (Swamp), 10 (Forest) |
 
+## The pictures
+
+The race portraits and power badges (`client/src/games/smallworld/art`, served at
+`/smallworld-art/`) come from the rule sheets linked above, where every banner and badge is
+printed. They are small (about 120 pixels across for the base game, more for some
+expansions), which is plenty for tokens and the column.
+
+How to make them again, from `docs/small-world-art/`:
+
+1. Download the seven PDFs into a folder of their own and export each one's images with
+   their positions: `pdftohtml -xml -q <sheet>.pdf <exports>/<sheet>/doc`.
+2. `python3 -I make.py <exports> client/src/games/smallworld/art`.
+
+`picks.json` says which exported image is each race's and each power's. Most were matched by
+a script that paired each name in the PDF with the nearest picture; the rest (the Sky
+Islands, Royal Bonus's Aquatic and Behemoth, A Spider's Web's races) were picked by eye from
+contact sheets. The base races are printed as round portraits on white, and the script finds
+each ring where the white starts. The expansion races are printed as whole banners, and the
+portrait is the medallion on their right. Its circle is the same on every banner of a sheet
+(`medallions.json`): it was fitted across all of a sheet's banners at once, then checked by
+eye. Royal Bonus's radius was set by hand, as the fit caught the ring's inner edge. A banner's
+medallion keeps the token number printed over its corner.
+
+On the map a token is its race's portrait on a disc of its player's colour, with the token
+count beside it. A race in decline is drawn in grey, like the banner's grey side.
+
 ## Rules: what was chosen where the rulebook is silent
 
 | Topic | What the engine does |

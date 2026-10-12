@@ -249,11 +249,17 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
             let token = r.tokens.map(|t| {
                 let seat = look::region_owner(view, i).unwrap_or(0);
                 let class = if t.declined { "token declined" } else { "token" };
+                // The race's portrait on a disc of its player's colour, and
+                // how many tokens stand there.
+                let color = look::seat_color(seat);
                 view! {
                     <g class=class transform=format!("translate({x} {y})")>
-                        <rect x="-24" y="-12" width="48" height="24" rx="7" fill=look::seat_color(seat) />
-                        <text class="tag" x="-8" y="4.5">{look::race_tag(t.race)}</text>
-                        <text class="count" x="16" y="5">{t.count}</text>
+                        <circle class="disc" r="17" fill=color />
+                        <image href=look::race_art(t.race) x="-15" y="-15" width="30" height="30" />
+                        <g class="count" transform="translate(15 10)">
+                            <circle r="8.5" fill=color />
+                            <text y="4">{t.count}</text>
+                        </g>
                     </g>
                 }
             });
