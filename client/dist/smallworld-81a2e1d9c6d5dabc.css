@@ -803,64 +803,90 @@
 }
 
 .smallworld .army {
+  --combo-h: 36px;
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0 0.3rem;
-  margin: 0.15rem 0;
+  gap: 0.45rem;
+  margin: 0.2rem 0;
 }
 
 .smallworld .army .tag {
-  margin-left: 0.05rem;
+  margin-left: 0.3rem;
 }
 
-.smallworld .army-art {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
+.smallworld .army-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
 }
 
-.smallworld .army-art img {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-}
-
-.smallworld .army-art .power-art {
-  width: 22px;
-  height: 22px;
-  margin-right: -4px;
-  position: relative;
-  z-index: 1;
-}
-
-.smallworld .army.declined .race-art {
+/* In decline: the banner turned over, grey side up. */
+.smallworld .army.declined .combo-race {
   filter: grayscale(1) brightness(0.95);
 }
 
-.smallworld .army.declined .army-name {
-  color: var(--ink-soft);
+/* ---------- a race and its power, as the box puts them together ---------- */
+
+.smallworld .combo {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: var(--combo-h);
+}
+
+.smallworld .combo img {
+  height: 100%;
+  width: auto;
+}
+
+/* The badge's edge slips into the banner's curved left end. */
+.smallworld .combo-power {
+  position: relative;
+  z-index: 1;
+  margin-right: calc(var(--combo-h) * -0.12);
+  filter: drop-shadow(1px 0 1px rgba(0, 0, 0, 0.4));
+}
+
+/* What the race and power do: while the combo is hovered or focused. */
+.smallworld .combo-details {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 2px);
+  z-index: 20;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: var(--parch);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.smallworld .combo-details p + p {
+  margin-top: 0.2rem;
+}
+
+.smallworld :is(.offer, .army):is(:hover, :focus-within) > .combo-details {
+  display: block;
+}
+
+.smallworld :is(.offer, .army):focus-visible {
+  outline: 2px solid var(--wax);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
 }
 
 .smallworld .army-extra {
   color: var(--ink-soft);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .smallworld .player .note {
   margin-left: 1.25rem;
-}
-
-.smallworld .powers {
-  margin: 0.3rem 0 0.3rem 1.25rem;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.82rem;
-  background: var(--parch-2);
-  border-radius: 0.5rem;
-}
-
-.smallworld .powers p + p {
-  margin-top: 0.2rem;
 }
 
 /* ---------- the column ---------- */
@@ -871,47 +897,18 @@
 }
 
 .smallworld .offer {
+  --combo-h: 68px;
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.6rem;
-  padding: 0.5rem 0;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--line);
 }
 
 .smallworld .offer-body {
   flex: 1;
   min-width: 0;
-}
-
-/* The power's badge slotted against the race's medallion. */
-.smallworld .offer-art {
-  position: relative;
-  flex: none;
-  width: 104px;
-  height: 66px;
-}
-
-.smallworld .offer-art .race-art {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 64px;
-  height: 64px;
-}
-
-.smallworld .offer-art .power-art {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  z-index: 1;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-}
-
-.smallworld .offer:last-child {
-  border-bottom: none;
 }
 
 .smallworld .offer-head {
@@ -931,11 +928,6 @@
   font-size: 0.78rem;
   color: var(--ink-soft);
   white-space: nowrap;
-}
-
-.smallworld .offer-text {
-  font-size: 0.8rem;
-  color: var(--ink-soft);
 }
 
 .smallworld .offer-foot {
