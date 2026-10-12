@@ -98,7 +98,9 @@ How to make them again, from `docs/small-world-art/`:
 
 1. Download the seven PDFs into a folder of their own and export each one's images with
    their positions: `pdftohtml -xml -q <sheet>.pdf <exports>/<sheet>/doc`.
-2. `python3 -I make.py <exports> client/src/games/smallworld/art`.
+2. `python3 -I make.py <exports> client/src/games/smallworld/art`, then
+   `python3 -I banners.py <exports> <scans> client/src/games/smallworld/art`, where `<scans>`
+   holds the three BoardGameGeek scans below as `<id>.jpg`.
 
 `picks.json` says which exported image is each race's and each power's. Most were matched by
 a script that paired each name in the PDF with the nearest picture; the rest (the Sky
@@ -110,8 +112,20 @@ portrait is the medallion on their right. Its circle is the same on every banner
 eye. Royal Bonus's radius was set by hand, as the fit caught the ring's inner edge. A banner's
 medallion keeps the token number printed over its corner.
 
+The banners: the rule sheets have the expansion races' (their white surround made
+transparent), but no base race's. Those come from three flatbed scans of the physical
+banners on BoardGameGeek: [466842](https://boardgamegeek.com/image/466842),
+[466845](https://boardgamegeek.com/image/466845) and
+[466846](https://boardgamegeek.com/image/466846). `banners.py` cuts each one out and
+straightens it: `banner-scans.json` holds roughly where each banner lies, found by matching
+a template of what every banner shares. The rule sheets crop their banners a little tighter
+than the scans' outline (the top of the medallion is cut), which only shows side by side.
+
 On the map a token is its race's portrait on a disc of its player's colour, with the token
-count beside it. A race in decline is drawn in grey, like the banner's grey side.
+count beside it. A race in decline is drawn in grey, like the banner's grey side. In the
+column and the players' list, a combo is put together as in the box: the power's badge
+against the left end of the race's banner. What the race and the power do shows while the
+combo is hovered, or focused from the keyboard or by a tap.
 
 ## Rules: what was chosen where the rulebook is silent
 

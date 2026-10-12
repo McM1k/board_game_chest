@@ -13,12 +13,17 @@ pub fn seat_color(seat: usize) -> &'static str {
 
 /// Where the pictures are served: `art/` next to this file, which Trunk
 /// copies into the build (see `client/index.html`). They come from Days of
-/// Wonder's rule sheets.
+/// Wonder's rule sheets, and the base game's banners from scans.
 pub const ART: &str = "/smallworld-art";
 
 /// A race's portrait: the medallion from its banner.
 pub fn race_art(race: Race) -> String {
     format!("{ART}/races/{}.webp", format!("{race:?}").to_lowercase())
+}
+
+/// A race's banner, which a power's badge slots against.
+pub fn banner_art(race: Race) -> String {
+    format!("{ART}/banners/{}.webp", format!("{race:?}").to_lowercase())
 }
 
 /// A power's badge.
@@ -592,6 +597,7 @@ mod tests {
         let file = |url: String| dir.join(url.strip_prefix(&format!("{ART}/")).unwrap());
         for race in Race::ALL {
             assert!(file(race_art(race)).is_file(), "{race:?}: {}", race_art(race));
+            assert!(file(banner_art(race)).is_file(), "{race:?}: {}", banner_art(race));
         }
         for power in Power::ALL {
             assert!(file(power_art(power)).is_file(), "{power:?}: {}", power_art(power));

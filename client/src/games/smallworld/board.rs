@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameMove};
-use smallworld_core::{Action, Army, Board, Offer, Phase, Power, View};
+use smallworld_core::{Action, Army, Board, Offer, Phase, Power, Race, View};
 
 use super::look::{self, Tool};
 use super::map::map_svg;
@@ -453,6 +453,32 @@ fn peace_picker(ctx: &Ctx) -> AnyView {
 
 // ----- races and players ----------------------------------------------------------------
 
+/// A race and its power as the box puts them together: the power's badge
+/// slotted against the left end of the race's banner (no badge: a race in
+/// decline lost its power).
+fn combo_art(race: Race, power: Option<Power>) -> AnyView {
+    view! {
+        <span class="combo" aria-hidden="true">
+            {power.map(|p| view! { <img class="combo-power" src=look::power_art(p) alt="" /> })}
+            <img class="combo-race" src=look::banner_art(race) alt="" />
+        </span>
+    }
+    .into_any()
+}
+
+/// What a race and its power do, shown while hovering (or focusing) the
+/// combo.
+fn combo_details(race: Race, power: Option<Power>, copied: Option<Power>) -> AnyView {
+    view! {
+        <div class="combo-details" role="tooltip">
+            <p><b>{race.name()}</b>": "{race.blurb()}</p>
+            {power.map(|p| view! { <p><b>{p.name()}</b>": "{p.blurb()}</p> })}
+            {copied.map(|c| view! { <p><b>{c.name()}</b>" (copied): "{c.blurb()}</p> })}
+        </div>
+    }
+    .into_any()
+}
+
 fn army_line(army: &Army, declined: bool) -> AnyView {
     let name = if declined {
         match army.power {
@@ -462,26 +488,26 @@ fn army_line(army: &Army, declined: bool) -> AnyView {
     } else {
         look::combo_name(army.race, army.power)
     };
-    let copied = (!declined).then_some(army.copied).flatten().map(|p| format!(" \u{b7} copying {}", p.name()));
+    let copied = (!declined).then_some(army.copied).flatten();
+    let copying = copied.map(|p| format!(" \u{b7} copying {}", p.name()));
     let extra = match (declined, army.hand, army.resting) {
         (true, 0, _) => String::new(),
         (true, h, _) => format!(" \u{b7} {h} in hand"),
         (false, h, 0) => format!(" \u{b7} {h} in hand"),
         (false, h, r) => format!(" \u{b7} {h} in hand, {r} sitting out"),
     };
-    let title = if declined { String::new() } else { format!("{} {}", army.race.blurb(), army.power.blurb()) };
     // In decline the power is lost, unless it is Spirit.
-    let badge = (!declined || army.power == Power::Spirit).then(|| look::power_art(army.power));
+    let power = (!declined || army.power == Power::Spirit).then_some(army.power);
     view! {
-        <li class=if declined { "army declined" } else { "army" } title=title>
-            <span class="army-art" aria-hidden="true">
-                {badge.map(|src| view! { <img class="power-art" src=src alt="" /> })}
-                <img class="race-art" src=look::race_art(army.race) alt="" />
+        <li class=if declined { "army declined" } else { "army" } tabindex="0">
+            {combo_art(army.race, power)}
+            <span class="army-text">
+                <span class="army-name">{name}</span>
+                {(!declined).then(|| view! { <span class="tag">"active"</span> })}
+                {declined.then(|| view! { <span class="tag tag-off">"in decline"</span> })}
+                <span class="army-extra">{copying}{extra}</span>
             </span>
-            <span class="army-name">{name}</span>
-            {(!declined).then(|| view! { <span class="tag">"active"</span> })}
-            {declined.then(|| view! { <span class="tag tag-off">"in decline"</span> })}
-            <span class="army-extra">{copied}{extra}</span>
+            {combo_details(army.race, power, copied)}
         </li>
     }
     .into_any()
@@ -505,18 +531,6 @@ fn races_panel(ctx: &Ctx) -> AnyView {
                 .map(|a| army_line(a, false))
                 .chain(p.declined.iter().map(|a| army_line(a, true)))
                 .collect_view();
-            let mine = (seat == v.you).then(|| {
-                p.active.map(|a| {
-                    let copied = a.copied.map(|c| view! { <p><b>{c.name()}</b>" (copied): "{c.blurb()}</p> });
-                    view! {
-                        <div class="powers">
-                            <p><b>{a.race.name()}</b>": "{a.race.blurb()}</p>
-                            <p><b>{a.power.name()}</b>": "{a.power.blurb()}</p>
-                            {copied}
-                        </div>
-                    }
-                })
-            });
             let notes = {
                 let mut n = vec![format!("{} token{} on the map", p.on_map, plural(p.on_map))];
                 if p.pacts > 0 {
@@ -537,7 +551,6 @@ fn races_panel(ctx: &Ctx) -> AnyView {
                         <span class="coins" title="Victory coins: everybody else's stay hidden until the end">{coins}</span>
                     </div>
                     <ul class="armies">{armies}</ul>
-                    {mine}
                     <p class="note">{notes}</p>
                 </li>
             }
@@ -567,19 +580,13 @@ fn offer_row(ctx: &Ctx, i: usize, o: &Offer) -> AnyView {
     };
     let c = ctx.clone();
     view! {
-        <li class="offer">
-            // The power's badge beside the race's banner, as in the box.
-            <div class="offer-art" aria-hidden="true">
-                <img class="power-art" src=look::power_art(o.power) alt="" />
-                <img class="race-art" src=look::race_art(o.race) alt="" />
-            </div>
+        <li class="offer" tabindex="0">
+            {combo_art(o.race, Some(o.power))}
             <div class="offer-body">
                 <div class="offer-head">
                     <span class="offer-name">{look::combo_name(o.race, o.power)}</span>
                     <span class="offer-tokens" title="Tokens: race + power">{sum}</span>
                 </div>
-                <p class="offer-text"><b>{o.race.name()}</b>": "{o.race.blurb()}</p>
-                <p class="offer-text"><b>{o.power.name()}</b>": "{o.power.blurb()}</p>
                 <div class="offer-foot">
                     {(o.coins > 0).then(|| view! { <span class="on-it">{format!("+{} on it", o.coins)}</span> })}
                     {if can {
@@ -589,6 +596,7 @@ fn offer_row(ctx: &Ctx, i: usize, o: &Offer) -> AnyView {
                     }}
                 </div>
             </div>
+            {combo_details(o.race, Some(o.power), None)}
         </li>
     }
     .into_any()
@@ -684,10 +692,15 @@ mod tests {
             assert_eq!(html.matches("class=\"offer\"").count(), 6);
             assert_eq!(html.matches("Take (").count(), 6, "five coins: every combo is affordable");
             assert!(html.contains("Take (Free)"));
-            // Each combo shows its power's badge and its race's portrait.
-            assert_eq!(html.matches("class=\"power-art\"").count(), 6);
-            assert_eq!(html.matches("class=\"race-art\"").count(), 6);
-            assert!(html.contains(&look::race_art(s.offers[0].race)) && html.contains(&look::power_art(s.offers[0].power)));
+            // Each combo is assembled as in the box: the power's badge, then
+            // the race's banner. Their texts are there for hovering.
+            assert_eq!(html.matches("class=\"combo-power\"").count(), 6);
+            assert_eq!(html.matches("class=\"combo-race\"").count(), 6);
+            let top = s.offers[0];
+            assert!(html.contains(&format!("src=\"{}\"", look::power_art(top.power))), "{html}");
+            assert!(html.contains(&format!("src=\"{}\"", look::banner_art(top.race))));
+            assert_eq!(html.matches("class=\"combo-details\"").count(), 6);
+            assert!(shows(&html, top.race.blurb()) && shows(&html, top.power.blurb()));
             // Every region of the 3-player board is drawn.
             assert_eq!(html.matches("<polygon").count(), 30);
             assert!(html.contains("Turn") && html.contains("of 10"));
@@ -734,7 +747,9 @@ mod tests {
             // The token is the race's portrait; the player lists it too.
             let race = s.players[0].active.unwrap().race;
             assert!(html.contains(&format!("<image href=\"{}\"", look::race_art(race))), "{html}");
-            assert!(html.contains("class=\"army-art\""));
+            // The player's race is assembled too, its texts on hover.
+            assert_eq!(html.matches("class=\"combo-details\"").count(), 6 + 1, "{html}");
+            assert!(!html.contains("class=\"powers\""));
             // Now the regions out of reach show their price, faded.
             let m = s.moves(0);
             let far = |&&(r, _): &&(usize, u8)| !m.can(RegionMove::Conquer, r) && !m.can(RegionMove::Gamble, r);
