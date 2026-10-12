@@ -24,6 +24,14 @@ README is tracked.
   It should match the screen's `view`. If it doesn't, the bug is in what reached the
   browser.
 
+## Past reports
+
+The dialog's **Past reports** button lists every report here and in `done/` (`GET /reports`):
+the open ones under "To be addressed", the ones in `done/` under "Addressed". It shows each
+report's title, time, game, the player's words, and every section added below them (the
+"Resolution" and "What was done"), never where the player was or what their screen held. Anyone
+who can open the site can read it, so keep secrets out of what you add.
+
 ## Working on a report
 
 A report is either a bug or a suggestion (a feature request).

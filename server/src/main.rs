@@ -18,7 +18,7 @@ use axum::{
     Extension, Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use protocol::{ClientMsg, Report, ReportSaved, ServerMsg};
+use protocol::{ClientMsg, PastReport, Report, ReportSaved, ServerMsg};
 use reports::ReportError;
 use rooms::{disconnect, free_dropped_seat, process, remove_if_abandoned, Ident, Rooms, Shared};
 use std::{
@@ -51,6 +51,7 @@ async fn main() {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/report", post(report_handler).layer(DefaultBodyLimit::max(reports::MAX_BODY)))
+        .route("/reports", get(past_reports_handler))
         .fallback_service(files)
         .layer(Extension(Arc::new(reports_dir.clone())))
         .with_state(state);
@@ -90,6 +91,16 @@ async fn report_handler(
         Err(e @ ReportError::Empty) => Err((StatusCode::BAD_REQUEST, e.message())),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.message())),
     }
+}
+
+/// The reports saved so far, open and done, for the dialog's "Past reports".
+async fn past_reports_handler(
+    Extension(dir): Extension<Arc<PathBuf>>,
+) -> Result<Json<Vec<PastReport>>, (StatusCode, String)> {
+    tokio::task::spawn_blocking(move || reports::list(&dir))
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Shared>) -> impl IntoResponse {

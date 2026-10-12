@@ -8,11 +8,15 @@
 //!
 //! The report goes over HTTP rather than the game's socket, which carries
 //! small messages only and may be the very thing that broke.
+//!
+//! "Past reports" swaps the box for every report sent so far (`GET
+//! /reports`): those still to be addressed, and those addressed with what
+//! was done about them.
 
 use crate::app::{load, App, Screen, KEY_TOKEN};
 use crate::games;
 use leptos::prelude::*;
-use protocol::Report;
+use protocol::{PastReport, Report};
 
 /// The longest message the box takes (the server keeps as much).
 pub const MAX_MESSAGE: usize = 5_000;
@@ -30,6 +34,16 @@ pub enum Status {
     Failed(String),
 }
 
+/// The past reports, while the dialog lists them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub enum Past {
+    Loading,
+    Loaded(Vec<PastReport>),
+    /// Not loaded, and why.
+    Failed(String),
+}
+
 /// The dialog's state, which outlives the screens behind it.
 #[derive(Clone, Copy)]
 pub struct Signals {
@@ -37,11 +51,18 @@ pub struct Signals {
     /// What the player has written so far (kept if they close the dialog).
     pub text: RwSignal<String>,
     pub status: RwSignal<Status>,
+    /// The past reports, when the dialog shows them instead of the box.
+    pub past: RwSignal<Option<Past>>,
 }
 
 impl Signals {
     pub fn new() -> Signals {
-        Signals { open: RwSignal::new(false), text: RwSignal::new(String::new()), status: RwSignal::new(Status::Writing) }
+        Signals {
+            open: RwSignal::new(false),
+            text: RwSignal::new(String::new()),
+            status: RwSignal::new(Status::Writing),
+            past: RwSignal::new(None),
+        }
     }
 }
 
@@ -116,14 +137,37 @@ pub fn build(app: App, message: String) -> Report {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn unreachable(_: wasm_bindgen::JsValue) -> String {
+    "The server couldn't be reached. Try again in a moment.".to_string()
+}
+
+/// Sends a request to the server and reads its answer, or what went wrong.
+#[cfg(target_arch = "wasm32")]
+async fn call(request: web_sys::Request) -> Result<String, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::Response;
+
+    let window = web_sys::window().ok_or("No browser window.")?;
+    let response: Response =
+        JsFuture::from(window.fetch_with_request(&request)).await.map_err(unreachable)?.dyn_into().map_err(unreachable)?;
+    let text = JsFuture::from(response.text().map_err(unreachable)?).await.map_err(unreachable)?.as_string().unwrap_or_default();
+    if response.ok() {
+        Ok(text)
+    } else if text.is_empty() {
+        Err(format!("The server answered {}.", response.status()))
+    } else {
+        Err(text)
+    }
+}
+
 /// Posts a report; the file it was saved in, or what went wrong.
 #[cfg(target_arch = "wasm32")]
 async fn post(report: &Report) -> Result<protocol::ReportSaved, String> {
-    use wasm_bindgen::{JsCast, JsValue};
-    use wasm_bindgen_futures::JsFuture;
-    use web_sys::{Headers, Request, RequestInit, Response};
+    use wasm_bindgen::JsValue;
+    use web_sys::{Headers, Request, RequestInit};
 
-    let unreachable = |_| "The server couldn't be reached. Try again in a moment.".to_string();
     let body = serde_json::to_string(report).map_err(|e| e.to_string())?;
     let headers = Headers::new().map_err(unreachable)?;
     headers.set("Content-Type", "application/json").map_err(unreachable)?;
@@ -131,18 +175,29 @@ async fn post(report: &Report) -> Result<protocol::ReportSaved, String> {
     init.set_method("POST");
     init.set_headers(&headers);
     init.set_body(&JsValue::from_str(&body));
-    let request = Request::new_with_str_and_init("/report", &init).map_err(unreachable)?;
-    let window = web_sys::window().ok_or("No browser window.")?;
-    let response: Response =
-        JsFuture::from(window.fetch_with_request(&request)).await.map_err(unreachable)?.dyn_into().map_err(unreachable)?;
-    let text = JsFuture::from(response.text().map_err(unreachable)?).await.map_err(unreachable)?.as_string().unwrap_or_default();
-    if response.ok() {
-        serde_json::from_str::<protocol::ReportSaved>(&text).map_err(|e| e.to_string())
-    } else if text.is_empty() {
-        Err(format!("The server answered {}.", response.status()))
-    } else {
-        Err(text)
-    }
+    let text = call(Request::new_with_str_and_init("/report", &init).map_err(unreachable)?).await?;
+    serde_json::from_str(&text).map_err(|e| e.to_string())
+}
+
+/// Shows the past reports in place of the box, loading them afresh.
+fn show_past(app: App) {
+    let r = app.report;
+    r.past.set(Some(Past::Loading));
+    #[cfg(target_arch = "wasm32")]
+    leptos::task::spawn_local(async move {
+        let list = async {
+            let text = call(web_sys::Request::new_with_str("/reports").map_err(unreachable)?).await?;
+            serde_json::from_str::<Vec<PastReport>>(&text).map_err(|e| e.to_string())
+        };
+        let past = match list.await {
+            Ok(list) => Past::Loaded(list),
+            Err(e) => Past::Failed(e),
+        };
+        // Unless the player went back to the box meanwhile.
+        if r.past.get_untracked() == Some(Past::Loading) {
+            r.past.set(Some(past));
+        }
+    });
 }
 
 /// Sends what the player wrote, with the context.
@@ -168,13 +223,15 @@ pub fn send(app: App) {
     let _ = report;
 }
 
-/// Opens or closes the dialog. A finished report makes way for a new one.
+/// Opens or closes the dialog. A finished report makes way for a new one,
+/// and the dialog opens on the box.
 fn toggle(app: App) {
     let r = app.report;
     r.open.update(|open| *open = !*open);
     if matches!(r.status.get_untracked(), Status::Sent(_) | Status::Failed(_)) {
         r.status.set(Status::Writing);
     }
+    r.past.set(None);
 }
 
 /// The button, and the dialog when it is open.
@@ -207,9 +264,8 @@ fn dialog(app: App) -> impl IntoView {
         }
     });
     let close = move || {
-        r.open.set(false);
-        if matches!(r.status.get_untracked(), Status::Sent(_) | Status::Failed(_)) {
-            r.status.set(Status::Writing);
+        if r.open.get_untracked() {
+            toggle(app);
         }
     };
     let on_key = move |ev: leptos::ev::KeyboardEvent| {
@@ -217,10 +273,19 @@ fn dialog(app: App) -> impl IntoView {
             close();
         }
     };
+    let past_button = move || {
+        view! {
+            <button type="button" class="report-past-button" on:click=move |_| show_past(app)>
+                "Past reports"
+            </button>
+        }
+    };
     let body = move || match r.status.get() {
+        _ if r.past.with(Option::is_some) => past(app, close),
         Status::Sent(file) => view! {
             <p class="report-done" role="status">"Thanks! Your message was saved (" <code>{file}</code> ")."</p>
             <div class="report-actions">
+                {past_button()}
                 <button type="button" on:click=move |_| r.status.set(Status::Writing)>"Send something else"</button>
                 <button type="button" class="report-send" on:click=move |_| close()>"Close"</button>
             </div>
@@ -247,6 +312,7 @@ fn dialog(app: App) -> impl IntoView {
                 <p class="report-note">"Sent with it: the page you are on and what your screen shows, your game as you see it."</p>
                 {failed}
                 <div class="report-actions">
+                    {past_button()}
                     <button type="button" on:click=move |_| close()>"Cancel"</button>
                     <button
                         type="button"
@@ -261,12 +327,150 @@ fn dialog(app: App) -> impl IntoView {
             .into_any()
         }
     };
+    let listing = move || r.past.with(Option::is_some);
     view! {
-        <div class="report-panel" role="dialog" aria-labelledby="report-title" on:keydown=on_key>
-            <h2 id="report-title">"Report a bug or suggest an idea"</h2>
+        <div
+            class="report-panel"
+            class:report-panel-wide=listing
+            role="dialog"
+            aria-labelledby="report-title"
+            on:keydown=on_key
+        >
+            <h2 id="report-title">{move || if listing() { "Past reports" } else { "Report a bug or suggest an idea" }}</h2>
             {body}
         </div>
     }
+}
+
+/// The past reports: those still to be addressed, then those addressed.
+fn past(app: App, close: impl Fn() + Copy + 'static) -> AnyView {
+    let r = app.report;
+    let content = match r.past.get() {
+        None | Some(Past::Loading) => view! { <p class="report-note" role="status">"Loading…"</p> }.into_any(),
+        Some(Past::Failed(e)) => view! { <p class="report-error" role="alert">{e}</p> }.into_any(),
+        Some(Past::Loaded(list)) => {
+            let (done, open): (Vec<_>, Vec<_>) = list.into_iter().partition(|p| p.done);
+            view! {
+                {section("To be addressed", "Nothing is waiting.", open)}
+                {section("Addressed", "None yet.", done)}
+            }
+            .into_any()
+        }
+    };
+    view! {
+        <div class="report-past">{content}</div>
+        <div class="report-actions">
+            <button type="button" on:click=move |_| r.past.set(None)>"Back"</button>
+            <button type="button" class="report-send" on:click=move |_| close()>"Close"</button>
+        </div>
+    }
+    .into_any()
+}
+
+fn section(title: &str, empty: &'static str, reports: Vec<PastReport>) -> impl IntoView {
+    let heading = format!("{title} ({})", reports.len());
+    let list = if reports.is_empty() {
+        view! { <p class="report-note">{empty}</p> }.into_any()
+    } else {
+        view! { <ul class="report-list">{reports.into_iter().map(item).collect_view()}</ul> }.into_any()
+    };
+    view! {
+        <section class="report-section">
+            <h3>{heading}</h3>
+            {list}
+        </section>
+    }
+}
+
+/// One report, folded: its title, when and in which game; unfolded, what
+/// the player wrote and what was done.
+fn item(p: PastReport) -> impl IntoView {
+    let meta = [Some(p.when), p.game].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+    let meta = (!meta.is_empty()).then(|| view! { <span class="report-meta">{meta}</span> });
+    // A status other than the folder's own, such as "in progress".
+    let status = (!["open", "done", ""].contains(&p.status.as_str())).then(|| view! { <span class="report-status">{p.status}</span> });
+    let resolution = (!p.resolution.is_empty()).then(|| view! { <div class="report-resolution">{markdown(&p.resolution)}</div> });
+    view! {
+        <li class="report-item">
+            <details>
+                <summary>
+                    <span class="report-item-title">{p.title}</span>
+                    {status}
+                    {meta}
+                </summary>
+                <blockquote class="report-message">{p.message}</blockquote>
+                {resolution}
+            </details>
+        </li>
+    }
+}
+
+/// A resolution's Markdown, drawn plainly: headings, bullet lists (indented
+/// as written), paragraphs and code blocks, with `code` and **bold** inside.
+fn markdown(text: &str) -> impl IntoView {
+    let mut views = Vec::new();
+    let mut bullets: Vec<(usize, String)> = Vec::new();
+    let mut paragraph: Option<String> = None;
+    let flush = |views: &mut Vec<AnyView>, bullets: &mut Vec<(usize, String)>, paragraph: &mut Option<String>| {
+        if let Some(p) = paragraph.take() {
+            views.push(view! { <p>{inline(&p)}</p> }.into_any());
+        }
+        if !bullets.is_empty() {
+            let items = bullets
+                .drain(..)
+                .map(|(depth, b)| view! { <li style:margin-left=format!("{}rem", depth as f32 * 1.1)>{inline(&b)}</li> })
+                .collect_view();
+            views.push(view! { <ul>{items}</ul> }.into_any());
+        }
+    };
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if trimmed.starts_with("```") {
+            flush(&mut views, &mut bullets, &mut paragraph);
+            let fence = &trimmed[..trimmed.len() - trimmed.trim_start_matches('`').len()];
+            let code: Vec<&str> = lines.by_ref().take_while(|l| l.trim() != fence).collect();
+            views.push(view! { <pre>{code.join("\n")}</pre> }.into_any());
+        } else if trimmed.starts_with('#') {
+            flush(&mut views, &mut bullets, &mut paragraph);
+            views.push(view! { <h4>{inline(trimmed.trim_start_matches('#').trim())}</h4> }.into_any());
+        } else if let Some(b) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+            if paragraph.is_some() {
+                flush(&mut views, &mut bullets, &mut paragraph);
+            }
+            bullets.push((indent / 2, b.to_string()));
+        } else if trimmed.is_empty() {
+            flush(&mut views, &mut bullets, &mut paragraph);
+        } else if let (Some((_, last)), None) = (bullets.last_mut(), &paragraph) {
+            // A bullet that goes on over the next line.
+            last.push(' ');
+            last.push_str(trimmed);
+        } else {
+            let p = paragraph.get_or_insert_with(String::new);
+            if !p.is_empty() {
+                p.push(' ');
+            }
+            p.push_str(trimmed);
+        }
+    }
+    flush(&mut views, &mut bullets, &mut paragraph);
+    views
+}
+
+/// A line's `code` and **bold**.
+fn inline(text: &str) -> Vec<AnyView> {
+    let mut views = Vec::new();
+    for (i, part) in text.split('`').enumerate() {
+        if i % 2 == 1 {
+            views.push(view! { <code>{part.to_string()}</code> }.into_any());
+            continue;
+        }
+        for (j, bit) in part.split("**").enumerate().filter(|(_, b)| !b.is_empty()) {
+            views.push(if j % 2 == 1 { view! { <strong>{bit.to_string()}</strong> }.into_any() } else { bit.to_string().into_any() });
+        }
+    }
+    views
 }
 
 #[cfg(test)]
@@ -300,6 +504,66 @@ mod tests {
             toggle(app);
             toggle(app);
             assert_eq!(app.report.status.get_untracked(), Status::Writing);
+        });
+    }
+
+    #[test]
+    fn past_reports_list_what_waits_and_what_was_done() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            toggle(app);
+            assert!(shows(&widget(app).to_html(), "Past reports"), "the box offers them");
+            app.report.text.set("Half written".into());
+            app.report.past.set(Some(Past::Loading));
+            let html = widget(app).to_html();
+            assert!(html.contains("Loading…") && html.contains("report-panel-wide") && !html.contains("<textarea"), "{html}");
+
+            let open = PastReport {
+                file: "2026-10-12T13-00-00Z-abcd.md".into(),
+                title: "The <b>board</b> went blank".into(),
+                when: "2026-10-12 13:00:00 UTC".into(),
+                game: Some("Hanabi".into()),
+                status: "in progress".into(),
+                message: "The <b>board</b> went blank\nafter a clue.".into(),
+                ..PastReport::default()
+            };
+            let done = PastReport {
+                file: "2026-10-12T12-00-00Z-efgh.md".into(),
+                title: "Bigger tokens".into(),
+                status: "done".into(),
+                done: true,
+                message: "Bigger tokens".into(),
+                resolution: "## Resolution\n\nDone in abc1234.\n\n## What was done\n\n- **What changed:**\n  - `look.rs` draws\n    them bigger.".into(),
+                ..PastReport::default()
+            };
+            app.report.past.set(Some(Past::Loaded(vec![open, done])));
+            let html = widget(app).to_html();
+            assert!(html.contains("To be addressed (1)") && html.contains("Addressed (1)"), "{html}");
+            // What players wrote is shown, never run as markup.
+            assert!(html.contains("The &lt;b&gt;board&lt;/b&gt; went blank") && !html.contains("<b>board"), "{html}");
+            assert!(html.contains("2026-10-12 13:00:00 UTC · Hanabi") && html.contains("in progress"));
+            assert!(html.contains("<h4>Resolution") && html.contains("<p>Done in abc1234."), "{html}");
+            assert!(html.contains("<strong>What changed:</strong>") && html.contains("<code>look.rs</code>"));
+            assert!(shows(&html, " draws them bigger."), "a bullet over two lines: {html}");
+            assert!(html.contains("margin-left:1.1rem"), "a nested bullet: {html}");
+
+            app.report.past.set(Some(Past::Loaded(vec![])));
+            let html = widget(app).to_html();
+            assert!(html.contains("Nothing is waiting.") && html.contains("None yet."));
+            app.report.past.set(Some(Past::Failed("The server answered 500.".into())));
+            assert!(widget(app).to_html().contains("The server answered 500."));
+
+            // Back to the box, with what was written.
+            app.report.past.set(None);
+            let html = widget(app).to_html();
+            assert!(html.contains("<textarea") && !html.contains("report-panel-wide"));
+            assert_eq!(app.report.text.get_untracked(), "Half written");
+            // Closing and opening again shows the box.
+            app.report.past.set(Some(Past::Loading));
+            toggle(app);
+            toggle(app);
+            assert_eq!(app.report.past.get_untracked(), None);
         });
     }
 

@@ -5,9 +5,12 @@
 //! The client sends the message and where the player was (the screen, the
 //! game's state as their seat saw it); the server adds the time and what it
 //! knows about their room, never the seat's token.
+//!
+//! `GET /reports` lists the reports there, open and done, with what the
+//! players wrote and what was done about it, for the dialog's "Past reports".
 
 use crate::rooms::Rooms;
-use protocol::{Report, ReportSaved};
+use protocol::{PastReport, Report, ReportSaved};
 use std::{
     fs,
     io::{ErrorKind, Write},
@@ -211,6 +214,87 @@ pub fn save(dir: &Path, report: &Report, room: Option<&RoomInfo>, when: SystemTi
     Err(ReportError::Io("no free file name".into()))
 }
 
+/// The sections `render` writes with what the screen and the server held:
+/// too big and too private to list.
+const CONTEXT_SECTIONS: [&str; 3] = [
+    "What the player's screen held",
+    "The room's options (from the server)",
+    "The game as the server holds it for that seat",
+];
+
+/// A saved report as `GET /reports` lists it, from the file's text: its
+/// title and fields, the player's words, and every section someone added
+/// after them (the resolution). `done` says whether it sits in `done/`.
+pub fn parse(file: &str, text: &str, done: bool) -> PastReport {
+    let mut past = PastReport { file: file.to_string(), done, ..PastReport::default() };
+    let mut section: Option<&str> = None;
+    // The fence a line is inside, if any: a heading in there is not one.
+    let mut fence: Option<&str> = None;
+    let mut message = Vec::new();
+    for line in text.lines() {
+        if let Some(f) = fence {
+            if line.trim_end() == f {
+                fence = None;
+            }
+        } else if line.starts_with("```") {
+            fence = Some(&line[..line.len() - line.trim_start_matches('`').len()]);
+        } else if let Some(heading) = line.strip_prefix("## ") {
+            section = Some(heading.trim());
+        } else if section.is_none() {
+            if let Some(title) = line.strip_prefix("# ") {
+                past.title = title.trim_start_matches("Bug report:").trim().to_string();
+            } else if let Some((label, value)) = line.strip_prefix("- **").and_then(|l| l.split_once(":** ")) {
+                let value = value.trim().to_string();
+                match label {
+                    "Status" => past.status = value,
+                    "When" => past.when = value,
+                    "Game" if value != "none" => past.game = Some(value),
+                    _ => {}
+                }
+            }
+            continue;
+        }
+        match section {
+            Some("What the player wrote") => {
+                if let Some(quoted) = line.strip_prefix('>') {
+                    message.push(quoted.strip_prefix(' ').unwrap_or(quoted));
+                }
+            }
+            Some(s) if CONTEXT_SECTIONS.contains(&s) => {}
+            Some(_) => {
+                past.resolution.push_str(line);
+                past.resolution.push('\n');
+            }
+            None => {}
+        }
+    }
+    past.message = message.join("\n").trim().to_string();
+    past.resolution = past.resolution.trim().to_string();
+    past.done |= past.status == "done";
+    past
+}
+
+/// Every report in `dir` (open) and `dir/done` (addressed), newest first.
+/// A missing folder lists nothing.
+pub fn list(dir: &Path) -> Vec<PastReport> {
+    let mut all = Vec::new();
+    for (folder, done) in [(dir.to_path_buf(), false), (dir.join("done"), true)] {
+        let Ok(entries) = fs::read_dir(&folder) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".md") || name == "README.md" {
+                continue;
+            }
+            if let Ok(text) = fs::read_to_string(entry.path()) {
+                all.push(parse(&name, &text, done));
+            }
+        }
+    }
+    // The names start with the time they arrived.
+    all.sort_by(|a, b| b.file.cmp(&a.file));
+    all
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,5 +399,35 @@ mod tests {
         assert!(text.contains(&format!("- **Room:** {code} (waiting room)")));
         assert!(text.contains("- **Seats:** 1. P0, host; 2. P1"));
         assert!(!text.contains("## The game as the server holds it"));
+    }
+
+    #[test]
+    fn past_reports_are_listed_newest_first_with_what_was_done() {
+        let dir = scratch("past");
+        // A heading in the screen's state is not the start of a resolution.
+        let open = Report { state: Some("## Resolution\nnot json".into()), ..report("The clue buttons vanished.\n\nThen the board.") };
+        let open = save(&dir, &open, None, at(1_791_734_196)).unwrap();
+        let old = save(&dir, &report("Bigger tokens, please"), None, at(1_791_700_000)).unwrap();
+        let resolution = "## Resolution\n\nA suggestion, done in abc1234.\n\n## What was done\n\n- **What changed:** `look.rs`.";
+        let text = fs::read_to_string(dir.join(&old.file)).unwrap().replace("- **Status:** open", "- **Status:** done");
+        fs::create_dir_all(dir.join("done")).unwrap();
+        fs::write(dir.join("done").join(&old.file), format!("{text}\n{resolution}\n")).unwrap();
+        fs::remove_file(dir.join(&old.file)).unwrap();
+        fs::write(dir.join("README.md"), "# Bug reports\n").unwrap();
+
+        let past = list(&dir);
+        let files: Vec<_> = past.iter().map(|p| (p.file.as_str(), p.done)).collect();
+        assert_eq!(files, [(open.file.as_str(), false), (old.file.as_str(), true)]);
+        let (new, old) = (&past[0], &past[1]);
+        assert_eq!(new.title, "The clue buttons vanished.");
+        assert_eq!((new.when.as_str(), new.game.as_deref(), new.status.as_str()), ("2026-10-11 15:56:36 UTC", Some("Hanabi"), "open"));
+        assert_eq!((new.message.as_str(), new.resolution.as_str()), ("The clue buttons vanished.\n\nThen the board.", ""));
+        assert_eq!((old.status.as_str(), old.message.as_str(), old.resolution.as_str()), ("done", "Bigger tokens, please", resolution));
+        // Where the player was and what their screen held stay out.
+        let json = serde_json::to_string(&past).unwrap();
+        assert!(!json.contains("Firefox") && !json.contains("not json") && !json.contains("has ```"), "{json}");
+
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(list(&dir).is_empty());
     }
 }

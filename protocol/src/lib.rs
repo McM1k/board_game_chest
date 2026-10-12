@@ -230,6 +230,30 @@ pub struct ReportSaved {
     pub file: String,
 }
 
+/// A report already in the reports folder, as `GET /reports` lists it: what
+/// the player wrote and, once addressed, what was done. Who sent it, their
+/// browser and their game stay out.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PastReport {
+    /// The file's name, which starts with the time it arrived.
+    pub file: String,
+    /// The report's title: the start of what the player wrote.
+    pub title: String,
+    /// When it arrived, e.g. "2026-10-12 12:47:58 UTC".
+    pub when: String,
+    /// The game's name, if the player was in one.
+    pub game: Option<String>,
+    /// Its status line: "open", "done", or what the person on it wrote.
+    pub status: String,
+    /// Whether it has been addressed (moved to `done/`).
+    pub done: bool,
+    /// What the player wrote.
+    pub message: String,
+    /// What was done about it, in Markdown: the sections added under the
+    /// player's words ("Resolution", "What was done"), empty while open.
+    pub resolution: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,6 +485,17 @@ mod tests {
         assert_eq!(serde_json::from_str::<Report>(&json).unwrap(), report);
         let saved = ReportSaved { file: "2026-10-12T09-41-07Z-k3f9.md".into() };
         assert_eq!(serde_json::from_str::<ReportSaved>(&serde_json::to_string(&saved).unwrap()).unwrap(), saved);
+        let past = PastReport {
+            file: saved.file,
+            title: "The board went blank".into(),
+            when: "2026-10-12 09:41:07 UTC".into(),
+            game: Some("Small World".into()),
+            status: "done".into(),
+            done: true,
+            message: "The board went blank".into(),
+            resolution: "## Resolution\n\nFixed in abc123.".into(),
+        };
+        assert_eq!(serde_json::from_str::<PastReport>(&serde_json::to_string(&past).unwrap()).unwrap(), past);
     }
 
     #[test]
