@@ -27,6 +27,11 @@
 .theme-catan input { font: inherit; width: 100%; padding: .55rem .7rem; border-radius: 8px; border: 1px solid #3a5167;
   background: #0f1923; color: var(--text); margin-top: .25rem; }
 .theme-catan label { display: block; text-align: left; font-size: .85rem; color: var(--muted); margin-bottom: .8rem; }
+.theme-catan select { font: inherit; width: 100%; padding: .5rem .6rem; border-radius: 8px; border: 1px solid #3a5167;
+  background: #0f1923; color: var(--text); margin-top: .25rem; }
+.theme-catan select:disabled { opacity: .7; cursor: not-allowed; }
+.theme-catan .option { text-align: left; margin-bottom: .6rem; }
+.theme-catan .option label { margin-bottom: .2rem; }
 .theme-catan h1,
 .theme-catan h2,
 .theme-catan h3 { margin: 0 0 .5rem; }
