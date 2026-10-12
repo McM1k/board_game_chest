@@ -3073,6 +3073,10 @@ pub struct Moves {
     pub decline: bool,
     /// What can be done to regions: the kind, the region, the tokens it costs.
     pub regions: Vec<Target>,
+    /// While conquering: what each region the conquering race may attack
+    /// would cost, within reach or not, for planning ahead.
+    #[serde(default)]
+    pub prices: Vec<(usize, u8)>,
     pub roll: bool,
     pub end_conquests: bool,
     /// Copycat: the combos whose power you can copy (empty: no copying now).
@@ -3202,6 +3206,12 @@ impl State {
             Phase::Conquest { ghouls } => {
                 m.decline = self.this_turn.may_decline && !self.this_turn.moved;
                 m.end_conquests = true;
+                if let Some((army, declined)) = self.conqueror(seat) {
+                    m.prices = (0..self.regions.len())
+                        .filter(|&r| self.target_anywhere(seat, &army, declined, r).is_ok())
+                        .map(|r| (r, self.die_cost(&army, declined, self.cost(seat, &army, declined, r))))
+                        .collect();
+                }
                 if !ghouls {
                     if let Some(a) = army {
                         m.roll = a.has(Power::Berserk) && self.this_turn.berserk.is_none() && a.hand > 0;

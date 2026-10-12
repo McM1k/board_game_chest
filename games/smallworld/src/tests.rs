@@ -202,6 +202,35 @@ fn a_race_enters_through_the_border_then_conquers_next_to_its_regions() {
 }
 
 #[test]
+fn every_region_that_could_be_attacked_is_priced_for_planning() {
+    let mut s = empty_game();
+    give(&mut s, 1, Race::Wizards, Power::Alchemist);
+    place(&mut s, 19, Race::Wizards, 3);
+    place(&mut s, 20, Race::Wizards, 1);
+    s.regions[20].hero = true;
+    give(&mut s, 0, Race::Ratmen, Power::Merchant);
+    place(&mut s, 7, Race::Ratmen, 1);
+    let m = s.moves(0);
+    let price = |r: usize| m.prices.iter().find(|p| p.0 == r).map(|p| p.1);
+    // Next door, as the conquests say, and across the board too.
+    assert_eq!(price(6), Some(2));
+    assert_eq!(m.conquer().iter().find(|c| c.0 == 6), Some(&(6, 2)));
+    assert_eq!(price(18), Some(2));
+    assert!(!m.conquer().iter().any(|c| c.0 == 18), "out of reach");
+    assert_eq!(price(4), Some(3), "a mountain");
+    assert_eq!(price(19), Some(2 + 1 + 3), "a mountain with three Wizards");
+    // Not ours, not the water, not an immune region.
+    assert_eq!((price(7), price(0), price(11), price(20)), (None, None, None, None));
+    // More than in hand is still priced.
+    s.players[0].active.as_mut().unwrap().hand = 1;
+    assert_eq!(s.moves(0).prices.iter().find(|p| p.0 == 19), Some(&(19, 6)));
+    // Only while conquering.
+    s.phase = Phase::Redeploy;
+    assert!(s.moves(0).prices.is_empty());
+    assert!(s.moves(1).prices.is_empty(), "not their turn");
+}
+
+#[test]
 fn defenses_and_defenders_add_to_the_cost() {
     let mut s = empty_game();
     give(&mut s, 1, Race::Wizards, Power::Alchemist);

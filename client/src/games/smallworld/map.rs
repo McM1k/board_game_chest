@@ -160,7 +160,7 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
                 match mark {
                     Some(Mark::Target(_)) => " target",
                     Some(Mark::Gamble(_)) => " gamble",
-                    None => "",
+                    Some(Mark::Price(_)) | None => "",
                 },
                 if pending == Some(i) { " pending" } else { "" },
                 if state.lava.is_some() || state.burning.is_some() { " molten" } else { "" },
@@ -271,6 +271,7 @@ pub fn map_svg(app: App, view: &View, names: &[String], tool: Option<look::Tool>
                 let (text, class) = match mark {
                     Mark::Target(Some(text)) => (text, "badge"),
                     Mark::Gamble(text) => (text, "badge die"),
+                    Mark::Price(text) => (text, "badge price"),
                     Mark::Target(None) => return None,
                 };
                 Some(view! {

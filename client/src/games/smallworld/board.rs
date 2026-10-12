@@ -714,6 +714,13 @@ mod tests {
             s.apply(0, Action::Conquer { region: r }).unwrap();
             let html = render(app, &s, 0);
             assert!(html.contains("class=\"token\""));
+            // Now the regions out of reach show their price, faded.
+            let m = s.moves(0);
+            let far = |&&(r, _): &&(usize, u8)| !m.can(RegionMove::Conquer, r) && !m.can(RegionMove::Gamble, r);
+            let priced = m.prices.iter().filter(far).count();
+            assert!(priced > 0);
+            assert_eq!(html.matches("badge price").count(), priced);
+            assert!(html.contains("faded: out of reach for now"));
             // The Abandon tool is offered only for regions held before this turn.
             assert!(!html.contains(">Abandon<"));
             s.apply(0, Action::EndConquests).unwrap();

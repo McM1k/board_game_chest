@@ -637,6 +637,16 @@
   font-size: 12px;
 }
 
+/* Out of reach for now: the price, to plan ahead, but nothing to click. */
+.smallworld .badge.price {
+  opacity: 0.6;
+}
+
+.smallworld .badge.price circle {
+  fill: var(--parch);
+  stroke-dasharray: 3 2;
+}
+
 /* ---------- the key under the map ---------- */
 
 .smallworld .legend {

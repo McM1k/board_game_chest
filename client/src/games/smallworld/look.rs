@@ -231,6 +231,8 @@ pub enum Mark {
     Target(Option<String>),
     /// Only with the die: what it costs.
     Gamble(String),
+    /// Out of reach for now (or too dear): what it would cost, to plan ahead.
+    Price(String),
 }
 
 /// The regions the tool does something on, and how to mark them.
@@ -259,6 +261,14 @@ pub fn marks(view: &View, tool: Tool) -> Vec<(usize, Mark)> {
             _ => continue,
         };
         marks.push((t.region, mark));
+    }
+    // Conquering: the rest of the map is priced too, to plan ahead.
+    if tool == RegionMove::Conquer {
+        for &(region, cost) in &m.prices {
+            if !marks.iter().any(|(r, _)| *r == region) {
+                marks.push((region, Mark::Price(cost.to_string())));
+            }
+        }
     }
     marks
 }
@@ -331,7 +341,7 @@ pub fn hint(view: &View, names: &[String]) -> String {
                 };
                 format!("Your Ghouls in decline conquer first, with {n} in hand{then}.")
             } else {
-                format!("{n} tokens in hand. Click a region to conquer it; the number is its cost.")
+                format!("{n} tokens in hand. Click a region to conquer it; the number is its cost (faded: out of reach for now).")
             };
             if !m.gamble().is_empty() {
                 let whose = if ghouls { "the Ghouls'" } else { "your" };
@@ -576,6 +586,32 @@ mod tests {
         let (g, _) = v.moves.gamble()[0];
         assert_eq!(click(&v, RegionMove::Conquer, g), Click::Gamble(g));
         assert!(matches!(marks(&v, RegionMove::Conquer).iter().find(|(r, _)| *r == g), Some((_, Mark::Gamble(_)))));
+    }
+
+    #[test]
+    fn regions_out_of_reach_show_their_price_too() {
+        let mut s = State::new(2, 4);
+        s.apply(0, Action::Pick { offer: 0 }).unwrap();
+        let v = s.view_for(0);
+        let marks = marks(&v, RegionMove::Conquer);
+        let m = &v.moves;
+        let far: Vec<(usize, u8)> = m
+            .prices
+            .iter()
+            .copied()
+            .filter(|&(r, _)| !m.can(RegionMove::Conquer, r) && !m.can(RegionMove::Gamble, r))
+            .collect();
+        assert!(!far.is_empty(), "the inland regions can't be entered yet");
+        for (r, cost) in far {
+            assert!(marks.contains(&(r, Mark::Price(cost.to_string()))), "{r}");
+            assert_eq!(click(&v, RegionMove::Conquer, r), Click::Nothing);
+        }
+        // What can be conquered now keeps its own mark, once.
+        let (r, cost) = m.conquer()[0];
+        assert_eq!(marks.iter().filter(|(m, _)| *m == r).count(), 1);
+        assert!(marks.contains(&(r, Mark::Target(Some(cost.to_string())))));
+        // The other tools don't show prices.
+        assert!(super::marks(&v, RegionMove::Abandon).is_empty());
     }
 
     #[test]
