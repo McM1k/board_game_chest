@@ -6,8 +6,8 @@
 //! server's answer is the next state, which rebuilds the screen. What a click
 //! means is decided in `look`, so it can be tested natively.
 //!
-//! Cards are built from `span`s only, so a whole card can sit inside a
-//! `<button>` (the draft) as well as in a `<div>`.
+//! Cards are built from `span`s only (and their picture's `img`), so a whole
+//! card can sit inside a `<button>` (the draft) as well as in a `<div>`.
 
 use std::sync::Arc;
 
@@ -260,7 +260,8 @@ fn recycle_icon() -> AnyView {
 
 /// What a card shows inside its frame. `cost` is the row of spaces (static
 /// for a card in hand, live for a building). Its band names the type, the
-/// expansion's mark if it has one, and the cube recycling it gives.
+/// expansion's mark if it has one, and the cube recycling it gives; under it
+/// comes the printed card's picture, with the card's name over its foot.
 fn card_body(card: &'static Card, cost: Option<AnyView>) -> AnyView {
     let cost = cost.map(|c| view! { <span class="card-cost">{c}</span> });
     view! {
@@ -275,7 +276,10 @@ fn card_body(card: &'static Card, cost: Option<AnyView>) -> AnyView {
                 </span>
             </span>
         </span>
-        <span class="card-name">{card.name}</span>
+        <span class="card-art">
+            <img src=look::card_art(card) alt="" width="480" height="240" loading="lazy" decoding="async" />
+            <span class="card-name">{card.name}</span>
+        </span>
         {cost}
         <span class="card-rows">{makes_row(card)}{worth_row(card)}{built_row(card)}</span>
     }
@@ -808,6 +812,14 @@ fn stock_line(p: &PlayerView) -> AnyView {
     .into_any()
 }
 
+/// An Empire's round crest. `alt` is empty where its name is written beside
+/// it; otherwise it is the name, which a pointer over it shows too.
+fn crest(empire: usize, alt: &'static str) -> AnyView {
+    let title = (!alt.is_empty()).then_some(alt);
+    view! { <img class="crest" src=look::crest_art(empire) alt=alt title=title width="96" height="96" decoding="async" /> }
+        .into_any()
+}
+
 fn points(p: &PlayerView) -> AnyView {
     view! {
         <div class="points">
@@ -848,8 +860,17 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
     view! {
         <section class="panel empire">
             <div class="empire-head">
+                <img
+                    class="empire-art"
+                    src=look::empire_art(me.empire_card)
+                    alt=""
+                    width="1200"
+                    height="400"
+                    loading="lazy"
+                    decoding="async"
+                />
                 <div>
-                    <h2>"Your Empire"</h2>
+                    <div class="empire-title">{crest(me.empire_card, "")}<h2>"Your Empire"</h2></div>
                     <p class="empire-name">{look::empire_name(me.empire_card)}</p>
                     <p class="empire-points">{look::empire_points(me.empire_card)}</p>
                 </div>
@@ -916,7 +937,8 @@ fn rival(ctx: &Ctx, seat: usize) -> AnyView {
     view! {
         <li class="rival">
             <div class="rival-head">
-                <div>
+                {crest(p.empire_card, "")}
+                <div class="rival-who">
                     <h3>
                         {ctx.name(seat)}
                         {offline.then(|| view! { <span class="tag tag-off">"offline"</span> })}
@@ -1052,6 +1074,7 @@ fn results_panel(ctx: &Ctx) -> AnyView {
             view! {
                 <tr class={if r.winner { "winner" } else { "" }}>
                     <th scope="row">
+                        {crest(ctx.view.players[r.seat].empire_card, look::empire_name(ctx.view.players[r.seat].empire_card))}
                         <span class="rank-name">{r.name.clone()}</span>
                         {(r.seat == you).then(|| view! { <span class="tag">"you"</span> })}
                         {r.winner.then(|| view! { <span class="tag tag-win">"winner"</span> })}
@@ -1239,6 +1262,12 @@ mod tests {
             assert!(html.contains("Game over"));
             for s in 0..3 {
                 assert!(html.contains(&format!("<td class=\"total\">{}</td>", state.scores[s].total)));
+            }
+            // Each player's Empire crest by their name.
+            let table = &html[html.find("class=\"standings\"").unwrap()..];
+            let table = &table[..table.find("</table>").unwrap()];
+            for s in 0..3 {
+                assert!(table.contains(&format!("src=\"{}\"", look::crest_art(state.empires[s]))), "seat {s}");
             }
             // One winner mark per winner, and nothing left to build.
             assert_eq!(html.matches("tag tag-win").count(), state.winners().len());
@@ -1537,6 +1566,49 @@ mod tests {
         assert!(!html.contains("No finished cards yet."));
         let bare = render(&State::new(3, 12), 0);
         assert!(bare.contains("No finished cards yet."));
+    }
+
+    #[test]
+    fn every_card_shows_its_picture_with_its_name_over_it() {
+        let mut state = State::with_options(3, 1, wonderful_core::Options { ascension: true });
+        let (hand, kept, building, finished) = (id("Secret Society"), id("Neuroscience"), id("Juggernaut"), id("Pandora's Box"));
+        state.players[0].hand = vec![hand];
+        state.players[0].drafted = vec![kept];
+        state.players[0].buildings = vec![Building { card: building, filled: Cost::default() }];
+        state.players[0].empire = vec![finished];
+        let html = render(&state, 0);
+        // A picture under every card's header: in the hand, kept, being built, finished.
+        assert_eq!(html.matches("class=\"card-art\"").count(), html.matches("class=\"card-head\"").count());
+        for card in [hand, kept, building, finished] {
+            let def = card.def();
+            let at = html.find(&format!("src=\"{}\"", look::card_art(def))).expect(def.name);
+            let band = &html[html[..at].rfind("class=\"card-art\"").unwrap()..];
+            let band = &band[..band.find("</span>").unwrap() + "</span>".len()];
+            assert!(band.contains("alt=\"\"") && band.contains("loading=\"lazy\""), "{band}");
+            let named = |name: &str| band.contains(&format!("class=\"card-name\">{name}</span>"));
+            assert!(named(def.name) || named(&def.name.replace('\'', "&#39;")), "the name over the picture: {band}");
+        }
+    }
+
+    #[test]
+    fn the_empires_show_their_pictures() {
+        let mut state = State::new(3, 12);
+        state.empires = vec![0, 1, 2];
+        let html = render(&state, 0);
+        // Yours: its board's picture behind the heading, and its crest.
+        let head = &html[html.find("class=\"empire-head\"").unwrap()..];
+        let head = &head[..head.find("empire-stats").unwrap()];
+        assert!(head.contains(&format!("src=\"{}\"", look::empire_art(0))), "{head}");
+        assert!(head.contains(&format!("src=\"{}\"", look::crest_art(0))), "{head}");
+        assert!(head.contains("Noram States") && head.contains("1 VP per Financier"));
+        // The others': a crest by their Empire's name.
+        for (seat, name) in [(1, "Bob"), (2, "Cy")] {
+            let h3 = html.find(&format!("<h3>{name}")).unwrap();
+            let start = html[..h3].rfind("class=\"rival\"").unwrap();
+            let rival = &html[start..start + html[start..].find("</li>").unwrap()];
+            assert!(rival.contains(&format!("src=\"{}\"", look::crest_art(seat))), "{rival}");
+        }
+        assert!(!html.contains(&look::empire_art(1)), "only your own board's picture");
     }
 
     #[test]

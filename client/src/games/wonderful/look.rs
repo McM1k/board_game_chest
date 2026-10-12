@@ -50,6 +50,43 @@ pub fn empire_points(empire: usize) -> String {
     per.map(|(points, what)| format!("{points} VP per {what}")).unwrap_or_default()
 }
 
+// ----- the pictures -----------------------------------------------------------
+
+/// Where the pictures are served: `art/` next to this file, which Trunk
+/// copies into the build (see `client/index.html`). They come from the
+/// published cards and Empire boards, as Game Park's online version has them
+/// (see `docs/wonderful-world.md`, "The pictures").
+pub const ART: &str = "/wonderful-art";
+
+/// A name as a file name: "Pandora's Box" is "pandoras-box".
+pub fn art_slug(name: &str) -> String {
+    let mut slug = String::new();
+    for c in name.chars().filter(|&c| c != '\'') {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    slug.trim_end_matches('-').to_string()
+}
+
+/// A card's illustration: a 2:1 band cut from the printed card, clear of
+/// its printed costs and icons.
+pub fn card_art(card: &Card) -> String {
+    format!("{ART}/cards/{}.webp", art_slug(card.name))
+}
+
+/// An Empire board's illustration, as a wide banner.
+pub fn empire_art(empire: usize) -> String {
+    format!("{ART}/empires/{}.webp", art_slug(empire_name(empire)))
+}
+
+/// An Empire's round crest.
+pub fn crest_art(empire: usize) -> String {
+    format!("{ART}/crests/{}.webp", art_slug(empire_name(empire)))
+}
+
 /// The name shown for a seat: "You" for yourself.
 pub fn who(seat: usize, names: &[String], you: usize) -> String {
     if seat == you {
@@ -674,6 +711,28 @@ mod tests {
             }
         }
         s
+    }
+
+    #[test]
+    fn every_card_and_empire_has_its_picture() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/games/wonderful/art");
+        let file = |url: String| dir.join(url.strip_prefix(&format!("{ART}/")).unwrap());
+        for card in catalogue() {
+            assert!(file(card_art(card)).is_file(), "{}: {}", card.name, card_art(card));
+        }
+        for empire in 0..EMPIRES.len() {
+            assert!(file(empire_art(empire)).is_file(), "{}", empire_art(empire));
+            assert!(file(crest_art(empire)).is_file(), "{}", crest_art(empire));
+        }
+        // Nothing else: one picture per design, two per Empire.
+        let count = |sub: &str| std::fs::read_dir(dir.join(sub)).map_or(0, |d| d.count());
+        assert_eq!(count("cards"), catalogue().len());
+        assert_eq!((count("empires"), count("crests")), (EMPIRES.len(), EMPIRES.len()));
+        assert_eq!(card_art(id("Pandora's Box").def()), "/wonderful-art/cards/pandoras-box.webp");
+        assert_eq!(card_art(id("Mega-Drill").def()), "/wonderful-art/cards/mega-drill.webp");
+        assert_eq!(empire_art(0), "/wonderful-art/empires/noram-states.webp");
+        assert_eq!(crest_art(1), "/wonderful-art/crests/republic-of-europe.webp");
+        assert_eq!(art_slug("King Solomon's Mines"), "king-solomons-mines");
     }
 
     #[test]

@@ -127,6 +127,58 @@ need not be the host.
   Total column. The only change to the other games' look: the menu's max width went from
   760 to 1000 px so three cards fit in a row.
 
+## The pictures
+
+Every card shows its printed illustration, and your Empire its board's (a player asked for
+the original game's look, 2026-10-12). They come from Game Park's online version, the same
+repository as the numbers (commit `3627484`, 2026-09-27), and are served at `/wonderful-art/`
+from `client/src/games/wonderful/art` (`look::card_art`, `empire_art`, `crest_art`):
+
+| Pictures | Source in `app/src/images` | Ours |
+|---|---|---|
+| The cards, all 116 designs (78 base, 38 Corruption & Ascension) | `cards/developments/en/<Type>_<n>_EN_<Name>.jpg`: each printed face, 650 x 1000 | `art/cards/<slug>.webp`: a 2:1 band, 480 x 240, about 11 KB |
+| The seven Empires | `empires/<name>-artwork.jpg`: the board's illustration alone, 1920 x 1080 | `art/empires/<slug>.webp`: a 3:1 banner from its middle, 1200 x 400, 30 to 46 KB |
+| Their crests | `empires/<name>-avatar.png`, 100 x 100 | `art/crests/<slug>.webp`, 96 x 96, 2 to 4 KB |
+
+A slug is the name in lower case, apostrophes dropped and anything else between words a
+hyphen ("Pandora's Box" is `pandoras-box`). The pictures weigh 1.6 MB in all, but a page
+only loads what it shows (a hand is 80 to 130 KB the first time) and the card pictures are
+`loading="lazy"`. A test (`every_card_and_empire_has_its_picture`) checks there is one per
+design and per Empire, and nothing else.
+
+How to make them again, from `docs/wonderful-world-art/`:
+
+```sh
+git clone --depth 1 --filter=blob:none --sparse https://github.com/gamepark/its-a-wonderful-world <gamepark>
+git -C <gamepark> sparse-checkout set app/src/images/cards/developments/en app/src/images/empires
+python3 -I cards.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art/cards
+python3 -I empires.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art
+```
+
+The printed face has the game's own icons over its illustration, which `cards.py` keeps out:
+the title bar at the top, the column of cost spaces down the left, the construction bonus
+and the recycling cube at the foot of the picture. What is left is x 128 to 650 and y 125 to
+725. A card with more than nine cost spaces prints a second column beside the first (x 128
+to 245, one space every 95 pixels from y 140); its band goes under that column, or beside
+both when there is no room under it. `cards.py` counts each design's spaces in `cards.rs`.
+The band is as wide as the free area and halfway down it, unless `focus.json` says
+otherwise: under `at`, 0 puts it at the top of the free area and 1 at the bottom (31 cards,
+mostly to keep faces in); under `beside_second_column`, cards whose band is better beside
+both columns (Dark Matter's portal, Giant Robot's head). They were chosen by eye from contact
+sheets of every band drawn over its card. Game Park's file names drop the spaces and
+apostrophes ("PandoraBox" is the one `cards.py` must be told).
+
+On screen: the band sits under each card's header, with the card's name in white on a dark
+fade over its foot; the costs, what the card makes and is worth, and the header's type,
+expansion mark and recycling cube are on the pale card as before. The narrow grids ("Kept
+so far", your Empire's finished cards) use a taller 8:5 crop of the same picture and a
+smaller name. Your Empire's heading lies across its banner, darkened behind the words on the
+left and the points on the right; the crest stands by your Empire's title, by each rival's
+name, and by each name in the final standings (with the Empire's name as its text). The
+columns of your Empire's types no longer stretch to fill the panel (`auto-fill`), so that a
+lone finished card's picture stays the size of a card. The pictures belong to the
+publisher, La Boîte de Jeu; Game Park's licence covers its code, not the art.
+
 ## Known issues
 
 * **"Leave game" strands the seat.** The client forgets its token, but the server keeps the
