@@ -133,4 +133,14 @@ impl crate::games::Game for Wonderful {
     fn reset(&self, app: App) {
         app.games.wonderful.reset();
     }
+
+    fn snapshot(&self, app: App) -> serde_json::Value {
+        let wonderful = app.games.wonderful;
+        serde_json::json!({
+            "view": wonderful.view.get_untracked(),
+            "names": wonderful.names.get_untracked(),
+            "connected": wonderful.connected.get_untracked(),
+            "options": wonderful.options.get_untracked(),
+        })
+    }
 }

@@ -118,4 +118,14 @@ impl crate::games::Game for Hanabi {
     fn reset(&self, app: App) {
         app.games.hanabi.reset();
     }
+
+    fn snapshot(&self, app: App) -> serde_json::Value {
+        let hanabi = app.games.hanabi;
+        serde_json::json!({
+            "view": hanabi.view.get_untracked(),
+            "names": hanabi.names.get_untracked(),
+            "connected": hanabi.connected.get_untracked(),
+            "rules": hanabi.rules.get_untracked(),
+        })
+    }
 }

@@ -156,4 +156,12 @@ impl crate::games::Game for Catan {
     fn reset(&self, app: App) {
         app.games.catan.reset();
     }
+
+    fn snapshot(&self, app: App) -> serde_json::Value {
+        let catan = app.games.catan;
+        serde_json::json!({
+            "view": catan.view.get_untracked(),
+            "connected": catan.connected.get_untracked(),
+        })
+    }
 }

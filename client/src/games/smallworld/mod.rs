@@ -138,4 +138,16 @@ impl crate::games::Game for SmallWorld {
     fn reset(&self, app: App) {
         app.games.smallworld.reset();
     }
+
+    fn snapshot(&self, app: App) -> serde_json::Value {
+        let small_world = app.games.smallworld;
+        serde_json::json!({
+            "view": small_world.view.get_untracked(),
+            "names": small_world.names.get_untracked(),
+            "connected": small_world.connected.get_untracked(),
+            "options": small_world.options.get_untracked(),
+            "tool": small_world.ui.tool.get_untracked(),
+            "die_asked_for": small_world.ui.gamble.get_untracked(),
+        })
+    }
 }

@@ -7,6 +7,7 @@
 mod app;
 mod games;
 mod menu;
+mod report;
 #[cfg(test)]
 mod testing;
 
@@ -42,13 +43,9 @@ fn page_title(app: App) -> &'static str {
     game.map_or("Games", |kind| games::game(kind).tab_title(app))
 }
 
-#[component]
-fn Root() -> impl IntoView {
-    let app = App::new();
-    connect(app);
-
-    Effect::new(move |_| document().set_title(page_title(app)));
-
+/// Everything on the page: the error toast, the offline banner, the current
+/// screen, and the bug report button that every screen has.
+fn page(app: App) -> impl IntoView {
     view! {
         <div class="root">
             {move || {
@@ -57,8 +54,19 @@ fn Root() -> impl IntoView {
             }}
             {move || (!app.online.get()).then(|| view! { <div class="offline-banner">"Connecting to server…"</div> })}
             {move || current_screen(app)}
+            {report::widget(app)}
         </div>
     }
+}
+
+#[component]
+fn Root() -> impl IntoView {
+    let app = App::new();
+    connect(app);
+
+    Effect::new(move |_| document().set_title(page_title(app)));
+
+    page(app)
 }
 
 fn main() {
@@ -70,7 +78,7 @@ fn main() {
 /// screens and frame, and the page title. Each game's own screens are
 /// tested in its folder. These do not replace a browser test.
 #[cfg(test)]
-mod render_tests {
+pub(crate) mod render_tests {
     use super::*;
     use crate::app::{handle, leave, Lobby};
     use crate::testing::{players, shows};
@@ -90,7 +98,7 @@ mod render_tests {
     }
 
     /// A first view of each game, from seat 1 of a three-player game.
-    fn first_view(kind: GameKind) -> GameView {
+    pub(crate) fn first_view(kind: GameKind) -> GameView {
         let names: Vec<String> = ["Ann", "Bob", "Cy"].iter().map(|s| s.to_string()).collect();
         match kind {
             GameKind::Catan => {
@@ -155,6 +163,27 @@ mod render_tests {
                 let html = current_screen(app).to_html();
                 assert!(html.contains(frame_class(kind)) && html.contains("WXYZ"), "{kind:?}");
                 assert!(html.contains("Start game") && html.contains("Leave room"), "{kind:?}");
+            }
+        });
+    }
+
+    #[test]
+    fn every_screen_has_the_bug_report_button() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let button = "class=\"report-button\"";
+            assert_eq!(page(app).to_html().matches(button).count(), 1, "the menu");
+            for kind in GameKind::ALL {
+                app.screen.set(Screen::Home(kind));
+                assert!(page(app).to_html().contains(button), "{kind:?}'s home");
+                let lobby = Lobby { room: "WXYZ".into(), game: kind, players: players(&["Ann", "Bob"]), you: 0, is_host: true };
+                app.screen.set(Screen::Lobby(lobby));
+                assert!(page(app).to_html().contains(button), "{kind:?}'s lobby");
+                let names = vec!["Ann".to_string(), "Bob".to_string(), "Cy".to_string()];
+                handle(app, ServerMsg::Game { view: first_view(kind), names, connected: vec![true; 3] });
+                let html = page(app).to_html();
+                assert!(html.contains(button) && html.contains(frame_class(kind)), "{kind:?}'s game");
             }
         });
     }

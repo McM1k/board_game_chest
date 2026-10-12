@@ -47,7 +47,8 @@ a room in one and join with the 4-letter code in the others. Refreshing the page
 you back in your seat automatically (a token is kept in the tab's `sessionStorage`, so
 two tabs of one browser are two players).
 
-Env vars: `PORT` (default 3000), `STATIC_DIR` (default `client/dist`).
+Env vars: `PORT` (default 3000), `STATIC_DIR` (default `client/dist`), `REPORTS_DIR` (default
+`reports`, where bug reports are saved).
 
 Development with live reload: run `cargo run -p server` and, in `client/`,
 `trunk serve` (its `Trunk.toml` proxies `/ws` to the server on port 3000).
@@ -118,10 +119,10 @@ cargo test --workspace
   tries the powers' moves too: 48 base games on all four boards, 48 with every expansion
   for 2 to 6 players, checked after every move (no token is ever made out of nothing, every
   banner is somewhere once, no more pieces than the box holds).
-* `protocol` (9): every message survives JSON, including each game's view (the Hanabi
+* `protocol` (10): every message survives JSON, bug reports included, including each game's view (the Hanabi
   maps are keyed by seat and color), every move, view and option names its game, and rule
   payloads from before "hanabii" existed still parse.
-* `server` (43): in `rooms.rs`, the room flows run for every game: starting with a full
+* `server` (47): in `rooms.rs`, the room flows run for every game: starting with a full
   table and a view for every seat, host-only start and options, seat order, fullness,
   reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
   for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
@@ -129,8 +130,10 @@ cargo test --workspace
   a whole game, It's a Wonderful World's hidden picks, seat checks, its expansion switch (up
   to seven seats) and whole games, one with the expansion at a full table, Small World's
   turns, hidden coins, reconnecting, the Sky Islands' three to six seats, and whole games for
-  2 to 6 players with and without the expansions.
-* `client` (108): native render tests that build real games and render every screen to
+  2 to 6 players with and without the expansions. In `reports.rs`: a report saved in a file
+  of its own (UTC time, the message, the state, never the token), the limits, and the
+  reporter's room described only to someone holding one of its seats.
+* `client` (112): native render tests that build real games and render every screen to
   HTML. In the shell: every game is registered under its own kind and drawn in its own
   frame, and a state from the server puts its board on screen until you leave. In each
   game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
@@ -139,7 +142,8 @@ cargo test --workspace
   player count of a whole game; Small World's board through whole games with and without the
   expansions, the Sky Islands above the board, the cost badges, the die's confirmation, the
   decline button, the Copycat and Trade Pact controls, the expansions' switches in the
-  lobby; the lobbies; and the pure helpers behind what a click means. Animations, drag and drop and the CSS need a browser (see below).
+  lobby; the lobbies; the bug report button on every screen, its dialog, and the context a
+  report carries from each screen and game; and the pure helpers behind what a click means. Animations, drag and drop and the CSS need a browser (see below).
 
 ## What has been run in a browser
 
@@ -162,6 +166,19 @@ with people:
   Diplomat, Sorcerers, and the expansions' Catapult, Mercenaries, Fireballs, Behemoths, Lava,
   Winter, Pots of Gold, Cannons, Zeppelins, Copycat, Trade Pacts) were tested in the rules,
   on the server and in render tests, but the browser script only conquers.
+
+## Bug reports
+
+Every screen has a round red **!** button in its bottom left corner (`client/src/report.rs`).
+It asks what bug or error you want to report; when you send it, the page adds where you
+were: the screen, the game, the room, the page's address, the browser and window size, the
+last error shown, and what the screen held (the waiting room, or the game as your seat sees
+it). It goes to the server's `POST /report` (`server/src/reports.rs`), not the game's socket,
+so it also works when the game's connection is down. The server adds the time and what it
+knows about your room (the seats, the options, the game as it holds it for your seat) and
+saves the report as its own Markdown file in `reports/`, for an AI agent to pick up.
+`reports/README.md` says what a report holds and how to work through them. The report files
+are ignored by git.
 
 ## Game menu
 

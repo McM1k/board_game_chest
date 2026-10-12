@@ -4,6 +4,7 @@
 //! [`games::Games`] and gets its messages through [`games::game`].
 
 use crate::games::{self, Games};
+use crate::report;
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameKind, LobbyPlayer, ServerMsg};
 use std::time::Duration;
@@ -12,7 +13,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, WebSocket};
 
 const KEY_ROOM: &str = "games.room";
-const KEY_TOKEN: &str = "games.token";
+pub const KEY_TOKEN: &str = "games.token";
 pub const KEY_NAME: &str = "games.name";
 
 #[derive(Clone)]
@@ -47,12 +48,16 @@ pub struct App {
     pub online: RwSignal<bool>,
     pub screen: RwSignal<Screen>,
     pub error: RwSignal<Option<String>>,
+    /// The last error shown, kept after the toast is gone (for bug reports).
+    pub last_error: RwSignal<Option<String>>,
     pub name: RwSignal<String>,
     pub room_input: RwSignal<String>,
     /// The code of the room we are in, for the games' title bars.
     pub room: RwSignal<String>,
     /// What each game keeps beyond a single screen.
     pub games: Games,
+    /// The bug report button's dialog.
+    pub report: report::Signals,
 }
 
 impl App {
@@ -62,10 +67,12 @@ impl App {
             online: RwSignal::new(false),
             screen: RwSignal::new(Screen::Menu),
             error: RwSignal::new(None),
+            last_error: RwSignal::new(None),
             name: RwSignal::new(load(KEY_NAME).unwrap_or_default()),
             room_input: RwSignal::new(String::new()),
             room: RwSignal::new(String::new()),
             games: Games::new(),
+            report: report::Signals::new(),
         }
     }
 }
@@ -124,6 +131,7 @@ pub fn send(app: App, msg: &ClientMsg) {
 }
 
 pub fn show_error(app: App, msg: String) {
+    app.last_error.set(Some(msg.clone()));
     app.error.set(Some(msg));
     set_timeout(move || app.error.set(None), Duration::from_secs(5));
 }

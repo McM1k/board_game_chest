@@ -89,7 +89,8 @@ The same files as the other games:
 
 - `mod.rs`: the game's `Signals` (what it keeps between server messages: the view, the names,
   who is connected, and interface state that must survive a redraw), and `struct Nim`
-  implementing the `Game` trait of `client/src/games/mod.rs`;
+  implementing the `Game` trait of `client/src/games/mod.rs` (its `snapshot` returns those
+  signals as JSON, which a bug report sent from the game carries);
 - `screens.rs`: the frame (the element carrying the game's class, e.g. `<div class="nim">`);
   the home screen (your name, "Create a room", a room code and "Join room", "← All games");
   the waiting room (who is here, "Start game" for the host, "Leave room"); and `icon()`, the

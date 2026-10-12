@@ -197,6 +197,39 @@ pub enum ServerMsg {
     Error(String),
 }
 
+/// A bug report from the button in the corner of every screen, sent as
+/// JSON to `POST /report` (not over the game's socket, so it also works when
+/// that is down). The player writes the message; the client adds where they
+/// were.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Report {
+    /// What the player wrote.
+    pub message: String,
+    /// The screen they were on: "Menu", "Home", "Lobby" or "Game".
+    pub screen: String,
+    /// The game the screen belongs to.
+    pub game: Option<GameKind>,
+    /// The room's code, and the seat's token so the server can say which
+    /// seat reported (the token is never written to the report).
+    pub room: Option<String>,
+    pub token: Option<String>,
+    /// The page's address, the browser, and the window's size.
+    pub url: String,
+    pub browser: String,
+    pub viewport: String,
+    /// The last error shown at the top of the page, if any.
+    pub last_error: Option<String>,
+    /// What the screen holds, as JSON: the waiting room, or the running game
+    /// as this seat sees it.
+    pub state: Option<String>,
+}
+
+/// The server's answer to a report: the file it was saved in.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportSaved {
+    pub file: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,6 +441,26 @@ mod tests {
         };
         assert_eq!(*view, game.view_for(5));
         assert_eq!((view.board, view.access.len(), view.map().len()), (5, 2, 47 + 9));
+    }
+
+    #[test]
+    fn reports_survive_json() {
+        let report = Report {
+            message: "The board went blank".into(),
+            screen: "Game".into(),
+            game: Some(GameKind::SmallWorld),
+            room: Some("WXYZ".into()),
+            token: Some("t".into()),
+            url: "http://localhost:3000/".into(),
+            browser: "Firefox".into(),
+            viewport: "1400x1000".into(),
+            last_error: Some("It isn't your turn.".into()),
+            state: Some("{\"view\":null}".into()),
+        };
+        let json = serde_json::to_string(&report).unwrap();
+        assert_eq!(serde_json::from_str::<Report>(&json).unwrap(), report);
+        let saved = ReportSaved { file: "2026-10-12T09-41-07Z-k3f9.md".into() };
+        assert_eq!(serde_json::from_str::<ReportSaved>(&serde_json::to_string(&saved).unwrap()).unwrap(), saved);
     }
 
     #[test]

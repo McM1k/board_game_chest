@@ -6,3 +6,7 @@ dist = "dist"
 [[proxy]]
 backend = "ws://127.0.0.1:3000/ws"
 ws = true
+
+# ...and the bug reports.
+[[proxy]]
+backend = "http://127.0.0.1:3000/report"

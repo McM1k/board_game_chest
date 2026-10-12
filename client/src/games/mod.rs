@@ -61,6 +61,11 @@ pub trait Game: Sync {
 
     /// Forgets the game: on leaving the room, or arriving in a new one.
     fn reset(&self, app: App);
+
+    /// What the game holds right now, for a bug report: the view the server
+    /// last sent, the names, the lobby's options and what the screen keeps
+    /// beside them.
+    fn snapshot(&self, app: App) -> serde_json::Value;
 }
 
 /// The game `kind` names.

@@ -11,6 +11,8 @@ smallworld-core = { workspace = true }
 protocol = { path = "../protocol" }
 leptos = { version = "0.8", features = ["csr"] }
 wasm-bindgen = "0.2"
+# Sending bug reports with fetch.
+wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 serde_json = { workspace = true }
 console_error_panic_hook = "0.1"
@@ -21,6 +23,8 @@ features = [
   "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "Storage", "Location", "Window", "Document",
   # Hanabi board: drag and drop, and measuring hands for the slide animation.
   "DragEvent", "DataTransfer", "Element", "HtmlElement", "HtmlDivElement", "DomRect", "CssStyleDeclaration",
+  # Bug reports: posting them, and saying where the player was.
+  "Request", "RequestInit", "Response", "Headers", "Navigator",
 ]
 
 [dev-dependencies]

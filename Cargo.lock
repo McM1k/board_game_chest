@@ -221,6 +221,7 @@ dependencies = [
  "serde_json",
  "smallworld-core",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "wonderful-core",
 ]
