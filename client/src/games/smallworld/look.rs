@@ -26,6 +26,17 @@ pub fn tribe_art() -> String {
     format!("{ART}/lost-tribe.webp")
 }
 
+/// What the printed boards print besides the terrain, which the key shows
+/// as printed over them: the mines, magic sources and caverns, the squares
+/// where the Lost Tribes start, and the Sky Islands' Beanstalk and
+/// Stairway. The names are those of the map's markers.
+pub const SYMBOLS: [&str; 6] = ["mine", "magic", "cavern", "tribe-start", "beanstalk", "stairway"];
+
+/// One of `SYMBOLS`, cut from a picture of the boards.
+pub fn symbol_art(symbol: &str) -> String {
+    format!("{ART}/symbols/{symbol}.webp")
+}
+
 /// The printed ground board for `players` players (2 to 5), photographed.
 pub fn board_art(players: usize) -> String {
     format!("{ART}/boards/{}.webp", players.clamp(2, 5))
@@ -628,7 +639,11 @@ mod tests {
             assert!(file(sky_art(side)).is_file(), "{}", sky_art(side));
         }
         assert!(file(tribe_art()).is_file(), "{}", tribe_art());
+        for symbol in SYMBOLS {
+            assert!(file(symbol_art(symbol)).is_file(), "{}", symbol_art(symbol));
+        }
         assert_eq!(race_art(Race::StormGiants), "/smallworld-art/races/stormgiants.webp");
+        assert_eq!(symbol_art("mine"), "/smallworld-art/symbols/mine.webp");
         assert_eq!(power_art(Power::HordesOf), "/smallworld-art/powers/hordesof.webp");
     }
 

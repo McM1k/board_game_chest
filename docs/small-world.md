@@ -91,7 +91,8 @@ written in `gen_sky.py`:
 
 The map shows a picture of the printed board by default (a switch under it goes back to the
 drawn map). The regions lie on it, invisible but for what the tool in hand can act on, and
-the picture shows the mines, magic sources and caverns itself. The pictures, in
+the picture shows the mines, magic sources and caverns itself; the key under it then shows
+them as printed (see "The pictures"). The pictures, in
 `client/src/games/smallworld/art/boards`, come from BoardGameGeek:
 
 | Board | Picture | |
@@ -170,6 +171,18 @@ The token is square, 97 pixels across, framed in grey with the Lost Tribe symbol
 column in two corners. `make.py` cuts a circle out of it that keeps the silhouette against
 the sunset, head included, and leaves the grey out: centre (51, 47.5) and radius 34, in the
 export's pixels (`picks.json`, `tribe`).
+
+The board's own symbols (`art/symbols`), which the key shows over the printed board, are cut
+by `symbols.py` from BoardGameGeek images
+[4530241](https://boardgamegeek.com/image/4530241) (the 4-player board's flat scan) and
+[3740949](https://boardgamegeek.com/image/3740949) (the Sky Islands):
+`python3 -I symbols.py <scans> client/src/games/smallworld/art`, with `<scans>/<id>.jpg`.
+`symbols.json` says where each is printed. The mine, the magic source, the cavern and the
+square where a Lost Tribe starts are each the median of their copies on the 4-player board
+(seven, or fourteen for the square), aligned to a quarter pixel, which clears the JPEG noise.
+A disc is cut at its ring's outer edge, keeping the point on top of the magic source's. The
+Beanstalk and the Stairway carry the same shield, so each is cut round with what is around
+it: the vine and a leaf, or the stairs and their gate.
 
 On the map a token is its race's portrait on a disc of its player's colour, with the token
 count beside it, and a Lost Tribe is its picture on a sand-coloured disc. Tokens are 46 board

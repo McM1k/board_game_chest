@@ -85,7 +85,7 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
                 <div class="map-col">
                     <div class="map-frame">{map_svg(app, &ctx.view, &ctx.names, tool, pending, drawn)}</div>
                     {map_style(&ctx, drawn)}
-                    {legend(&ctx)}
+                    {legend(&ctx, drawn)}
                 </div>
                 <aside class="side-col">
                     {over.then(|| results_panel(&ctx))}
@@ -150,8 +150,9 @@ fn map_style(ctx: &Ctx, drawn: bool) -> AnyView {
 }
 
 /// The key to the map's markers, drawn as they are on the map: only those
-/// this game can show.
-fn legend(ctx: &Ctx) -> AnyView {
+/// this game can show. Over the printed board, what the board prints itself
+/// is shown as printed, since our signs for it aren't on the map then.
+fn legend(ctx: &Ctx, drawn: bool) -> AnyView {
     use super::map::*;
     let o = ctx.view.options;
     let mut items: Vec<(&'static str, &'static str, &'static str)> = vec![
@@ -186,17 +187,27 @@ fn legend(ctx: &Ctx) -> AnyView {
     let list = items
         .into_iter()
         .map(|(class, glyph, label)| {
-            view! {
-                <li>
-                    <svg class="key" viewBox="-12 -12 24 24" aria-hidden="true">{marker(0, 0, class, glyph)}</svg>
-                    {label}
-                </li>
-            }
+            let sign = if !drawn && look::SYMBOLS.contains(&class) {
+                view! { <img class="key" src=look::symbol_art(class) alt="" /> }.into_any()
+            } else {
+                view! { <svg class="key" viewBox="-12 -12 24 24" aria-hidden="true">{marker(0, 0, class, glyph)}</svg> }.into_any()
+            };
+            view! { <li>{sign}{label}</li> }
         })
         .collect_view();
+    // The drawn map doesn't mark where the Lost Tribes start.
+    let tribe_start = (!drawn).then(|| {
+        view! {
+            <li>
+                <img class="key" src=look::symbol_art("tribe-start") alt="" />
+                "Where a Lost Tribe starts"
+            </li>
+        }
+    });
     view! {
         <ul class="legend" aria-label="Map key">
             {list}
+            {tribe_start}
             <li>
                 <svg class="key" viewBox="-25 -25 50 50" aria-hidden="true">{tribe_token(0, 0)}</svg>
                 "Lost Tribe"
@@ -711,7 +722,7 @@ mod tests {
             assert!(html.contains("class=\"map printed\"") && html.contains("WXYZ"));
             assert!(html.contains(&format!("href=\"{}\"", look::board_art(3))), "{html}");
             assert!(html.contains("Printed board") && html.contains("Drawn map"));
-            assert_eq!(html.matches("marker mine").count(), 1, "the picture shows the mines; the key, its sign");
+            assert!(!html.contains("marker mine"), "the picture shows the mines, and the key their printed sign");
             app.games.smallworld.ui.drawn.set(true);
             let drawn = render(app, &s, 0);
             assert!(drawn.contains("class=\"map\"") && !drawn.contains("board-art"));
@@ -794,6 +805,49 @@ mod tests {
             assert!(html.contains("Sky Islands") && html.contains("class=\"sky-band\""));
             assert!(html.contains("marker beanstalk") && html.contains("marker stairway"));
             assert!(html.contains("Pot of Gold") && shows(&html, "Scavengers' captive"), "the key lists the new pieces");
+        });
+    }
+
+    #[test]
+    fn over_the_printed_board_the_key_shows_its_printed_symbols() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let key = |s: &State| {
+                let html = render(app, s, 0);
+                html.split("class=\"legend\"").nth(1).unwrap().split("</ul>").next().unwrap().to_string()
+            };
+            let printed_sign = |symbol: &str| format!("<img src=\"{}\"", look::symbol_art(symbol));
+            let s = State::new(3, 5);
+            let printed = key(&s);
+            // What the board prints, as printed: no sign of ours for it.
+            for symbol in ["mine", "magic", "cavern", "tribe-start"] {
+                assert!(printed.contains(&printed_sign(symbol)), "{symbol}: {printed}");
+            }
+            for ours in ["marker mine", "marker magic", "marker cavern"] {
+                assert!(!printed.contains(ours), "{ours}: {printed}");
+            }
+            assert!(shows(&printed, "Where a Lost Tribe starts"));
+            // What we draw on it keeps our signs, the Lost Tribes' token too.
+            assert!(printed.contains("marker lair") && printed.contains("marker hero"), "{printed}");
+            assert!(printed.contains(&format!("<image href=\"{}\"", look::tribe_art())));
+            assert!(!printed.contains("beanstalk"), "no Sky Islands");
+            // The drawn map's key is unchanged.
+            app.games.smallworld.ui.drawn.set(true);
+            let drawn = key(&s);
+            assert!(drawn.contains("marker mine") && drawn.contains("marker magic") && drawn.contains("marker cavern"));
+            assert!(!drawn.contains("/symbols/") && !shows(&drawn, "Where a Lost Tribe starts"), "{drawn}");
+            // The Sky Islands print the Beanstalk and the Stairway.
+            let sky = State::with_options(4, 5, Options::all());
+            let drawn = key(&sky);
+            assert!(drawn.contains("marker beanstalk") && drawn.contains("marker stairway"), "{drawn}");
+            app.games.smallworld.ui.drawn.set(false);
+            let printed = key(&sky);
+            for symbol in ["beanstalk", "stairway"] {
+                assert!(printed.contains(&printed_sign(symbol)), "{symbol}: {printed}");
+                assert!(!printed.contains(&format!("marker {symbol}")), "{symbol}: {printed}");
+            }
+            assert!(printed.contains("marker captive") && printed.contains("marker pot"), "{printed}");
         });
     }
 
