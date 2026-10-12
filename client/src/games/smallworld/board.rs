@@ -594,28 +594,29 @@ fn offer_row(ctx: &Ctx, i: usize, o: &Offer) -> AnyView {
     let price = pick.map_or_else(|| look::pick_cost(&ctx.view, i), |(_, c)| c);
     let cost = if price == 0 { "Free".to_string() } else { format!("{price} coin{}", plural(price)) };
     let tokens = o.race.tokens() + o.power.tokens() + o.tokens;
-    let sum = if o.tokens > 0 {
-        format!("{} + {} + {} = {tokens}", o.race.tokens(), o.power.tokens(), o.tokens)
-    } else {
-        format!("{} + {} = {tokens}", o.race.tokens(), o.power.tokens())
-    };
+    // The picture prints the name and the tokens; screen readers get them here.
+    let label = format!("{}, {tokens} tokens", look::combo_name(o.race, o.power));
+    // What lies on the combo isn't printed: the coins, and the Homunculi's
+    // extra tokens.
+    let mut on_it = Vec::new();
+    if o.coins > 0 {
+        on_it.push(format!("+{} on it", o.coins));
+    }
+    if o.tokens > 0 {
+        on_it.push(format!("+{} token{}", o.tokens, plural(o.tokens as u32)));
+    }
     let c = ctx.clone();
     view! {
         <li class="offer" tabindex="0">
+            <span class="sr">{label}</span>
             {combo_art(o.race, Some(o.power))}
-            <div class="offer-body">
-                <div class="offer-head">
-                    <span class="offer-name">{look::combo_name(o.race, o.power)}</span>
-                    <span class="offer-tokens" title="Tokens: race + power">{sum}</span>
-                </div>
-                <div class="offer-foot">
-                    {(o.coins > 0).then(|| view! { <span class="on-it">{format!("+{} on it", o.coins)}</span> })}
-                    {if can {
-                        view! { <button class="primary" on:click=move |_| c.act(Action::Pick { offer: i })>{format!("Take ({cost})")}</button> }.into_any()
-                    } else {
-                        view! { <span class="offer-cost">{cost}</span> }.into_any()
-                    }}
-                </div>
+            <div class="offer-foot">
+                {(!on_it.is_empty()).then(|| view! { <span class="on-it">{on_it.join(" \u{b7} ")}</span> })}
+                {if can {
+                    view! { <button class="primary" on:click=move |_| c.act(Action::Pick { offer: i })>{format!("Take ({cost})")}</button> }.into_any()
+                } else {
+                    view! { <span class="offer-cost">{cost}</span> }.into_any()
+                }}
             </div>
             {combo_details(o.race, Some(o.power), None)}
         </li>
@@ -741,6 +742,40 @@ mod tests {
             let other = render(app, &s, 1);
             assert!(other.contains("Ann picks a race") && other.contains("Waiting for Ann."));
             assert!(!other.contains("Take ("));
+        });
+    }
+
+    #[test]
+    fn each_combo_in_the_column_is_its_picture_with_the_price_under_it() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let mut s = State::new(3, 5);
+            // Skipped twice: two coins and, for the Homunculi, two tokens on it.
+            s.offers[1] = Offer { race: Race::Homunculi, power: Power::Flying, coins: 2, tokens: 2 };
+            let html = render(app, &s, 0);
+            let top = s.offers[0];
+            // The picture already prints the name and the tokens: no text
+            // beside it, only a name for screen readers.
+            assert!(!html.contains("offer-name") && !html.contains("offer-tokens") && !html.contains("offer-body"));
+            assert!(!html.contains(&format!("{} + {} = ", top.race.tokens(), top.power.tokens())), "{html}");
+            let total = top.race.tokens() + top.power.tokens();
+            let label = format!("<span class=\"sr\">{}, {total} tokens</span>", look::combo_name(top.race, top.power));
+            assert!(shows(&html, &label), "{html}");
+            // The price and the Take button sit under the picture.
+            let offers: Vec<&str> = html.split("class=\"offer\">").skip(1).collect();
+            assert_eq!(offers.len(), 6, "{html}");
+            for offer in &offers {
+                let art = offer.find("class=\"combo-race\"").unwrap();
+                let foot = offer.find("class=\"offer-foot\"").unwrap();
+                let take = offer.find("Take (").unwrap();
+                assert!(art < foot && foot < take, "{offer}");
+            }
+            // The Homunculi's extra tokens aren't printed on the picture.
+            let homunculi = offers[1];
+            assert!(homunculi.contains("+2 on it") && homunculi.contains("+2 tokens"), "{homunculi}");
+            let total = Race::Homunculi.tokens() + Power::Flying.tokens() + 2;
+            assert!(shows(homunculi, &format!("Flying Homunculi, {total} tokens")), "{homunculi}");
         });
     }
 
