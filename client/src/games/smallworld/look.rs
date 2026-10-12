@@ -13,7 +13,8 @@ pub fn seat_color(seat: usize) -> &'static str {
 
 /// Where the pictures are served: `art/` next to this file, which Trunk
 /// copies into the build (see `client/index.html`). They come from Days of
-/// Wonder's rule sheets, and the base game's banners from scans.
+/// Wonder's rule sheets, the base game's banners and some pieces from scans
+/// and photos.
 pub const ART: &str = "/smallworld-art";
 
 /// A race's portrait: the medallion from its banner.
@@ -35,6 +36,35 @@ pub const SYMBOLS: [&str; 6] = ["mine", "magic", "cavern", "tribe-start", "beans
 /// One of `SYMBOLS`, cut from a picture of the boards.
 pub fn symbol_art(symbol: &str) -> String {
     format!("{ART}/symbols/{symbol}.webp")
+}
+
+/// The pieces the map puts in the regions, which it draws over the printed
+/// board as the box has them. The names are those of the map's markers; a
+/// firing Cannon is "cannon-firing", and a Drakons' Dragon is their own
+/// "drakon". (The Scavengers' captive is a race's token: its portrait.)
+pub const PIECES: [&str; 16] = [
+    "lair",
+    "fort",
+    "camp",
+    "hole",
+    "hero",
+    "dragon",
+    "drakon",
+    "pot",
+    "catapult",
+    "winter",
+    "loot",
+    "lava",
+    "burning",
+    "behemoth",
+    "cannon",
+    "cannon-firing",
+];
+
+/// One of `PIECES`: the token's picture, cut from the rule sheets or from
+/// scans and photos of the tokens.
+pub fn piece_art(piece: &str) -> String {
+    format!("{ART}/pieces/{piece}.webp")
 }
 
 /// The printed ground board for `players` players (2 to 5), photographed.
@@ -642,8 +672,12 @@ mod tests {
         for symbol in SYMBOLS {
             assert!(file(symbol_art(symbol)).is_file(), "{}", symbol_art(symbol));
         }
+        for piece in PIECES {
+            assert!(file(piece_art(piece)).is_file(), "{}", piece_art(piece));
+        }
         assert_eq!(race_art(Race::StormGiants), "/smallworld-art/races/stormgiants.webp");
         assert_eq!(symbol_art("mine"), "/smallworld-art/symbols/mine.webp");
+        assert_eq!(piece_art("lair"), "/smallworld-art/pieces/lair.webp");
         assert_eq!(power_art(Power::HordesOf), "/smallworld-art/powers/hordesof.webp");
     }
 

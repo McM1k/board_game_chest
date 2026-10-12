@@ -4,15 +4,15 @@
 //! `look::click`.
 //!
 //! The regions lie on a picture of the printed board, invisible but for
-//! what the tool in hand can act on; or, drawn, each is filled with its
-//! terrain.
+//! what the tool in hand can act on, with the pieces as the box has them;
+//! or, drawn, each is filled with its terrain, and the pieces are our signs.
 
 use super::look::{self, Click, Mark};
 use super::shapes::{self, Shape};
 use crate::app::{send, App};
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameMove};
-use smallworld_core::{Board, Terrain, View};
+use smallworld_core::{Board, Race, Terrain, View};
 
 /// Space between the Sky Islands and the ground board.
 const GAP: i32 = 40;
@@ -23,11 +23,15 @@ const GAP: i32 = 40;
 const TOKEN_R: i32 = 23;
 const ART_R: i32 = TOKEN_R - 2;
 const CHIP: (i32, i32, i32) = (20, 14, 10);
-// ...the markers' size, the row of printed features above the token and the
-// row of pieces under it...
+// ...the markers' size (our signs, and the pieces' pictures over the printed
+// board, a little larger), the row of printed features above the token and
+// the row of pieces under it (the pictures' row lowered by what they gain,
+// to keep clear of the count)...
 const MARKER_R: i32 = 10;
+const PIECE_R: i32 = 13;
 const ICONS_DY: i32 = -35;
 const PIECES_DY: i32 = 35;
+const PICTURES_DY: i32 = PIECES_DY + PIECE_R - MARKER_R;
 // ...and the cost badge on its right.
 const BADGE_DX: i32 = 46;
 const BADGE_R: i32 = 13;
@@ -106,9 +110,20 @@ pub fn marker(x: i32, y: i32, class: &'static str, glyph: &'static str) -> AnyVi
     .into_any()
 }
 
-/// Where the `k`th of `n` markers in a row goes, from the row's middle.
-fn row_x(k: i32, n: i32) -> i32 {
-    (2 * k - (n - 1)) * (MARKER_R + 1)
+/// A piece over the printed board: the picture of the token in the box.
+pub fn piece(x: i32, y: i32, class: &'static str, art: String) -> AnyView {
+    view! {
+        <g class=format!("piece {class}") transform=format!("translate({x} {y})")>
+            <image href=art x=-PIECE_R y=-PIECE_R width=2 * PIECE_R height=2 * PIECE_R />
+        </g>
+    }
+    .into_any()
+}
+
+/// Where the `k`th of `n` markers of radius `r` in a row goes, from the
+/// row's middle.
+fn row_x(k: i32, n: i32, r: i32) -> i32 {
+    (2 * k - (n - 1)) * (r + 1)
 }
 
 /// A Lost Tribe: its printed token's picture, on a plain disc the size of a
@@ -253,44 +268,66 @@ pub fn map_svg(
                     }
                 }
             }
-            let mut pieces: Vec<(&'static str, &'static str)> = Vec::new();
+            // The pieces: our sign for each, and its picture.
+            let mut pieces: Vec<(&'static str, &'static str, String)> = Vec::new();
+            let drakon = r.tokens.is_some_and(|t| t.race == Race::Drakons);
             let flags = [
-                (r.lair, "lair", LAIR),
-                (r.fortress, "fort", FORT),
-                (r.hole, "hole", HOLE),
-                (r.hero, "hero", HERO),
-                (r.dragon, "dragon", DRAGON),
-                (r.pot, "pot", POT),
-                (r.catapult, "catapult", CATAPULT),
-                (r.winter, "winter", WINTER),
-                (r.loot, "loot", LOOT),
-                (r.lava.is_some(), "lava", LAVA),
-                (r.burning.is_some(), "burning", FIRE),
-                (r.captive.is_some(), "captive", CAPTIVE),
+                (r.lair, "lair", LAIR, "lair"),
+                (r.fortress, "fort", FORT, "fort"),
+                (r.hole, "hole", HOLE, "hole"),
+                (r.hero, "hero", HERO, "hero"),
+                (r.dragon, "dragon", DRAGON, if drakon { "drakon" } else { "dragon" }),
+                (r.pot, "pot", POT, "pot"),
+                (r.catapult, "catapult", CATAPULT, "catapult"),
+                (r.winter, "winter", WINTER, "winter"),
+                (r.loot, "loot", LOOT, "loot"),
+                (r.lava.is_some(), "lava", LAVA, "lava"),
+                (r.burning.is_some(), "burning", FIRE, "burning"),
             ];
-            for (has, class, glyph) in flags {
+            for (has, class, glyph, art) in flags {
                 if has {
-                    pieces.push((class, glyph));
+                    pieces.push((class, glyph, look::piece_art(art)));
                 }
             }
+            if let Some(race) = r.captive {
+                pieces.push(("captive", CAPTIVE, look::race_art(race)));
+            }
             for _ in 0..r.encampments {
-                pieces.push(("camp", CAMP));
+                pieces.push(("camp", CAMP, look::piece_art("camp")));
             }
             for _ in 0..r.behemoths {
-                pieces.push(("behemoth", BEHEMOTH));
+                pieces.push(("behemoth", BEHEMOTH, look::piece_art("behemoth")));
             }
             match r.cannon {
-                Some(true) => pieces.push(("cannon firing", CANNON)),
-                Some(false) => pieces.push(("cannon", CANNON)),
+                Some(true) => pieces.push(("cannon firing", CANNON, look::piece_art("cannon-firing"))),
+                Some(false) => pieces.push(("cannon", CANNON, look::piece_art("cannon"))),
                 None => {}
             }
+            // Over the printed board, the pieces are their pictures.
+            let (piece_r, pieces_dy) = if drawn { (MARKER_R, PIECES_DY) } else { (PIECE_R, PICTURES_DY) };
             // The region's number goes under the row of pieces, if any.
-            let number_dy = if pieces.is_empty() { 44 } else { PIECES_DY + MARKER_R + 10 };
-            let row = |list: Vec<(&'static str, &'static str)>, dy: i32| {
-                let n = list.len() as i32;
-                list.into_iter()
+            let number_dy = if pieces.is_empty() { 44 } else { pieces_dy + piece_r + 10 };
+            let icons = {
+                let n = icons.len() as i32;
+                icons
+                    .into_iter()
                     .enumerate()
-                    .map(|(k, (class, glyph))| marker(x + row_x(k as i32, n), y + dy, class, glyph))
+                    .map(|(k, (class, glyph))| marker(x + row_x(k as i32, n, MARKER_R), y + ICONS_DY, class, glyph))
+                    .collect_view()
+            };
+            let pieces = {
+                let n = pieces.len() as i32;
+                pieces
+                    .into_iter()
+                    .enumerate()
+                    .map(|(k, (class, glyph, art))| {
+                        let (px, py) = (x + row_x(k as i32, n, piece_r), y + pieces_dy);
+                        if drawn {
+                            marker(px, py, class, glyph)
+                        } else {
+                            piece(px, py, class, art)
+                        }
+                    })
                     .collect_view()
             };
             let token = r.tokens.map(|t| {
@@ -331,10 +368,10 @@ pub fn map_svg(
             view! {
                 <g class="pieces">
                     <text class="number" x=x y=y + number_dy>{i + 1}</text>
-                    {row(icons, ICONS_DY)}
+                    {icons}
                     {tribe}
                     {token}
-                    {row(pieces, PIECES_DY)}
+                    {pieces}
                     {badge}
                 </g>
             }
@@ -407,11 +444,12 @@ mod tests {
         let token = (0, 0, TOKEN_R);
         let badge = (BADGE_DX, 0, BADGE_R);
         assert!(apart(token, badge) && apart(CHIP, badge));
-        // Rows of up to four markers above and under it.
+        // Rows of up to four markers above and under it, and of the pieces'
+        // pictures, a little larger, under it.
         for n in 1..=4 {
             for k in 0..n {
-                for dy in [ICONS_DY, PIECES_DY] {
-                    let m = (row_x(k, n), dy, MARKER_R);
+                for (dy, r) in [(ICONS_DY, MARKER_R), (PIECES_DY, MARKER_R), (PICTURES_DY, PIECE_R)] {
+                    let m = (row_x(k, n, r), dy, r);
                     assert!(apart(token, m) && apart(CHIP, m) && apart(badge, m), "{k} of {n} at {dy}");
                 }
             }

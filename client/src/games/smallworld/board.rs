@@ -151,7 +151,8 @@ fn map_style(ctx: &Ctx, drawn: bool) -> AnyView {
 
 /// The key to the map's markers, drawn as they are on the map: only those
 /// this game can show. Over the printed board, what the board prints itself
-/// is shown as printed, since our signs for it aren't on the map then.
+/// is shown as printed, and the pieces as the box has them, since our signs
+/// for them aren't on the map then.
 fn legend(ctx: &Ctx, drawn: bool) -> AnyView {
     use super::map::*;
     let o = ctx.view.options;
@@ -183,15 +184,27 @@ fn legend(ctx: &Ctx, drawn: bool) -> AnyView {
             ("cannon", CANNON, "Cannon"),
             ("burning", FIRE, "Burning"),
         ]);
+        // The Drakons' Dragons are a token of their own in the box.
+        if !drawn {
+            items.insert(items.iter().position(|i| i.0 == "dragon").unwrap() + 1, ("drakon", DRAGON, "Drakons' Dragon"));
+        }
     }
+    // The Scavengers' captive is a race's token: a captive's portrait, once
+    // there is one.
+    let captive = ctx.view.regions.iter().find_map(|r| r.captive);
     let list = items
         .into_iter()
         .map(|(class, glyph, label)| {
-            let sign = if !drawn && look::SYMBOLS.contains(&class) {
-                view! { <img class="key" src=look::symbol_art(class) alt="" /> }.into_any()
-            } else {
+            let sign = match class {
+                _ if drawn => None,
+                "captive" => captive.map(|race| view! { <img class="key captive" src=look::race_art(race) alt="" /> }.into_any()),
+                _ if look::SYMBOLS.contains(&class) => Some(view! { <img class="key" src=look::symbol_art(class) alt="" /> }.into_any()),
+                _ if look::PIECES.contains(&class) => Some(view! { <img class="key" src=look::piece_art(class) alt="" /> }.into_any()),
+                _ => None,
+            }
+            .unwrap_or_else(|| {
                 view! { <svg class="key" viewBox="-12 -12 24 24" aria-hidden="true">{marker(0, 0, class, glyph)}</svg> }.into_any()
-            };
+            });
             view! { <li>{sign}{label}</li> }
         })
         .collect_view();
@@ -828,15 +841,18 @@ mod tests {
                 assert!(!printed.contains(ours), "{ours}: {printed}");
             }
             assert!(shows(&printed, "Where a Lost Tribe starts"));
-            // What we draw on it keeps our signs, the Lost Tribes' token too.
-            assert!(printed.contains("marker lair") && printed.contains("marker hero"), "{printed}");
+            // The pieces we put on it are their pictures, the Lost Tribes' token too.
+            assert!(printed.contains(&format!("<img src=\"{}\"", look::piece_art("lair"))), "{printed}");
+            assert!(!printed.contains("marker lair") && !printed.contains("marker hero"), "{printed}");
             assert!(printed.contains(&format!("<image href=\"{}\"", look::tribe_art())));
             assert!(!printed.contains("beanstalk"), "no Sky Islands");
             // The drawn map's key is unchanged.
             app.games.smallworld.ui.drawn.set(true);
             let drawn = key(&s);
             assert!(drawn.contains("marker mine") && drawn.contains("marker magic") && drawn.contains("marker cavern"));
-            assert!(!drawn.contains("/symbols/") && !shows(&drawn, "Where a Lost Tribe starts"), "{drawn}");
+            assert!(drawn.contains("marker lair") && drawn.contains("marker hero"), "{drawn}");
+            assert!(!drawn.contains("/symbols/") && !drawn.contains("/pieces/"), "{drawn}");
+            assert!(!shows(&drawn, "Where a Lost Tribe starts"), "{drawn}");
             // The Sky Islands print the Beanstalk and the Stairway.
             let sky = State::with_options(4, 5, Options::all());
             let drawn = key(&sky);
@@ -847,7 +863,70 @@ mod tests {
                 assert!(printed.contains(&printed_sign(symbol)), "{symbol}: {printed}");
                 assert!(!printed.contains(&format!("marker {symbol}")), "{symbol}: {printed}");
             }
-            assert!(printed.contains("marker captive") && printed.contains("marker pot"), "{printed}");
+            assert!(printed.contains(&format!("<img src=\"{}\"", look::piece_art("pot"))), "{printed}");
+            assert!(printed.contains(&format!("<img src=\"{}\"", look::piece_art("drakon"))), "{printed}");
+            // No captive yet: its sign; then the captive race's portrait.
+            assert!(printed.contains("marker captive"), "{printed}");
+            let mut sky = sky;
+            sky.regions[3].captive = Some(Race::Humans);
+            let printed = key(&sky);
+            assert!(!printed.contains("marker captive"), "{printed}");
+            assert!(printed.contains(&format!("<img src=\"{}\" alt=\"\" class=\"key captive\"", look::race_art(Race::Humans))), "{printed}");
+        });
+    }
+
+    #[test]
+    fn over_the_printed_board_the_pieces_are_their_pictures() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let mut s = State::with_options(4, 5, Options::all());
+            let tokens = |race| Some(Tokens { race, count: 2, declined: false });
+            s.regions[0] = RegionState { tokens: tokens(Race::Trolls), lair: true, fortress: true, encampments: 2, ..RegionState::default() };
+            s.regions[1] = RegionState { tokens: tokens(Race::Halflings), hole: true, hero: true, ..RegionState::default() };
+            s.regions[2] = RegionState { tokens: tokens(Race::Humans), dragon: true, pot: true, catapult: true, ..RegionState::default() };
+            s.regions[3] = RegionState { tokens: tokens(Race::Drakons), dragon: true, winter: true, loot: true, ..RegionState::default() };
+            s.regions[4] = RegionState { lava: Some(0), burning: Some(1), behemoths: 2, cannon: Some(true), ..RegionState::default() };
+            s.regions[5] = RegionState { tokens: tokens(Race::Scavengers), captive: Some(Race::Elves), cannon: Some(false), ..RegionState::default() };
+            let map = |app| {
+                let html = render(app, &s, 0);
+                html.split("class=\"legend\"").next().unwrap().to_string()
+            };
+            let printed = map(app);
+            let picture = |art: String| format!("<image href=\"{art}\"");
+            for (piece, n) in [
+                ("lair", 1),
+                ("fort", 1),
+                ("camp", 2),
+                ("hole", 1),
+                ("hero", 1),
+                ("dragon", 1),
+                ("drakon", 1),
+                ("pot", 1),
+                ("catapult", 1),
+                ("winter", 1),
+                ("loot", 1),
+                ("lava", 1),
+                ("burning", 1),
+                ("behemoth", 2),
+                ("cannon", 1),
+                ("cannon-firing", 1),
+            ] {
+                assert_eq!(printed.matches(&picture(look::piece_art(piece))).count(), n, "{piece}: {printed}");
+            }
+            // The Scavengers' captive is its race's portrait.
+            let captive = printed.split("class=\"piece captive\"").nth(1).expect("the captive").split("</g>").next().unwrap();
+            assert!(captive.contains(&picture(look::race_art(Race::Elves))), "{captive}");
+            assert!(!printed.contains("class=\"marker"), "no sign of ours over the printed board: {printed}");
+            // The drawn map keeps our signs.
+            app.games.smallworld.ui.drawn.set(true);
+            let drawn = map(app);
+            assert!(!drawn.contains("/pieces/") && !drawn.contains("class=\"piece "), "{drawn}");
+            let signs = ["lair", "fort", "camp", "hole", "hero", "dragon", "pot", "catapult", "winter", "loot", "lava", "burning"];
+            for sign in signs.into_iter().chain(["behemoth", "cannon firing", "cannon", "captive"]) {
+                assert!(drawn.contains(&format!("class=\"marker {sign}\"")), "{sign}: {drawn}");
+            }
+            app.games.smallworld.ui.drawn.set(false);
         });
     }
 

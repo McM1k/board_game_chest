@@ -191,6 +191,44 @@ sit in a row above a token, the pieces in a row under it, and the cost badge on 
 `map.rs` tests that none of them overlap. A race in decline is drawn in grey, like the
 banner's grey side.
 
+The pieces (`art/pieces`) are drawn over the printed board as the box has them, each in its
+own shape, 26 units across (our round signs are 20) with a dark edge against the painting.
+The drawn map keeps our signs, and the key under the map follows the style shown. A Drakons'
+Dragon is the Drakon token, a firing Cannon the Cannon's "-2" side, and the Scavengers'
+captive is its race's portrait in grey (in the key too, once there is one). `pieces.py` cuts
+them, after exporting each page it reads as SVG as well:
+
+```sh
+pdftocairo -svg -f <page> -l <page> <sheet>.pdf <exports>/<sheet>/page-<page>.svg
+python3 -I pieces.py <exports> <scans> client/src/games/smallworld/art
+```
+
+`pieces.json` says where each comes from:
+
+| Piece | Picture |
+|---|---|
+| Troll's Lair, Fortress, Encampment, Hole-in-the-Ground, Hero, Dragon | base rule sheet, page 1 (the list of components): images `1_3`, `1_5`, `1_16`, `1_17`, `1_18`, `1_19` |
+| Behemoth | Royal Bonus sheet, `1_12` (the male; `1_11` is the female) |
+| Burning region, Cannon, firing Cannon, Drakon | Sky Islands sheet, page 2: `2_347`, `2_360`, `2_367`, `2_95` |
+| Pot of Gold, Catapult | BoardGameGeek [1187328](https://boardgamegeek.com/image/1187328) and [1187318](https://boardgamegeek.com/image/1187318), scans of the unpunched English sheets |
+| Winter, Loot (face down) | BoardGameGeek [2231855](https://boardgamegeek.com/image/2231855), Days of Wonder's picture of A Spider's Web's new tokens |
+| Lava | BoardGameGeek [2231854](https://boardgamegeek.com/image/2231854): the Lava marker printed on the power's badge (Days of Wonder's picture) |
+
+The rule sheets print each token as a square picture clipped to its outline; the script reads
+the outline from the SVG's clip paths. The scans are cut by hand-made outlines: the Pot of
+Gold's octagon; the Catapult's die-cut line, which shows on the unpunched sheet once the scan
+is high-passed; the Lava marker's edge on the badge, traced the same way; and, for the Winter
+marker and the Loot, the white and the soft grey shadow around them, with a line between the
+Loot and the token behind it. Each is fitted in a 64-pixel square, transparent around, about
+3 KB. The map shows a piece 17 (phones) to 26 CSS pixels across, so 64 stays sharp on a
+screen of twice the density; that is about as much as the base sheet's pictures (86 to 120
+pixels) give.
+
+Not drawn: the Mountains. The box puts a Mountain token on every Mountain region (the base
+sheet's `1_4`), but the map has never drawn one: the board paints the mountains, and the
+prices count their defense. Lightning Bolts, Zeppelins, Fireballs and Trade Pacts never stay
+on the map.
+
 In the column and the players' list, a combo is put together as in the box: the power's
 badge against the left end of the race's banner. What the race and the power do shows while
 the combo is hovered, or focused from the keyboard or by a tap.
