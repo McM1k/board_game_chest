@@ -72,3 +72,30 @@ Then:
    If it turned out not to be a bug, or asked for something against the rules, move it to
    `done/` with `Status: declined` and a "Resolution" that says why in words a player
    understands (it shows in Past reports), with no branch.
+
+## Conventions
+
+- Commits: lowercase gerund messages ("fixing …", "adding …") with the same Co-Authored-By
+  trailer as recent commits. Rebuild the client with `cd client && trunk build --release`
+  (never `trunk serve`, which overwrites `client/dist` with a dev build) and commit
+  `client/dist` on its own as "rebuilding the client".
+- Checks: `cargo test --workspace` and `cargo clippy --workspace --all-targets`, both clean.
+  Run the client's tests unfiltered: filtered runs fail spuriously.
+- Merge: `git fetch`, fast-forward `main` to the branch, push `main` and the branch. Never
+  force-push.
+- Browser check, for visible changes only: headless Firefox driven by
+  `/snap/bin/geckodriver` through a small urllib WebDriver script (no selenium), with one
+  geckodriver per player on ports 4470 and up. Start a release server from the repo root
+  on a spare port: `PORT=30xx ./target/release/server & echo $! > target/<name>/server.pid`
+  (`SMALLWORLD_TOP=Race,Power` deals that combo first). Stop everything by its saved PID
+  only, never with `pkill` or `killall`: the real server runs on :3000. Keep work files
+  under `target/<name>/` and delete them at the end.
+
+## Keeping it cheap
+
+- Read only a report's header and the player's words:
+  `sed -n '1,/^## What the player.s screen/p' <file>`. The JSON below is long, so `grep` it
+  for what you need.
+- Pipe build and test output through `tail` or `grep`, and read big files in parts.
+- Look at as few screenshots as the change needs, cropped to the part that changed.
+- Keep "What was done" to about ten lines.
