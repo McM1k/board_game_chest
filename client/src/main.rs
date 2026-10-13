@@ -8,6 +8,7 @@ mod app;
 mod games;
 mod menu;
 mod report;
+mod rules;
 #[cfg(test)]
 mod testing;
 
@@ -44,7 +45,8 @@ fn page_title(app: App) -> &'static str {
 }
 
 /// Everything on the page: the error toast, the offline banner, the current
-/// screen, and the bug report button that every screen has.
+/// screen, the bug report button that every screen has, and the Rules button
+/// of the waiting rooms and games.
 fn page(app: App) -> impl IntoView {
     view! {
         <div class="root">
@@ -54,6 +56,7 @@ fn page(app: App) -> impl IntoView {
             }}
             {move || (!app.online.get()).then(|| view! { <div class="offline-banner">"Connecting to server…"</div> })}
             {move || current_screen(app)}
+            {rules::widget(app)}
             {report::widget(app)}
         </div>
     }
@@ -186,6 +189,55 @@ pub(crate) mod render_tests {
                 handle(app, ServerMsg::Game { view: first_view(kind), names, connected: vec![true; 3] });
                 let html = page(app).to_html();
                 assert!(html.contains(button) && html.contains(frame_class(kind)), "{kind:?}'s game");
+            }
+        });
+    }
+
+    #[test]
+    fn every_lobby_and_game_has_a_rules_button_that_opens_its_own_rules() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let button = "class=\"rules-button\"";
+            assert!(!page(app).to_html().contains(button), "the menu has no game to explain");
+            for kind in GameKind::ALL {
+                let rules = games::game(kind).rules();
+                app.rules_open.set(false);
+                app.screen.set(Screen::Home(kind));
+                assert!(!page(app).to_html().contains(button), "{kind:?}'s home");
+
+                let lobby = Lobby { room: "WXYZ".into(), game: kind, players: players(&["Ann", "Bob"]), you: 0, is_host: true };
+                app.screen.set(Screen::Lobby(lobby));
+                let html = page(app).to_html();
+                assert_eq!(html.matches(button).count(), 1, "{kind:?}'s lobby");
+                assert!(!html.contains("rules-panel"), "{kind:?}: closed until asked");
+
+                let names = vec!["Ann".to_string(), "Bob".to_string(), "Cy".to_string()];
+                handle(app, ServerMsg::Game { view: first_view(kind), names, connected: vec![true; 3] });
+                assert!(page(app).to_html().contains(button), "{kind:?}'s game");
+
+                // Open, it shows this game's summary and links its rulebook.
+                app.rules_open.set(true);
+                let html = page(app).to_html();
+                assert!(html.contains("rules-panel") && shows(&html, kind.title()), "{kind:?}");
+                for section in rules.sections {
+                    assert!(shows(&html, &section.title.replace('&', "&amp;")), "{kind:?}: {}", section.title);
+                }
+                for (_, url) in rules.links {
+                    assert!(html.contains(&format!("href=\"{url}\"")), "{kind:?}: {url}");
+                }
+                for other in GameKind::ALL.into_iter().filter(|&k| k != kind) {
+                    let other = games::game(other).rules();
+                    assert!(!html.contains(&format!("href=\"{}\"", other.links[0].1)), "{kind:?} shows another game's rules");
+                }
+
+                // The report's dialog and the rules' take turns in the corner.
+                report::toggle(app);
+                assert!(app.report.open.get_untracked() && !app.rules_open.get_untracked(), "{kind:?}");
+                crate::rules::toggle(app);
+                assert!(!app.report.open.get_untracked() && app.rules_open.get_untracked(), "{kind:?}");
+                leave(app);
+                assert!(!app.rules_open.get_untracked(), "{kind:?}: leaving closes them");
             }
         });
     }

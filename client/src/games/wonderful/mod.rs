@@ -9,6 +9,7 @@
 
 pub mod board;
 pub mod look;
+pub mod rules;
 pub mod screens;
 
 use crate::app::{App, Lobby};
@@ -111,6 +112,10 @@ impl crate::games::Game for Wonderful {
 
     fn blurb(&self) -> &'static str {
         "Draft cards, build an empire and out-produce your rivals over four rounds. Everybody plays at once."
+    }
+
+    fn rules(&self) -> &'static crate::rules::Rules {
+        &rules::RULES
     }
 
     fn frame(&self, _app: App, content: AnyView) -> AnyView {

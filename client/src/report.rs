@@ -224,10 +224,14 @@ pub fn send(app: App) {
 }
 
 /// Opens or closes the dialog. A finished report makes way for a new one,
-/// and the dialog opens on the box.
-fn toggle(app: App) {
+/// and the dialog opens on the box. It shares the corner with the rules,
+/// so it closes them.
+pub fn toggle(app: App) {
     let r = app.report;
     r.open.update(|open| *open = !*open);
+    if r.open.get_untracked() {
+        app.rules_open.set(false);
+    }
     if matches!(r.status.get_untracked(), Status::Sent(_) | Status::Failed(_)) {
         r.status.set(Status::Writing);
     }

@@ -61,6 +61,8 @@ pub struct App {
     pub games: Games,
     /// The bug report button's dialog.
     pub report: report::Signals,
+    /// Whether the Rules button's summary is open.
+    pub rules_open: RwSignal<bool>,
 }
 
 impl App {
@@ -76,6 +78,7 @@ impl App {
             room: RwSignal::new(String::new()),
             games: Games::new(),
             report: report::Signals::new(),
+            rules_open: RwSignal::new(false),
         }
     }
 }
@@ -271,6 +274,7 @@ pub fn leave(app: App) {
     // Leave the screen first, so no board outlives its game's state.
     app.screen.set(Screen::Menu);
     app.room.set(String::new());
+    app.rules_open.set(false);
     for kind in GameKind::ALL {
         games::game(kind).reset(app);
     }

@@ -16,6 +16,7 @@ pub mod smallworld;
 pub mod wonderful;
 
 use crate::app::{App, Lobby};
+use crate::rules::Rules;
 use leptos::prelude::*;
 use protocol::{GameKind, GameOptions, GameView};
 
@@ -30,6 +31,9 @@ pub trait Game: Sync {
 
     /// One sentence about the game, on its menu card.
     fn blurb(&self) -> &'static str;
+
+    /// A short summary of the rules, behind the Rules button.
+    fn rules(&self) -> &'static Rules;
 
     /// The browser tab's title while the game is on screen.
     fn tab_title(&self, app: App) -> &'static str {

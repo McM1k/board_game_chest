@@ -12,6 +12,7 @@ pub mod board;
 pub mod dice;
 pub mod look;
 pub mod map;
+pub mod rules;
 pub mod screens;
 
 use crate::app::{App, Lobby};
@@ -133,6 +134,10 @@ impl crate::games::Game for Catan {
 
     fn blurb(&self) -> &'static str {
         "Build roads and settlements, trade resources and race to 10 points on a random island."
+    }
+
+    fn rules(&self) -> &'static crate::rules::Rules {
+        &rules::RULES
     }
 
     fn frame(&self, _app: App, content: AnyView) -> AnyView {

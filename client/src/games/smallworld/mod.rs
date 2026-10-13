@@ -11,6 +11,7 @@
 pub mod board;
 pub mod look;
 pub mod map;
+pub mod rules;
 pub mod screens;
 pub mod shapes;
 
@@ -114,6 +115,10 @@ impl crate::games::Game for SmallWorld {
 
     fn blurb(&self) -> &'static str {
         "Lead fantasy races to conquer a world too small for all of them, then send them into decline and pick a new one. With all six expansions."
+    }
+
+    fn rules(&self) -> &'static crate::rules::Rules {
+        &rules::RULES
     }
 
     fn frame(&self, _app: App, content: AnyView) -> AnyView {

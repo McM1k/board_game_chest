@@ -11,6 +11,7 @@
 pub mod board;
 pub mod look;
 pub mod map;
+pub mod rules;
 pub mod screens;
 
 use crate::app::{load, save, App, Lobby};
@@ -136,6 +137,10 @@ impl crate::games::Game for Barrage {
 
     fn blurb(&self) -> &'static str {
         "Build dams, conduits and powerhouses in the Alps, hold back the water and turn it into energy to fulfill contracts."
+    }
+
+    fn rules(&self) -> &'static crate::rules::Rules {
+        &rules::RULES
     }
 
     fn frame(&self, _app: App, content: AnyView) -> AnyView {

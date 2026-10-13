@@ -95,6 +95,8 @@ The same files as the other games:
   the home screen (your name, "Create a room", a room code and "Join room", "← All games");
   the waiting room (who is here, "Start game" for the host, "Leave room"); and `icon()`, the
   menu card's picture;
+- `rules.rs`: `RULES`, the short summary the Rules button shows in the waiting room and the
+  game (setup, a turn or a round, scoring, end of game), with links to the official rulebooks;
 - `board.rs`: the game screen, redrawn from the signals by `board(app)`, and the moves it sends
   (`send(app, &ClientMsg::Move(GameMove::Nim(..)))`);
 - `look.rs`: the pure functions behind the screens (texts, what a click means), with native

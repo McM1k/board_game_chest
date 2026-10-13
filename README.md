@@ -190,6 +190,13 @@ board looked at at phone width. Still to look at with people:
   Winter, Pots of Gold, Cannons, Zeppelins, Copycat, Trade Pacts) were tested in the rules,
   on the server and in render tests, but the browser script only conquers.
 
+## Rules
+
+Every waiting room and game has a **Rules** button beside the red **!** one (`client/src/rules.rs`): a short
+summary of the game's rules (setup, a turn or a round, scoring, end of game, and the
+expansions or variants it supports), written in the game's `rules.rs`, with links to the
+official rulebooks.
+
 ## Bug reports
 
 Every screen has a round red **!** button in its bottom left corner (`client/src/report.rs`).

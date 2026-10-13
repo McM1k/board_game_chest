@@ -9,6 +9,7 @@
 
 pub mod board;
 pub mod look;
+pub mod rules;
 pub mod screens;
 
 use crate::app::{App, Lobby};
@@ -79,6 +80,10 @@ impl crate::games::Game for Hanabi {
 
     fn blurb(&self) -> &'static str {
         "A cooperative card game: build the fireworks in order, but you can't see your own hand."
+    }
+
+    fn rules(&self) -> &'static crate::rules::Rules {
+        &rules::RULES
     }
 
     /// "Hanabii" in that mode.
