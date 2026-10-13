@@ -222,7 +222,7 @@ fn legend(ctx: &Ctx, drawn: bool) -> AnyView {
             {list}
             {tribe_start}
             <li>
-                <svg class="key" viewBox="-25 -25 50 50" aria-hidden="true">{tribe_token(0, 0)}</svg>
+                <svg class="key" viewBox="-30 -30 60 60" aria-hidden="true">{tribe_token(0, 0)}</svg>
                 "Lost Tribe"
             </li>
             <li>
@@ -993,7 +993,7 @@ mod tests {
             let map = html.split("class=\"legend\"").next().unwrap();
             let token = map.split("class=\"token\"").nth(1).expect("a token");
             let radius: f32 = token.split("r=\"").nth(1).and_then(|t| t.split('"').next()).unwrap().parse().unwrap();
-            assert!(radius >= 22.0, "{radius}");
+            assert!(radius >= 28.0, "{radius}");
         });
     }
 

@@ -20,17 +20,17 @@ const GAP: i32 = 40;
 // What stands in a region, around its anchor, in board units (1000 across):
 // a token's disc, with its picture inside a thin ring of the player's
 // colour, and the count chip on its lower right (x, y, radius)...
-const TOKEN_R: i32 = 23;
+const TOKEN_R: i32 = 28;
 const ART_R: i32 = TOKEN_R - 2;
-const CHIP: (i32, i32, i32) = (20, 14, 10);
+const CHIP: (i32, i32, i32) = (17, 12, 11);
 // ...the markers' size (our signs, and the pieces' pictures over the printed
 // board, a little larger), the row of printed features above the token and
 // the row of pieces under it (the pictures' row lowered by what they gain,
 // to keep clear of the count)...
 const MARKER_R: i32 = 10;
 const PIECE_R: i32 = 13;
-const ICONS_DY: i32 = -35;
-const PIECES_DY: i32 = 35;
+const ICONS_DY: i32 = -39;
+const PIECES_DY: i32 = 39;
 const PICTURES_DY: i32 = PIECES_DY + PIECE_R - MARKER_R;
 // ...and the cost badge on its right.
 const BADGE_DX: i32 = 46;
@@ -343,7 +343,7 @@ pub fn map_svg(
                         <image href=look::race_art(t.race) x=-ART_R y=-ART_R width=2 * ART_R height=2 * ART_R />
                         <g class="count" transform=format!("translate({cx} {cy})")>
                             <circle r=cr fill=color />
-                            <text y="4.5">{t.count}</text>
+                            <text y="5">{t.count}</text>
                         </g>
                     </g>
                 }
@@ -433,6 +433,7 @@ pub fn map_svg(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smallworld_core::Sky;
 
     /// Whether two circles, (x, y, radius), keep clear of each other.
     fn apart(a: (i32, i32, i32), b: (i32, i32, i32)) -> bool {
@@ -452,6 +453,43 @@ mod tests {
                     let m = (row_x(k, n, r), dy, r);
                     assert!(apart(token, m) && apart(CHIP, m) && apart(badge, m), "{k} of {n} at {dy}");
                 }
+            }
+        }
+    }
+
+    /// How far a point is from the nearest side of a polygon, if it is inside.
+    fn clearance((x, y): (f64, f64), points: &str) -> Option<f64> {
+        let pts: Vec<(f64, f64)> = points
+            .split_whitespace()
+            .map(|p| {
+                let (a, b) = p.split_once(',').unwrap();
+                (a.parse().unwrap(), b.parse().unwrap())
+            })
+            .collect();
+        let (mut inside, mut near) = (false, f64::MAX);
+        for (k, &(x1, y1)) in pts.iter().enumerate() {
+            let (x2, y2) = pts[(k + 1) % pts.len()];
+            if (y1 > y) != (y2 > y) && x < x1 + (y - y1) * (x2 - x1) / (y2 - y1) {
+                inside = !inside;
+            }
+            let (dx, dy) = (x2 - x1, y2 - y1);
+            let t = (((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy).max(1e-9)).clamp(0.0, 1.0);
+            near = near.min((x - x1 - t * dx).hypot(y - y1 - t * dy));
+        }
+        inside.then_some(near)
+    }
+
+    #[test]
+    fn tokens_are_big_and_stay_inside_their_regions() {
+        // The disc and its count chip, from the anchor.
+        let (cx, cy, cr) = CHIP;
+        let reach = f64::from(TOKEN_R).max(f64::from(cx).hypot(f64::from(cy)) + f64::from(cr));
+        let boards = (2..=5).map(shapes::board).chain([Sky::Two, Sky::Three].map(shapes::sky));
+        for (b, board) in boards.enumerate() {
+            for (i, shape) in board.shapes.iter().enumerate() {
+                let at = (f64::from(shape.at.0), f64::from(shape.at.1));
+                let room = clearance(at, shape.points).unwrap_or(-1.0);
+                assert!(room >= reach, "board {b}, region {i}: {room:.1} < {reach:.1}");
             }
         }
     }
