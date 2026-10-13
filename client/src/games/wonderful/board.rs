@@ -1572,7 +1572,7 @@ mod tests {
         // races, so the prize is looked for in the race itself.)
         assert!(html.contains("Materials produced") && html.contains("race-row lead"));
         assert!(html.contains("class=\"race-prize\">takes a Financier<"));
-        assert!(html.contains("Put on your Empire") && html.contains("Done with Materials: drop 3 cubes")
+        assert!(html.contains("Put on your Empire") && html.contains("Done with Materials: 3 cubes to your Empire")
             && html.contains("Placing Materials — press Done when finished"));
         assert!(html.contains("piece selected"), "the first piece is the one used");
         assert!(html.contains("Materials cube"));
@@ -1583,7 +1583,7 @@ mod tests {
         let tied = render(&state, 0);
         assert!(tied.contains("tied: no character") && !tied.contains("race-row lead") && !tied.contains("race-prize"));
 
-        // Seat 1 produces nothing in that step: nothing to place, nothing to drop.
+        // Seat 1 produces nothing in that step: nothing to place.
         let idle = render(&state, 1);
         assert!(idle.contains("Nothing to place right now."));
         assert!(idle.contains("Waiting for the others"));
@@ -1607,7 +1607,7 @@ mod tests {
         state.apply(0, Action::Place { piece: cube, target: to }).unwrap();
         let html = render(&state, 0);
         assert!(!html.contains("class=\"undo\""));
-        assert!(html.contains("Done with Materials: drop 1 cube<"));
+        assert!(html.contains("Done with Materials: 1 cube to your Empire<"));
         state.apply(0, Action::Place { piece: wonderful_core::Piece::Cube(Res::Materials), target: wonderful_core::Target::Empire })
             .unwrap();
         let html = render(&state, 0);

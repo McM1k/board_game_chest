@@ -639,7 +639,7 @@ pub fn hint(view: &View, names: &[String]) -> String {
         Phase::Production { step } if (step as usize) < Res::ALL.len() && !me.ready && me.pool > 0 => {
             let res = Res::ALL[step as usize];
             format!(
-                "Place your {} {} cube{}: pick a free space on a building, or put them on your Empire, then press Done. Until then, Undo takes back what you placed. Cubes you don't place are lost.",
+                "Place your {} {} cube{}: pick a free space on a building, or put them on your Empire, then press Done. Until then, Undo takes back what you placed. Cubes you don't place go on your Empire.",
                 me.pool,
                 res.name(),
                 if me.pool == 1 { "" } else { "s" }
@@ -682,7 +682,7 @@ pub fn done_button(view: &View) -> (String, bool) {
     } else if me.choose {
         ("Take a character first".into(), true)
     } else if me.pool > 0 {
-        (format!("Done with {what}: drop {} cube{}", me.pool, if me.pool == 1 { "" } else { "s" }), false)
+        (format!("Done with {what}: {} cube{} to your Empire", me.pool, if me.pool == 1 { "" } else { "s" }), false)
     } else {
         (format!("Done with {what}"), false)
     }
@@ -1279,7 +1279,7 @@ mod tests {
         assert_eq!(s.view_for(0).players[0].pool, 3);
         let v = s.view_for(0);
         assert_eq!(placing_cue(&v).as_deref(), Some("Placing Materials — press Done when finished"));
-        assert_eq!(done_button(&v), ("Done with Materials: drop 3 cubes".to_string(), false));
+        assert_eq!(done_button(&v), ("Done with Materials: 3 cubes to your Empire".to_string(), false));
         assert_eq!(undo_title(&v), None);
 
         // Every cube placed: the step waits for Done, and Undo is offered.
