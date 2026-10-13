@@ -339,7 +339,7 @@ fn building_puts_a_card_under_construction() {
     let card = s.players[1].drafted[3];
     s.apply(1, Action::Build { card }).unwrap();
     assert_eq!(s.players[1].drafted.len(), 6);
-    assert_eq!(s.players[1].buildings, vec![Building { card, filled: Cost::default() }]);
+    assert_eq!(s.players[1].buildings, vec![Building { card, filled: Cost::default(), jokers: [0; 5] }]);
     // It can't be built twice, and it isn't someone else's.
     assert_eq!(s.apply(1, Action::Build { card }), Err(Error::NotDrafted));
     let theirs = s.players[0].drafted[0];
@@ -382,6 +382,7 @@ fn recycling_can_finish_a_building_at_once() {
     s.players[0].buildings = vec![Building {
         card: id("Wind Turbines"),
         filled: Cost { res: [1, 0, 0, 0, 0], ..Cost::default() },
+        jokers: [0; 5],
     }];
     s.players[0].drafted = vec![id("Recycling Plant")]; // recycles into Materials
     s.apply(0, Action::Recycle { card: id("Recycling Plant"), to: Target::Card(id("Wind Turbines")) }).unwrap();
@@ -401,6 +402,7 @@ fn finishing_a_building_pays_its_bonus() {
             filled.res[missing] -= 1;
             filled
         },
+        jokers: [0; 5],
     };
     let mut s = blank(2);
     s.players[0].buildings = vec![
@@ -431,8 +433,8 @@ fn scrapping_loses_what_was_placed_and_sends_the_recycling_cube_to_the_empire() 
     let mut s = blank(2);
     let placed = Cost { res: [3, 1, 0, 0, 0], krystallium: 1, ..Cost::default() };
     s.players[0].buildings = vec![
-        Building { card: id("Juggernaut"), filled: placed },
-        Building { card: id("Recycling Plant"), filled: Cost::default() },
+        Building { card: id("Juggernaut"), filled: placed, jokers: [0; 5] },
+        Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] },
     ];
     s.players[0].empire_cubes = 4;
     s.apply(0, Action::Scrap { card: id("Juggernaut") }).unwrap();
@@ -591,7 +593,7 @@ fn the_science_winner_chooses_the_character() {
 fn cubes_come_from_the_pool() {
     let mut s = blank(2);
     // Noram States makes 3 Materials; the Recycling Plant needs 2.
-    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] }];
     start_production(&mut s);
     assert_eq!(s.players[0].pool, 3);
 
@@ -666,7 +668,7 @@ fn krystallium_stands_in_for_any_cube_but_not_for_characters() {
     let mut s = blank(2);
     // Seat 1 makes less Materials than seat 0, so it takes no character at
     // the start. Center of the Earth: 5 Exploration and two Generals.
-    s.players[1].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default() }];
+    s.players[1].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[1].krystallium = 5;
     s.players[1].generals = 2;
     s.players[1].financiers = 1;
@@ -700,8 +702,8 @@ fn some_spaces_take_only_krystallium() {
     // Secret Society: 3 Gold (all placed here) and a Krystallium.
     let gold_placed = Cost { res: [0, 0, 0, 3, 0], ..Cost::default() };
     s.players[0].buildings = vec![
-        Building { card: id("Secret Society"), filled: gold_placed },
-        Building { card: id("Recycling Plant"), filled: Cost::default() },
+        Building { card: id("Secret Society"), filled: gold_placed, jokers: [0; 5] },
+        Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] },
     ];
     s.players[0].krystallium = 2;
     let society = Target::Card(id("Secret Society"));
@@ -722,7 +724,7 @@ fn some_spaces_take_only_krystallium() {
 #[test]
 fn you_cannot_place_what_you_do_not_hold() {
     let mut s = blank(2);
-    s.players[1].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default() }];
+    s.players[1].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default(), jokers: [0; 5] }];
     start_production(&mut s);
     let center = Target::Card(id("Center of the Earth"));
     assert_eq!(s.apply(1, Action::Place { piece: Piece::General, target: center }), Err(Error::NothingToPlace));
@@ -731,7 +733,7 @@ fn you_cannot_place_what_you_do_not_hold() {
         Err(Error::NothingToPlace)
     );
     // Cubes are only held during their own production step.
-    s.players[1].buildings.push(Building { card: id("Zeppelin"), filled: Cost::default() });
+    s.players[1].buildings.push(Building { card: id("Zeppelin"), filled: Cost::default(), jokers: [0; 5] });
     let zeppelin = Target::Card(id("Zeppelin"));
     assert_eq!(s.apply(1, Action::Place { piece: Piece::Cube(Res::Energy), target: zeppelin }), Err(Error::NothingToPlace));
 }
@@ -742,6 +744,7 @@ fn a_building_finished_in_one_step_produces_in_the_next() {
     s.players[0].buildings = vec![Building {
         card: id("Wind Turbines"),
         filled: Cost { res: [1, 0, 0, 0, 0], ..Cost::default() },
+        jokers: [0; 5],
     }];
     start_production(&mut s);
     assert_eq!(s.players[0].produced, 3);
@@ -756,7 +759,7 @@ fn a_building_finished_in_one_step_produces_in_the_next() {
 #[test]
 fn only_players_with_something_to_place_wait_in_the_wrap_up() {
     let mut s = blank(2);
-    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].krystallium = 1;
     s.players[1].krystallium = 1; // nothing to put it on
     start_production(&mut s);
@@ -774,7 +777,7 @@ fn only_players_with_something_to_place_wait_in_the_wrap_up() {
 #[test]
 fn the_round_ends_by_dealing_the_next_one() {
     let mut s = blank(2);
-    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].krystallium = 2;
     start_production(&mut s);
     skip_to(&mut s, WRAP_UP);
@@ -823,10 +826,10 @@ fn the_step_ends_when_everybody_has_pressed_done() {
 #[test]
 fn undo_takes_back_what_was_placed_last() {
     let mut s = blank(2);
-    s.players[0].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].krystallium = 1;
     s.players[0].generals = 1;
-    s.players[1].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
+    s.players[1].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] }];
     // Not in planning: what is placed there is final.
     assert_eq!(s.apply(0, Action::Undo), Err(Error::WrongPhase));
     start_production(&mut s);
@@ -848,9 +851,11 @@ fn undo_takes_back_what_was_placed_last() {
     s.apply(0, Action::Undo).unwrap();
     let p = &s.players[0];
     assert_eq!((p.generals, p.buildings[0].filled.generals), (1, 0));
+    assert_eq!(s.players[0].buildings[0].jokers, [0, 0, 0, 0, 1], "a Krystallium on an Exploration space");
     s.apply(0, Action::Undo).unwrap();
     let p = &s.players[0];
     assert_eq!((p.krystallium, p.buildings[0].filled.res[Res::Exploration.index()]), (1, 0));
+    assert_eq!(p.buildings[0].jokers, [0; 5]);
     s.apply(0, Action::Undo).unwrap();
     let p = &s.players[0];
     assert_eq!((p.pool, p.empire_cubes, p.financiers), (3, 0, financiers));
@@ -870,7 +875,7 @@ fn a_building_is_built_once_full_and_that_cannot_be_undone() {
     let mut s = blank(2);
     let mut filled = id("Industrial Complex").def().cost; // 3 Materials, 1 Energy: a Financier
     filled.res[Res::Materials.index()] -= 1;
-    s.players[0].buildings = vec![Building { card: id("Industrial Complex"), filled }];
+    s.players[0].buildings = vec![Building { card: id("Industrial Complex"), filled, jokers: [0; 5] }];
     start_production(&mut s);
     let financiers = s.players[0].financiers;
     let complex = Target::Card(id("Industrial Complex"));
@@ -913,7 +918,7 @@ fn done_puts_the_cubes_left_on_the_empire() {
 #[test]
 fn placing_after_done_reopens_your_step() {
     let mut s = blank(2);
-    s.players[0].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Center of the Earth"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].generals = 1;
     start_production(&mut s);
     s.apply(0, Action::Ready).unwrap();
@@ -929,7 +934,7 @@ fn placing_after_done_reopens_your_step() {
 #[test]
 fn scrapping_a_building_loses_what_was_placed_on_it_this_step() {
     let mut s = blank(2);
-    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].empire_cubes = 2;
     start_production(&mut s);
     let plant = Target::Card(id("Recycling Plant"));
@@ -974,7 +979,7 @@ fn points_add_up_from_cards_types_and_characters() {
     // Cubes, Krystallium and unfinished buildings are worth nothing.
     s.players[0].krystallium = 4;
     s.players[0].empire_cubes = 3;
-    s.players[0].buildings = vec![Building { card: id("Time Travel"), filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: id("Time Travel"), filled: Cost::default(), jokers: [0; 5] }];
     assert_eq!(s.score_of(0), score);
 }
 
@@ -1699,7 +1704,7 @@ fn krystallium_and_characters_held_are_never_lost() {
     let mut s = blank(2);
     // Lunar Base has a Krystallium space, so the wrap-up step waits for seat 0.
     let base = id("Lunar Base");
-    s.players[0].buildings = vec![Building { card: base, filled: Cost::default() }];
+    s.players[0].buildings = vec![Building { card: base, filled: Cost::default(), jokers: [0; 5] }];
     s.players[0].krystallium = 2;
     s.players[0].generals = 1;
     s.players[0].financiers = 1;

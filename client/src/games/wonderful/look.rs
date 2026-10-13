@@ -2,7 +2,7 @@
 //! functions with native tests: the browser-only code stays thin.
 
 use wonderful_core::{
-    Action, Card, CardId, Cost, Event, Kind, Phase, Piece, Res, Score, Target, Token, View, EMPIRES, ROUNDS,
+    Action, Building, Card, CardId, Cost, Event, Kind, Phase, Piece, Res, Score, Target, Token, View, EMPIRES, ROUNDS,
 };
 
 // ----- names and colours ----------------------------------------------------
@@ -203,6 +203,8 @@ impl Space {
 pub struct Slot {
     pub space: Space,
     pub filled: bool,
+    /// A resource space filled with Krystallium standing in for that resource.
+    pub joker: bool,
 }
 
 /// Every space of a card with the given cost, filled ones first within each
@@ -212,7 +214,7 @@ pub fn slots(cost: &Cost, filled: &Cost) -> Vec<Slot> {
     let mut out = Vec::new();
     let mut add = |space: Space, needed: u8, placed: u8| {
         for i in 0..needed {
-            out.push(Slot { space, filled: i < placed });
+            out.push(Slot { space, filled: i < placed, joker: false });
         }
     };
     for res in Res::ALL {
@@ -221,6 +223,22 @@ pub fn slots(cost: &Cost, filled: &Cost) -> Vec<Slot> {
     add(Space::Krystallium, cost.krystallium, filled.krystallium);
     add(Space::General, cost.generals, filled.generals);
     add(Space::Financier, cost.financiers, filled.financiers);
+    out
+}
+
+/// A building's spaces, as [`slots`], with the Krystallium standing in for a
+/// resource marked: the last filled spaces of that resource.
+pub fn building_slots(b: &Building) -> Vec<Slot> {
+    let mut out = slots(&b.card.def().cost, &b.filled);
+    for res in Res::ALL {
+        let mut left = b.jokers[res.index()];
+        for slot in out.iter_mut().rev() {
+            if left > 0 && slot.filled && slot.space == Space::Cube(res) {
+                slot.joker = true;
+                left -= 1;
+            }
+        }
+    }
     out
 }
 
@@ -912,11 +930,11 @@ mod tests {
         assert_eq!(
             list,
             vec![
-                Slot { space: Space::Cube(Res::Materials), filled: true },
-                Slot { space: Space::Cube(Res::Materials), filled: false },
-                Slot { space: Space::Cube(Res::Science), filled: false },
-                Slot { space: Space::Krystallium, filled: true },
-                Slot { space: Space::General, filled: false },
+                Slot { space: Space::Cube(Res::Materials), filled: true, joker: false },
+                Slot { space: Space::Cube(Res::Materials), filled: false, joker: false },
+                Slot { space: Space::Cube(Res::Science), filled: false, joker: false },
+                Slot { space: Space::Krystallium, filled: true, joker: false },
+                Slot { space: Space::General, filled: false, joker: false },
             ]
         );
         assert_eq!(progress(&cost, &filled), (2, 5));
@@ -925,6 +943,18 @@ mod tests {
         // A real card: Juggernaut needs 3 Materials, 3 Energy and a Krystallium.
         let juggernaut = id("Juggernaut").def().cost;
         assert_eq!(slots(&juggernaut, &Cost::default()).last().map(|s| s.space), Some(Space::Krystallium));
+    }
+
+    #[test]
+    fn krystallium_standing_in_for_a_resource_marks_its_space() {
+        // Juggernaut: 3 Materials, 3 Energy, a Krystallium; 2 Materials placed,
+        // one of them a Krystallium.
+        let filled = Cost { res: [2, 0, 0, 0, 0], ..Cost::default() };
+        let b = Building { card: id("Juggernaut"), filled, jokers: [1, 0, 0, 0, 0] };
+        let marked: Vec<bool> = building_slots(&b).iter().map(|s| s.joker).collect();
+        assert_eq!(marked, [false, true, false, false, false, false, false]);
+        let plain = Building { jokers: [0; 5], ..b };
+        assert!(building_slots(&plain).iter().all(|s| !s.joker));
     }
 
     #[test]

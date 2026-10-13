@@ -185,6 +185,11 @@ pub enum Event {
 pub struct Building {
     pub card: CardId,
     pub filled: Cost,
+    /// Krystallium standing in for a resource, per resource in [`Res::ALL`]
+    /// order: already counted in `filled.res`, so the card can show which
+    /// of those spaces hold Krystallium.
+    #[serde(default)]
+    pub jokers: [u8; 5],
 }
 
 impl Building {
@@ -535,7 +540,7 @@ impl State {
         let p = &mut self.players[seat];
         let at = p.drafted.iter().position(|&c| c == card).ok_or(Error::NotDrafted)?;
         p.drafted.remove(at);
-        p.buildings.push(Building { card, filled: Cost::default() });
+        p.buildings.push(Building { card, filled: Cost::default(), jokers: [0; 5] });
         Ok(())
     }
 
@@ -673,7 +678,12 @@ impl State {
                 p.krystallium -= 1;
                 self.hold_back(seat, piece, target);
                 match space {
-                    Some(res) => self.fill(seat, id, |f| f.res[res.index()] += 1),
+                    Some(res) => {
+                        if let Some(b) = self.players[seat].buildings.iter_mut().find(|b| b.card == id) {
+                            b.jokers[res.index()] += 1;
+                        }
+                        self.fill(seat, id, |f| f.res[res.index()] += 1)
+                    }
                     None => self.fill(seat, id, |f| f.krystallium += 1),
                 }
                 Ok(())
@@ -731,6 +741,9 @@ impl State {
             Target::Card(id) => {
                 // Finishing it would have emptied the list, so it is still there.
                 if let Some(b) = p.buildings.iter_mut().find(|b| b.card == id) {
+                    if let Piece::Krystallium(Some(res)) = piece {
+                        b.jokers[res.index()] -= 1;
+                    }
                     let f = &mut b.filled;
                     match piece {
                         Piece::Cube(res) | Piece::Krystallium(Some(res)) => f.res[res.index()] -= 1,

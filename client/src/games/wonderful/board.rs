@@ -887,12 +887,26 @@ fn tray(ctx: &Ctx) -> AnyView {
 
 // ----- your buildings ------------------------------------------------------------------------
 
+/// A filled space's classes: Krystallium standing in for a resource keeps
+/// that resource's face, circled in red.
+fn filled_class(slot: Slot) -> String {
+    format!("socket filled {}{}", slot.space.class(), if slot.joker { " joker" } else { "" })
+}
+
+fn filled_title(slot: Slot) -> String {
+    if slot.joker {
+        format!("Krystallium placed as {}", slot.space.name())
+    } else {
+        format!("{} placed", slot.space.name())
+    }
+}
+
 /// One space of a building: a free one lights up when what you hold fits.
 fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
     let space = slot.space;
     if slot.filled {
         return view! {
-            <span class=format!("socket filled {}", space.class()) title=format!("{} placed", space.name())>
+            <span class=filled_class(slot) title=filled_title(slot)>
                 {face(space.res(), space.token(), space.letter())}
             </span>
         }
@@ -937,7 +951,7 @@ fn building_card(ctx: &Ctx, building: &Building) -> AnyView {
     let card = building.card;
     let def = card.def();
     let (placed, needed) = look::progress(&def.cost, &building.filled);
-    let sockets = look::slots(&def.cost, &building.filled)
+    let sockets = look::building_slots(building)
         .into_iter()
         .map(|slot| live_socket(ctx, card, slot))
         .collect_view();
@@ -1158,14 +1172,17 @@ fn empire_of(ctx: &Ctx, seat: usize) -> AnyView {
 fn peek_building(b: &Building) -> AnyView {
     let def = b.card.def();
     let (placed, needed) = look::progress(&def.cost, &b.filled);
-    let sockets = look::slots(&def.cost, &b.filled)
+    let sockets = look::building_slots(b)
         .into_iter()
         .map(|slot| {
             let space = slot.space;
-            let (state, title) =
-                if slot.filled { ("filled", format!("{} placed", space.name())) } else { ("free", format!("Free {} space", space.name())) };
+            let (class, title) = if slot.filled {
+                (filled_class(slot), filled_title(slot))
+            } else {
+                (format!("socket free {}", space.class()), format!("Free {} space", space.name()))
+            };
             view! {
-                <span class=format!("socket {state} {}", space.class()) title=title>
+                <span class=class title=title>
                     {face(space.res(), space.token(), space.letter())}
                 </span>
             }
@@ -1841,7 +1858,7 @@ mod tests {
     fn placing_waits_for_done_and_can_be_undone() {
         let mut state = production_state();
         let card = id("Recycling Plant"); // 2 Materials
-        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default() }];
+        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default(), jokers: [0; 5] }];
         state.players[0].pool = 3;
         state.players[0].ready = false;
         assert!(!render(&state, 0).contains("class=\"undo\""), "nothing to take back yet");
@@ -1867,7 +1884,7 @@ mod tests {
         let mut state = production_state();
         // Give seat 0 a building that wants Energy and Gold, and some pieces.
         let card = id("Industrial Complex"); // 3 Materials, 1 Energy
-        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default() }];
+        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default(), jokers: [0; 5] }];
         state.players[0].pool = 2;
         state.players[0].ready = false;
         state.players[0].krystallium = 1;
@@ -1903,7 +1920,7 @@ mod tests {
     fn a_character_space_takes_a_character_and_the_science_winner_chooses() {
         let mut state = production_state();
         let card = id("Giant Tower"); // 2 Materials, 3 Gold, 1 Financier
-        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default() }];
+        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default(), jokers: [0; 5] }];
         state.players[0].financiers = 1;
         state.players[0].pool = 0;
         state.players[0].ready = true;
@@ -1970,7 +1987,7 @@ mod tests {
     fn the_other_players_show_what_they_have_built() {
         let mut state = State::new(4, 12);
         state.players[2].empire = vec![id("Recycling Plant"), id("Zeppelin")];
-        state.players[2].buildings = vec![wonderful_core::Building { card: id("Juggernaut"), filled: Cost::default() }];
+        state.players[2].buildings = vec![wonderful_core::Building { card: id("Juggernaut"), filled: Cost::default(), jokers: [0; 5] }];
         state.players[2].krystallium = 2;
         let html = in_owner(|| {
             let n = state.seats();
@@ -1997,7 +2014,7 @@ mod tests {
         let juggernaut = id("Juggernaut");
         let mut filled = Cost::default();
         filled.res[0] = 1;
-        state.players[1].buildings = vec![Building { card: juggernaut, filled }];
+        state.players[1].buildings = vec![Building { card: juggernaut, filled, jokers: [0; 5] }];
         state.players[1].empire = vec![id("Zeppelin")];
         let html = render(&state, 0);
         let rivals = &html[html.find("panel rivals").unwrap()..];
@@ -2012,6 +2029,24 @@ mod tests {
         assert_eq!(building.matches("socket free").count(), needed as usize - 1);
         assert!(building.contains("1 of 7 placed") && !building.contains("Scrap"));
         assert!(rivals.contains(look::card_art(id("Zeppelin").def()).as_str()));
+    }
+
+    #[test]
+    fn krystallium_standing_in_for_a_resource_shows_that_resource_circled() {
+        let mut state = State::new(3, 12);
+        let juggernaut = id("Juggernaut");
+        let filled = Cost { res: [2, 0, 0, 0, 0], ..Cost::default() };
+        let b = Building { card: juggernaut, filled, jokers: [1, 0, 0, 0, 0] };
+        state.players[0].buildings = vec![b.clone()];
+        state.players[1].buildings = vec![b];
+        let html = render(&state, 0);
+        let rivals = html.find("panel rivals").unwrap();
+        let (mine, theirs) = html.split_at(rivals);
+        for side in [mine, theirs] {
+            assert_eq!(side.matches("socket filled res-materials joker").count(), 1, "{side}");
+            assert_eq!(side.matches("socket filled res-materials\"").count(), 1, "{side}");
+            assert!(side.contains("Krystallium placed as Materials"));
+        }
     }
 
     #[test]
@@ -2050,7 +2085,7 @@ mod tests {
         let (hand, kept, building, finished) = (id("Secret Society"), id("Neuroscience"), id("Juggernaut"), id("Pandora's Box"));
         state.players[0].hand = vec![hand];
         state.players[0].drafted = vec![kept];
-        state.players[0].buildings = vec![Building { card: building, filled: Cost::default() }];
+        state.players[0].buildings = vec![Building { card: building, filled: Cost::default(), jokers: [0; 5] }];
         state.players[0].empire = vec![finished];
         let html = render(&state, 0);
         // A picture under every card's header: in the hand, kept, being built, finished.
@@ -2085,7 +2120,7 @@ mod tests {
         let (hand, kept, building) = (id("Secret Society"), id("Neuroscience"), id("Juggernaut"));
         state.players[0].hand = vec![hand];
         state.players[0].drafted = vec![kept];
-        state.players[0].buildings = vec![Building { card: building, filled: Cost::default() }];
+        state.players[0].buildings = vec![Building { card: building, filled: Cost::default(), jokers: [0; 5] }];
         let html = render(&state, 0);
         // Each card carries its cost between its picture and its rows.
         for card in [hand, kept, building] {
@@ -2245,7 +2280,7 @@ mod tests {
                 ([id("Zeppelin"), id("Border Patrol")], id("Neuroscience"), id("Juggernaut"), id("Recycling Plant"));
             state.players[0].hand = hand.to_vec();
             state.players[0].drafted = vec![kept];
-            state.players[0].buildings = vec![wonderful_core::Building { card: building, filled: Cost::default() }];
+            state.players[0].buildings = vec![wonderful_core::Building { card: building, filled: Cost::default(), jokers: [0; 5] }];
             state.players[0].empire = vec![finished];
             let html = render(&state, 0);
             for card in [hand[0], hand[1], kept, building, finished] {

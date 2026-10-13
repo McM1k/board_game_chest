@@ -460,6 +460,15 @@
   border-radius: 50%;
 }
 
+/* Krystallium standing in for a resource keeps that resource's face, circled in red. */
+.wonderful .socket.filled.joker {
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #d42a3c,
+    0 1px 3px 3px rgba(0, 0, 0, 0.4);
+}
+
 /* A General or Financier wears the game's own round token over its letter.
    If the picture fails, it removes itself and the letter and shape return. */
 .wonderful .token-art {
