@@ -1442,6 +1442,13 @@
   color: var(--muted);
 }
 
+/* "Placing Materials — press Done when finished": your step waits for Done. */
+.wonderful .placing-cue {
+  margin: 0;
+  flex-basis: 100%;
+  font-weight: 600;
+}
+
 .wonderful .empire-target {
   display: inline-flex;
   align-items: center;
