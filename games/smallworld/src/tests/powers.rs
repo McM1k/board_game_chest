@@ -27,3 +27,23 @@ fn each_mountain_pours_its_own_lava_next_to_it() {
     s.apply(0, Action::Lava { region: 15 }).unwrap();
     assert_eq!(s.apply(0, Action::Lava { region: 18 }), Err(Error::NoneLeft));
 }
+
+#[test]
+fn escargots_are_paid_at_the_start_what_the_winter_and_their_power_leave() {
+    let mut s = packs_game();
+    give(&mut s, 0, Race::Escargots, Power::Aquatic);
+    // Coastal 3; inland 6; inland 7 in the Winter.
+    for r in [3, 6, 7] {
+        place(&mut s, r, Race::Escargots, 1);
+    }
+    s.regions[7].winter = true;
+    // At the end, only what Aquatic adds: the coastal region.
+    assert_eq!(s.turn_coins(0), 1);
+    s.current = 1;
+    s.phase = Phase::Pick;
+    let coins = s.players[0].coins;
+    pass(&mut s, 1);
+    // At the start: region 3's coin; Aquatic takes 6's, the Winter 7's.
+    assert_eq!(s.current, 0);
+    assert_eq!(s.players[0].coins, coins + 1);
+}

@@ -274,7 +274,7 @@ The rule sheets are a paragraph per race and power; these are the calls made aro
 | Copycat | The copy is picked before anything moves, from the six combos; it ends at the start of the next turn or when someone picks that combo, taking the copied power's pieces with it (a copied Seafaring's tokens leave the water). Copied Wealthy, Spirit and Soul-Touch do nothing. |
 | Lava | One Lava per Mountain held (four at most), on a region next to one of them; the tokens there go back in hand. |
 | Soul-Touch | As Days of Wonder answered: the race in decline comes back with its own power and as many tokens as when it was picked, and plays on the next turn. |
-| Escargots | The start-of-turn coins are the regions' own (less Winter); what the power adds is paid at the end. |
+| Escargots | The start-of-turn coins are the regions' own, less what Winter or the power takes off (Aquatic, Goldsmith); what the power adds is paid at the end. |
 | Scavengers | A race in decline keeps scoring the regions where the Scavengers hold its token, and doesn't leave the map while it has one. |
 | Storm Giants | The Lightning Bolts take a Mountain within the usual reach. |
 | Drakons | Each Dragon costs a token turned into it and one to hold the region. Their Dragons fly away at the start of the next turn. |

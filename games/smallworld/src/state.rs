@@ -1869,7 +1869,11 @@ impl State {
                 self.uncopy(seat);
             }
             if a.race == Race::Escargots {
-                let coins = self.regions_of(a.race).len() as u32;
+                // Each region's own coin, less what the Winter or the power
+                // takes off it; what the power adds comes at the end.
+                let a = self.players[seat].active.unwrap();
+                let coins =
+                    self.regions_of(a.race).iter().map(|&r| 1u32.saturating_sub(self.region_bonus(&a, false, r).1)).sum();
                 self.pay(None, seat, coins, Why::Escargots);
             }
             if a.race == Race::Drakons {
@@ -2116,53 +2120,13 @@ impl State {
             let captives = (0..self.regions.len()).filter(|&r| self.regions[r].captive == Some(army.race)).count();
             coins += captives as u32;
             for &r in &held {
-                let spot = &board.regions[r];
-                let state = &self.regions[r];
-                let mut plus: i32 = 0;
-                let mut minus: i32 = 0;
-                if army.race == Race::Dwarves && spot.mine() {
-                    plus += 1;
-                }
-                if state.winter && army.race != Race::IceWitches {
-                    minus += 1;
-                }
-                if !declined {
-                    let has = |p: Power| army.has(p);
-                    plus += match army.race {
-                        Race::Humans => (spot.terrain == Terrain::Farmland) as i32,
-                        Race::Wizards => spot.magic() as i32,
-                        Race::Khans if matches!(spot.terrain, Terrain::Hill | Terrain::Farmland) => 1,
-                        _ => 0,
-                    };
-                    if army.race == Race::Khans && !matches!(spot.terrain, Terrain::Hill | Terrain::Farmland) {
-                        minus += 1;
-                    }
-                    plus += has(Power::Forest) as i32 * (spot.terrain == Terrain::Forest) as i32;
-                    plus += has(Power::Hill) as i32 * (spot.terrain == Terrain::Hill) as i32;
-                    plus += has(Power::Swamp) as i32 * (spot.terrain == Terrain::Swamp) as i32;
-                    plus += has(Power::Merchant) as i32;
-                    plus += has(Power::Fortified) as i32 * state.fortress as i32;
-                    if has(Power::Aquatic) {
-                        if board.coastal(r) {
-                            plus += 1;
-                        } else {
-                            minus += 1;
-                        }
-                    }
-                    if has(Power::Goldsmith) {
-                        if spot.mine() {
-                            plus += 2;
-                        } else {
-                            minus += 1;
-                        }
-                    }
-                }
+                let (plus, minus) = self.region_bonus(&army, declined, r);
                 if !declined && army.race == Race::Escargots {
                     // Their regions paid at the start of the turn; only what
                     // the power adds comes now.
-                    coins += plus.max(0) as u32;
+                    coins += plus as u32;
                 } else {
-                    coins += (1 + plus - minus).max(0) as u32;
+                    coins += (1 + plus as i32 - minus as i32).max(0) as u32;
                 }
             }
             // An island held whole by one race earns it a coin.
@@ -2206,6 +2170,44 @@ impl State {
             }
         }
         coins
+    }
+
+    /// What `army`'s region `r` is worth beyond its coin: the coins its race
+    /// and power add, and those they and the Winter take off.
+    fn region_bonus(&self, army: &Army, declined: bool, r: usize) -> (u32, u32) {
+        let spot = &self.board.regions[r];
+        let state = &self.regions[r];
+        let mut plus = 0;
+        let mut minus = 0;
+        if army.race == Race::Dwarves && spot.mine() {
+            plus += 1;
+        }
+        if state.winter && army.race != Race::IceWitches {
+            minus += 1;
+        }
+        if !declined {
+            let has = |p: Power| army.has(p) as u32;
+            let terrain = spot.terrain;
+            let hill_or_farm = matches!(terrain, Terrain::Hill | Terrain::Farmland);
+            plus += match army.race {
+                Race::Humans => (terrain == Terrain::Farmland) as u32,
+                Race::Wizards => spot.magic() as u32,
+                Race::Khans => hill_or_farm as u32,
+                _ => 0,
+            };
+            minus += (army.race == Race::Khans && !hill_or_farm) as u32;
+            plus += has(Power::Forest) * (terrain == Terrain::Forest) as u32;
+            plus += has(Power::Hill) * (terrain == Terrain::Hill) as u32;
+            plus += has(Power::Swamp) * (terrain == Terrain::Swamp) as u32;
+            plus += has(Power::Merchant);
+            plus += has(Power::Fortified) * state.fortress as u32;
+            let coastal = self.board.coastal(r);
+            plus += has(Power::Aquatic) * coastal as u32;
+            minus += has(Power::Aquatic) * !coastal as u32;
+            plus += 2 * has(Power::Goldsmith) * spot.mine() as u32;
+            minus += has(Power::Goldsmith) * !spot.mine() as u32;
+        }
+        (plus, minus)
     }
 
     /// The active race goes into decline: one token stays in each region
