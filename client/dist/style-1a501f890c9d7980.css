@@ -90,3 +90,28 @@ html, body { margin: 0; background: var(--bg); }
 .report-resolution code { font-size: .82rem; background: var(--panel-2); padding: 0 .25rem; border-radius: 4px; }
 .report-resolution pre { margin: .3rem 0; padding: .4rem .55rem; background: var(--panel-2); border-radius: 6px;
   overflow-x: auto; font-size: .8rem; }
+
+/* The Rules button, beside the report button in every waiting room and game,
+   and the summary it opens in the same corner (one closes the other). */
+.rules { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.rules-button { position: fixed; left: 4.6rem; bottom: 1rem; z-index: 70; height: 3rem; padding: 0 1rem;
+  border: 2px solid #fff; border-radius: 999px; background: #1f5f8b; color: #fff;
+  font: 700 1rem/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 4px 14px #0008; cursor: pointer; transition: transform .12s, background .12s; }
+.rules-button:hover { background: #2a77ab; transform: scale(1.04); }
+.rules-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.rules-panel { position: fixed; left: 1rem; bottom: 4.75rem; z-index: 70; width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 5.75rem); max-height: calc(100dvh - 5.75rem); display: flex; flex-direction: column;
+  padding: .9rem 0 .4rem; background: var(--panel); color: var(--text); border: 1px solid #3a5167;
+  border-radius: 14px; box-shadow: 0 10px 30px #000a; color-scheme: dark; }
+.rules-head { display: flex; align-items: center; gap: .5rem; padding: 0 .8rem 0 1.1rem; }
+.rules-head h2 { flex: 1; margin: 0; font-size: 1.15rem; }
+.rules-close { width: 2.2rem; height: 2.2rem; padding: 0; border: 0; border-radius: 50%; background: transparent;
+  color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.rules-close:hover { background: var(--panel-2); color: var(--text); }
+.rules-body { overflow-y: auto; min-height: 0; padding: 0 1.1rem .6rem; font-size: .9rem; scrollbar-color: #3a5167 transparent; }
+.rules-intro { margin: .5rem 0 0; color: var(--muted); }
+.rules-body h3 { margin: .9rem 0 .3rem; font-size: .95rem; color: var(--accent); }
+.rules-body ul { margin: 0; padding-left: 1.1rem; }
+.rules-body li { margin-top: .25rem; }
+.rules-body a { color: #8fd0ff; }
