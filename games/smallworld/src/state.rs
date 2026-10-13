@@ -2426,6 +2426,28 @@ impl State {
                 }
             }
         }
+        if power == Power::HordesOf {
+            // The two Hordes tokens go: from the hand first, then from the
+            // regions holding the most.
+            let a = self.players[seat].active.as_mut().unwrap();
+            let from_hand = a.extra.min(a.hand);
+            a.hand -= from_hand;
+            let left = std::mem::take(&mut a.extra) - from_hand;
+            let race = a.race;
+            for _ in 0..left {
+                let held = self.regions_of(race);
+                let Some(r) = held.into_iter().max_by_key(|&r| (self.regions[r].tokens.unwrap().count, std::cmp::Reverse(r))) else {
+                    break;
+                };
+                let region = &mut self.regions[r];
+                let t = region.tokens.as_mut().unwrap();
+                if t.count > 1 {
+                    t.count -= 1;
+                } else {
+                    *region = RegionState { loot: region.loot, winter: region.winter, ..RegionState::default() };
+                }
+            }
+        }
         let a = self.players[seat].active.as_mut().unwrap();
         match power {
             Power::Behemoth => a.behemoths = 0,
@@ -2793,9 +2815,15 @@ impl State {
                 self.uncopy(seat);
                 let a = self.players[seat].active.as_mut().unwrap();
                 a.copied = power;
-                if power == Some(Power::Behemoth) {
-                    // The copy comes with the power's two Behemoths.
-                    a.behemoths = BEHEMOTHS;
+                match power {
+                    // The copy comes with the power's two Behemoths, or its
+                    // two Hordes tokens.
+                    Some(Power::Behemoth) => a.behemoths = BEHEMOTHS,
+                    Some(Power::HordesOf) => {
+                        a.extra = HORDES;
+                        a.hand += HORDES;
+                    }
+                    _ => {}
                 }
                 self.this_turn.copied = true;
                 self.push(Event::Copied { seat, power });

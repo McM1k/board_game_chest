@@ -222,6 +222,46 @@ fn a_copied_behemoth_power_brings_its_behemoths() {
     assert_eq!((a.copied, a.behemoths, s.regions[4].behemoths), (None, 0, 0));
 }
 
+#[test]
+fn a_copied_hordes_brings_its_two_tokens_and_takes_them_back_hand_first() {
+    let mut s = packs_game();
+    s.offers[0].power = Power::HordesOf;
+    give(&mut s, 0, Race::Ratmen, Power::Copycat);
+    let start = hand(&s, 0);
+    s.apply(0, Action::Copy { offer: Some(0) }).unwrap();
+    let a = s.players[0].active.unwrap();
+    assert_eq!((a.hand, a.extra), (start + HORDES, HORDES));
+    // One token left in hand, the rest on the map.
+    s.players[0].active.as_mut().unwrap().hand = 1;
+    place(&mut s, 5, Race::Ratmen, 3);
+    place(&mut s, 6, Race::Ratmen, 1);
+    s.current = 1;
+    s.phase = Phase::Pick;
+    s.apply(1, Action::Pick { offer: 0 }).unwrap();
+    // The one in hand goes, then one from the map.
+    let a = s.players[0].active.unwrap();
+    assert_eq!((a.copied, a.extra, a.hand), (None, 0, 0));
+    assert_eq!((tokens(&s, 5), tokens(&s, 6)), (2, 1));
+}
+
+#[test]
+fn a_copied_hordes_leaves_the_map_at_the_start_of_the_next_turn() {
+    let mut s = packs_game();
+    s.offers[0].power = Power::HordesOf;
+    give(&mut s, 0, Race::Ratmen, Power::Copycat);
+    place(&mut s, 5, Race::Ratmen, 1);
+    let start = hand(&s, 0);
+    s.apply(0, Action::Copy { offer: Some(0) }).unwrap();
+    end_turn(&mut s, 0);
+    assert_eq!(tokens(&s, 5), 1 + start + HORDES);
+    pass(&mut s, 1);
+    assert_eq!(s.current, 0);
+    let a = s.players[0].active.unwrap();
+    assert_eq!((a.copied, a.extra), (None, 0));
+    assert_eq!(tokens(&s, 5) + a.hand, 1 + start);
+    assert_eq!(s.available(Race::Ratmen), Race::Ratmen.supply() - 1 - start);
+}
+
 // ----- the base game ---------------------------------------------------------------------------
 
 /// Seat 0's active race goes into decline at the start of its turn.
