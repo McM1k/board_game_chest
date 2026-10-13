@@ -847,15 +847,16 @@
 }
 
 /* The printed card's picture, right under the band, with the card's name in
-   white over its foot, on a dark fade. */
+   white over its head, on a dark fade. It fades out at the bottom into the
+   card, and the card's rows (what it makes, is worth, gives when built) sit
+   over that fade. */
 .wonderful .card-art {
   position: relative;
   display: block;
   flex: none;
-  aspect-ratio: var(--art-ratio, 2 / 1);
+  aspect-ratio: var(--art-ratio, 4 / 3);
   margin-top: -0.4rem;
   overflow: hidden;
-  background: var(--felt-3);
 }
 
 .wonderful .card-art img {
@@ -863,27 +864,29 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent 98%);
 }
 
 .wonderful .card-art .card-name {
   position: absolute;
-  inset: auto 0 0;
-  padding: 1.4rem 0.7rem 0.35rem;
+  inset: 0 0 auto;
+  padding: 0.3rem 0.7rem 1.3rem;
   color: #fff;
-  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.78));
+  background: linear-gradient(to top, transparent, rgba(0, 0, 0, 0.72));
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
-/* The narrow cards of the small grids: a taller picture and a smaller name,
-   so that a name on two lines still leaves some of it. */
-.wonderful .cards.kept .card-art,
-.wonderful .cards.finished .card-art {
-  --art-ratio: 8 / 5;
+/* The narrow cards of the small grids: a smaller name, so that a name on two
+   lines still leaves some of the picture, which is square beside the kept
+   cards' cost column. */
+.wonderful .cards.kept .card-art {
+  --art-ratio: 1 / 1;
 }
 
 .wonderful .cards.kept .card-art .card-name,
 .wonderful .cards.finished .card-art .card-name {
-  padding-top: 1rem;
+  padding-bottom: 1rem;
   font-size: 0.95rem;
 }
 
@@ -904,7 +907,9 @@
 .wonderful .card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr auto;
+  /* the band; the picture's head, kept for the name; its foot, where the
+     rows sit; room to spare; the foot */
+  grid-template-rows: auto minmax(2.4rem, auto) auto 1fr auto;
   column-gap: 0;
 }
 
@@ -914,12 +919,12 @@
 }
 
 .wonderful .card-foot {
-  grid-row: 4;
+  grid-row: 5;
 }
 
 .wonderful .card .card-cost {
   grid-column: 1;
-  grid-row: 2 / span 2;
+  grid-row: 2 / span 3;
   margin-top: -0.4rem;
   padding: 0.3rem 0.3rem 0 0.35rem;
 }
@@ -935,12 +940,30 @@
   grid-column: 2;
 }
 
+/* The rows sit at the picture's foot, over its fade, on a veil of card stock
+   that starts above their first line however many lines they take, with a
+   halo behind their words. They never climb over the picture's head, where
+   the name is: a card with many rows pushes them below the picture. */
 .wonderful .card .card-art {
-  grid-row: 2;
+  grid-row: 2 / span 2;
+  align-self: start;
 }
 
 .wonderful .card .card-rows {
+  position: relative;
   grid-row: 3;
+  align-self: end;
+  padding-top: 1.1rem;
+  padding-bottom: 0.1rem;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--pearl) 72%, transparent) 1.1rem
+  );
+  text-shadow:
+    0 0 2px var(--pearl),
+    0 0 4px var(--pearl),
+    0 0 6px var(--pearl);
 }
 
 .wonderful .card .card-cost + .card-rows {

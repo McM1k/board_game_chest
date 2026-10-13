@@ -366,7 +366,7 @@ fn card_body(card: &'static Card, cost: Option<AnyView>) -> AnyView {
             </span>
         </span>
         <span class="card-art">
-            <img src=look::card_art(card) alt="" width="480" height="240" loading="lazy" decoding="async" />
+            <img src=look::card_art(card) alt="" width="400" height="300" loading="lazy" decoding="async" />
             <span class="card-name">{card.name}</span>
         </span>
         {cost}
@@ -1761,6 +1761,29 @@ mod tests {
             let cost = rest.find("class=\"card-cost\"").expect(name);
             assert!(cost < rest.find("class=\"card-rows\"").unwrap(), "{name}");
         }
+    }
+
+    #[test]
+    fn the_picture_fades_out_under_the_rows() {
+        // A player asked for a bigger picture, fading out at its foot, with
+        // what the card makes and gives when built over the fade.
+        let css = include_str!("wonderful.css");
+        // The rule for that selector alone, not one it shares with others.
+        let rule = |sel: &str| {
+            let at = css
+                .match_indices(&format!("{sel} {{"))
+                .map(|(at, _)| at)
+                .find(|&at| !css[..at].trim_end().ends_with(','))
+                .expect(sel);
+            css[at..at + css[at..].find('}').unwrap()].to_string()
+        };
+        assert!(css.contains("aspect-ratio: var(--art-ratio, 4 / 3)"), "a taller picture");
+        assert!(rule(".wonderful .card-art img").contains("mask-image: linear-gradient(to bottom"));
+        let art = rule(".wonderful .card .card-art");
+        let rows = rule(".wonderful .card .card-rows");
+        assert!(art.contains("grid-row: 2 / span 2") && rows.contains("grid-row: 3"), "the rows lie over the picture");
+        assert!(rows.contains("align-self: end") && rows.contains("text-shadow"), "{rows}");
+        assert!(rule(".wonderful .card-art .card-name").contains("inset: 0 0 auto"), "the name over the picture's head");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 """Cut each card's illustration out of its printed face, as Game Park's online
-version has it, into a 2:1 band clear of the printed costs and icons.
+version has it, into a 4:3 box clear of the printed costs and icons.
 
 usage: python3 -I cards.py <images> <cards.rs> <out>
 
@@ -37,7 +37,9 @@ ALIASES = {"Pandora's Box": 'PandoraBox'}
 # one space every 95 pixels.
 TOP, BOTTOM, RIGHT = 125, 725, 650
 COLUMN_1, COLUMN_2 = 128, 245
-WIDTH, QUALITY = 480, 70
+# The box is 4:3: the picture fades out under the card's rows on screen.
+WIDTH, QUALITY = 400, 70
+RATIO = 3 / 4  # height over width
 
 
 def designs():
@@ -65,16 +67,16 @@ def free_area(spaces, beside):
     if spaces <= 9:
         return (COLUMN_1, TOP, RIGHT, BOTTOM)
     second_column_end = 160 + 95 * (spaces - 9)
-    if not beside and BOTTOM - second_column_end >= (RIGHT - COLUMN_1) // 2:
+    if not beside and BOTTOM - second_column_end >= round((RIGHT - COLUMN_1) * RATIO):
         return (COLUMN_1, second_column_end, RIGHT, BOTTOM)
     return (COLUMN_2, TOP, RIGHT, BOTTOM)
 
 
 def band(spaces, at, beside):
-    """The 2:1 box to cut: as wide as the free area, `at` of the way down it."""
+    """The 4:3 box to cut: as wide as the free area, `at` of the way down it."""
     x0, y0, x1, y1 = free_area(spaces, beside)
     w = x1 - x0
-    h = w // 2
+    h = round(w * RATIO)
     top = y0 + round(at * (y1 - y0 - h))
     return (x0, top, x1, top + h)
 
@@ -98,7 +100,7 @@ def main():
         face = Image.open(files[key]).convert('RGB')
         assert face.size == (650, 1000), (name, face.size)
         crop = face.crop(band(spaces, at.get(name, 0.5), name in beside))
-        crop = crop.resize((WIDTH, WIDTH // 2), Image.LANCZOS)
+        crop = crop.resize((WIDTH, round(WIDTH * RATIO)), Image.LANCZOS)
         path = os.path.join(out, slug(name) + '.webp')
         crop.save(path, 'WEBP', quality=QUALITY, method=6)
         total += os.path.getsize(path)

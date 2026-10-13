@@ -137,14 +137,14 @@ from `client/src/games/wonderful/art` (`look::card_art`, `empire_art`, `crest_ar
 
 | Pictures | Source in `app/src/images` | Ours |
 |---|---|---|
-| The cards, all 116 designs (78 base, 38 Corruption & Ascension) | `cards/developments/en/<Type>_<n>_EN_<Name>.jpg`: each printed face, 650 x 1000 | `art/cards/<slug>.webp`: a 2:1 band, 480 x 240, about 11 KB |
+| The cards, all 116 designs (78 base, 38 Corruption & Ascension) | `cards/developments/en/<Type>_<n>_EN_<Name>.jpg`: each printed face, 650 x 1000 | `art/cards/<slug>.webp`: a 4:3 box, 400 x 300, about 13 KB |
 | The seven Empires | `empires/<name>-artwork.jpg`: the board's illustration alone, 1920 x 1080 | `art/empires/<slug>.webp`: a 3:1 banner from its middle, 1200 x 400, 30 to 46 KB |
 | Their crests | `empires/<name>-avatar.png`, 100 x 100 | `art/crests/<slug>.webp`, 96 x 96, 2 to 4 KB |
 | The General and Financier tokens | `characters/general.jpg`, `financier.jpg`: the round token on white, 150 x 150 | `art/tokens/general.webp`, `financier.webp`: cut out round, 64 x 64, about 2 KB |
 | The round tracker | `round-tracker-recto.png` (green), `round-tracker-verso.png` (pink): a ring of arrows, 200 x 200 | `art/round/next.webp`, `previous.webp`, 112 x 112, about 5 KB |
 
 A slug is the name in lower case, apostrophes dropped and anything else between words a
-hyphen ("Pandora's Box" is `pandoras-box`). The pictures weigh 1.6 MB in all, but a page
+hyphen ("Pandora's Box" is `pandoras-box`). The pictures weigh 1.7 MB in all, but a page
 only loads what it shows (a hand is 80 to 130 KB the first time) and the card pictures are
 `loading="lazy"`. A test (`every_card_empire_and_token_has_its_picture`) checks there is one
 per design, per Empire and per token, and nothing else.
@@ -164,20 +164,23 @@ The printed face has the game's own icons over its illustration, which `cards.py
 the title bar at the top, the column of cost spaces down the left, the construction bonus
 and the recycling cube at the foot of the picture. What is left is x 128 to 650 and y 125 to
 725. A card with more than nine cost spaces prints a second column beside the first (x 128
-to 245, one space every 95 pixels from y 140); its band goes under that column, or beside
+to 245, one space every 95 pixels from y 140); its box goes under that column, or beside
 both when there is no room under it. `cards.py` counts each design's spaces in `cards.rs`.
-The band is as wide as the free area and halfway down it, unless `focus.json` says
+The box is as wide as the free area and halfway down it, unless `focus.json` says
 otherwise: under `at`, 0 puts it at the top of the free area and 1 at the bottom (31 cards,
 mostly to keep faces in); under `beside_second_column`, cards whose band is better beside
 both columns (Dark Matter's portal, Giant Robot's head). They were chosen by eye from contact
 sheets of every band drawn over its card. Game Park's file names drop the spaces and
 apostrophes ("PandoraBox" is the one `cards.py` must be told).
 
-On screen: the band sits under each card's header, with the card's name in white on a dark
-fade over its foot; the costs, what the card makes and is worth, and the header's type,
-expansion mark and recycling cube are on the pale card as before. The narrow grids ("Kept
-so far", your Empire's finished cards) use a taller 8:5 crop of the same picture and a
-smaller name. Your Empire's heading lies across its banner, darkened behind the words on the
+On screen: the picture sits under each card's header, with the card's name in white on a dark
+fade over its head. It fades out at its foot into the card (a mask on the image), and the rows
+saying what the card makes, is worth and gives when built lie over that fade, on a light veil of
+card stock with a halo behind their words (a player asked for it, 2026-10-13). A card with many
+rows pushes them below the picture rather than over the name. The costs and the header's type,
+expansion mark and recycling cube are on the pale card as before. The kept cards beside their
+cost column use a square crop of the same picture and a smaller name.
+Your Empire's heading lies across its banner, darkened behind the words on the
 left and the points on the right; the crest stands by your Empire's title, by each rival's
 name, and by each name in the final standings (with the Empire's name as its text). The
 columns of your Empire's types no longer stretch to fill the panel (`auto-fill`), so that a
