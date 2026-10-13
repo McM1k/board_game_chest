@@ -47,3 +47,51 @@ fn escargots_are_paid_at_the_start_what_the_winter_and_their_power_leave() {
     assert_eq!(s.current, 0);
     assert_eq!(s.players[0].coins, coins + 1);
 }
+
+/// A two-player game with every expansion but the Sky Islands, from `seed`.
+fn packs_seed(seed: u64) -> State {
+    no_tribes(State::with_options(2, seed, Options { sky: None, ..Options::all() }))
+}
+
+fn raised(s: &State, race: Race) -> u8 {
+    s.log.iter().map(|e| if let Event::Raised { race: r, tokens, .. } = *e { if r == race { tokens } else { 0 } } else { 0 }).sum()
+}
+
+#[test]
+fn pygmies_breed_whatever_takes_a_pygmy() {
+    let (mut wendigos, mut skags, mut zeppelins) = (0, 0, 0);
+    for seed in 0..30 {
+        // The Wendigos clear their Forest: one Pygmy lost, two back in hand.
+        let mut s = packs_seed(seed);
+        give(&mut s, 1, Race::Pygmies, Power::Stout);
+        place(&mut s, 14, Race::Pygmies, 3);
+        s.players[1].active.as_mut().unwrap().hand = 0;
+        give(&mut s, 0, Race::Wendigos, Power::Stout);
+        s.apply(0, Action::Wendigo { region: 14 }).unwrap();
+        assert_eq!(hand(&s, 1), 2 + raised(&s, Race::Pygmies));
+        wendigos += raised(&s, Race::Pygmies);
+
+        // Pygmies attacking the Skags fall to a Skag Attack.
+        let mut s = packs_seed(seed);
+        give(&mut s, 1, Race::Skags, Power::Stout);
+        place(&mut s, 7, Race::Skags, 1);
+        s.regions[7].loot = true;
+        s.loot[7] = Some(Loot::SkagAttack);
+        give(&mut s, 0, Race::Pygmies, Power::Stout);
+        place(&mut s, 6, Race::Pygmies, 1);
+        s.players[0].active.as_mut().unwrap().hand = 5;
+        s.apply(0, Action::Conquer { region: 7 }).unwrap();
+        assert_eq!(hand(&s, 0), 4 + raised(&s, Race::Pygmies));
+        skags += raised(&s, Race::Pygmies);
+
+        // A Pygmy Zeppelin crashes.
+        let mut s = packs_seed(seed);
+        give(&mut s, 0, Race::Pygmies, Power::Zeppelined);
+        s.apply(0, Action::Zeppelin { region: 15 }).unwrap();
+        if s.regions[15].burning.is_some() {
+            assert_eq!(hand(&s, 0), 6 + 5 - 1 + raised(&s, Race::Pygmies));
+            zeppelins += raised(&s, Race::Pygmies);
+        }
+    }
+    assert!(wendigos > 0 && skags > 0 && zeppelins > 0, "{wendigos} {skags} {zeppelins}");
+}

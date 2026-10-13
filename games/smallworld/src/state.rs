@@ -1640,11 +1640,13 @@ impl State {
         }
         self.loot[region] = None;
         self.regions[region].loot = false;
-        if let Some(a) = self.army_mut(seat, race) {
-            a.hand = a.hand.saturating_sub(1);
+        let declined = self.phase == Phase::Conquest { ghouls: true };
+        if let Some(a) = self.army_mut(seat, race).filter(|a| a.hand > 0) {
+            a.hand -= 1;
+            self.lose(seat, race, declined, 1);
         }
         self.this_turn.repelled.push(region);
-        self.mark_moved(self.phase == Phase::Conquest { ghouls: true });
+        self.mark_moved(declined);
         self.push(Event::SkagAttack { seat, region });
         true
     }
@@ -1677,12 +1679,31 @@ impl State {
         }
     }
 
+    /// `count` tokens of `owner`'s `race` lost for good: the Igors collect
+    /// them, and active Pygmies roll the die for each.
+    fn lose(&mut self, owner: usize, race: Race, declined: bool, count: u8) {
+        self.lost_in_conquest(count);
+        if race != Race::Pygmies || declined {
+            return;
+        }
+        for _ in 0..count {
+            let raised = self.roll().min(self.available(race));
+            if raised > 0 {
+                self.army_mut(owner, race).unwrap().hand += raised;
+                self.push(Event::Raised { seat: owner, race, tokens: raised });
+            }
+        }
+    }
+
     /// Whoever was in `region` makes way for `seat`'s `race`: a Lost Tribe
     /// is gone, a race loses a token (Elves none) and keeps the rest in hand,
     /// with what the races and powers on either side do about it. Returns
     /// who it was, and the race in decline the Scavengers keep there.
     fn clear_defenders(&mut self, seat: usize, race: Race, declined: bool, region: usize) -> (Option<Foe>, Option<Race>) {
         let r = self.regions[region];
+        // Off the map now, so that the box counts them right.
+        self.regions[region].tokens = None;
+        self.regions[region].captive = None;
         let mut foe = None;
         let mut captive = None;
         let scavenging = !declined && race == Race::Scavengers;
@@ -1708,15 +1729,7 @@ impl State {
                 a.hand += kept;
                 a.behemoths += behemoths;
             }
-            self.lost_in_conquest(lost);
-            if lost > 0 && t.race == Race::Pygmies && !owner_declined {
-                let die = self.roll();
-                let raised = die.min(self.available(Race::Pygmies));
-                if raised > 0 {
-                    self.army_mut(owner, t.race).unwrap().hand += raised;
-                    self.push(Event::Raised { seat: owner, race: t.race, tokens: raised });
-                }
-            }
+            self.lose(owner, t.race, owner_declined, lost);
             if owner != seat {
                 if !owner_declined && !self.this_turn.attacked.contains(&owner) {
                     self.this_turn.attacked.push(owner);
@@ -2713,8 +2726,9 @@ impl State {
                     let winter = self.regions[region].winter;
                     self.regions[region] = RegionState { burning: Some(seat), winter, ..RegionState::default() };
                     self.loot[region] = None;
-                    let a = self.players[seat].active.as_mut().unwrap();
-                    a.hand = a.hand.saturating_sub(1);
+                    // The Zeppelin's own token is lost too (at least one was in hand).
+                    self.players[seat].active.as_mut().unwrap().hand -= 1;
+                    self.lose(seat, army.race, false, 1);
                     self.mark_moved(false);
                     return Ok(());
                 }
@@ -3035,7 +3049,6 @@ impl State {
             a.hand += kept;
             a.behemoths += r.behemoths;
         }
-        self.lost_in_conquest(t.count - kept);
         if !declined && !self.this_turn.attacked.contains(&owner) {
             self.this_turn.attacked.push(owner);
         }
@@ -3045,6 +3058,7 @@ impl State {
             loot: r.loot,
             ..RegionState::default()
         };
+        self.lose(owner, t.race, declined, t.count - kept);
         self.this_turn.wendigo = true;
         self.mark_moved(false);
         if self.available(Race::Wendigos) > 0 {
