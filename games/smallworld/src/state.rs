@@ -2791,7 +2791,12 @@ impl State {
                     None => None,
                 };
                 self.uncopy(seat);
-                self.players[seat].active.as_mut().unwrap().copied = power;
+                let a = self.players[seat].active.as_mut().unwrap();
+                a.copied = power;
+                if power == Some(Power::Behemoth) {
+                    // The copy comes with the power's two Behemoths.
+                    a.behemoths = BEHEMOTHS;
+                }
                 self.this_turn.copied = true;
                 self.push(Event::Copied { seat, power });
                 Ok(())

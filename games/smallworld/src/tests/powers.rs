@@ -202,3 +202,22 @@ fn ghouls_in_decline_pay_corrupt_and_scarecrows_but_break_no_peace() {
     s.apply(0, Action::EndConquests).unwrap();
     assert_eq!(s.moves(0).allies, vec![1]);
 }
+
+#[test]
+fn a_copied_behemoth_power_brings_its_behemoths() {
+    let mut s = packs_game();
+    s.offers[0].power = Power::Behemoth;
+    give(&mut s, 0, Race::Ratmen, Power::Copycat);
+    place(&mut s, 5, Race::Ratmen, 1);
+    s.apply(0, Action::Copy { offer: Some(0) }).unwrap();
+    assert_eq!(s.players[0].active.unwrap().behemoths, BEHEMOTHS);
+    // One Swamp: Mountain 4 costs 3 - 1.
+    assert_eq!(s.moves(0).costs(RegionMove::Behemoth), vec![(3, 1), (4, 2), (6, 1), (7, 1)]);
+    s.apply(0, Action::Behemoth { region: 4 }).unwrap();
+    assert_eq!(s.regions[4].behemoths, 1);
+    // Whoever takes the power takes the Behemoths with it.
+    end_turn(&mut s, 0);
+    s.apply(1, Action::Pick { offer: 0 }).unwrap();
+    let a = s.players[0].active.unwrap();
+    assert_eq!((a.copied, a.behemoths, s.regions[4].behemoths), (None, 0, 0));
+}
