@@ -403,7 +403,7 @@ fn draft_panel(ctx: &Ctx) -> AnyView {
         let cards = view
             .drafted
             .iter()
-            .map(|&card| view! { <li>{card_static(card.def(), false, "")}</li> })
+            .map(|&card| view! { <li>{card_static(card.def(), true, "")}</li> })
             .collect_view();
         view! {
             <h3 class="subhead">
@@ -1311,6 +1311,10 @@ mod tests {
         let kept = &html[html.find("Kept so far").expect("the kept cards")..];
         let kept = &kept[..kept.find("</ul>").unwrap()];
         assert!(kept.contains(hand[2].def().name) && kept.contains("Recycles into"), "{kept}");
+        // And what it costs to build, one cube per space, as on the card in hand.
+        let spaces = look::slots(&hand[2].def().cost, &Cost::default()).len();
+        assert!(kept.contains("class=\"card-cost\""), "{kept}");
+        assert_eq!(kept.matches("class=\"socket req ").count(), spaces, "{kept}");
     }
 
     #[test]
