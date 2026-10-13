@@ -181,8 +181,8 @@ pub struct GameState {
 impl GameState {
     pub fn new(player_count: u8, seed: u64, rules: GameRules) -> Self {
         assert!(
-            (2..=5).contains(&player_count),
-            "Hanabi supports 2-5 players"
+            (2..=rules.max_players()).contains(&(player_count as usize)),
+            "Hanabi supports 2-5 players (2-6 in hanabii mode)"
         );
         // The hanabii mode is a fixed preset that replaces every other
         // option — resolve it once here so the stored rules (which are also
@@ -545,6 +545,21 @@ mod tests {
         for p in &g4.players {
             assert_eq!(g4.hands[p].len(), 4);
         }
+    }
+
+    #[test]
+    fn hanabii_deals_four_cards_each_to_six_players() {
+        let g = GameState::new(6, 1, GameRules { hanabii: true, ..Default::default() });
+        assert_eq!(g.players.len(), 6);
+        for p in &g.players {
+            assert_eq!(g.hands[p].len(), 4);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "players")]
+    fn only_hanabii_seats_six_players() {
+        GameState::new(6, 1, GameRules::default());
     }
 
     #[test]

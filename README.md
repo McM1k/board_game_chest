@@ -240,7 +240,7 @@ under `.theme-catan`.
 
 ## Hanabi
 
-A cooperative card game for 2–5 players: build the fireworks in order, but you can't
+A cooperative card game for 2–5 players (2–6 in the "hanabii" mode): build the fireworks in order, but you can't
 see your own hand. Everything of the original is kept: the variant rules the host
 picks in the lobby (multicolor, black powder, extra colors, six-card suits, the
 "short" 1-of-each versions, and the "hanabii" preset), the clue buttons with their

@@ -101,7 +101,7 @@ pub fn home_screen(app: App) -> impl IntoView {
                 "← All games"
             </button>
             <p class="hint">
-                "A cooperative game for 2 to 5 players. Share the room code with everyone you're playing with."
+                "A cooperative game for 2 to 5 players (6 in hanabii mode). Share the room code with everyone you're playing with."
             </p>
         </div>
     }
@@ -124,6 +124,8 @@ fn rule_group_class(app: App) -> &'static str {
     }
 }
 
+const SIX_SEATED: &str = "Six players are seated: hanabii mode stays on until one of them leaves.";
+
 /// Renders the "hanabii mode" lobby control: one on/off toggle for the
 /// fixed preset described in `GameRules::hanabii` — six colors, six-card
 /// suits, and primary-color-only clues where orange, green and purple are
@@ -136,7 +138,11 @@ fn rule_group_class(app: App) -> &'static str {
 /// with the preset. Un-picking goes back to a plain default game rather
 /// than leaving the preset's options ticked behind it, so unticking really
 /// does mean "back to normal".
-fn hanabii_mode_control(app: App, can_edit: bool) -> impl IntoView {
+///
+/// Only hanabii seats a sixth player, so with six seated it stays on (the
+/// server refuses the change too) until someone leaves.
+fn hanabii_mode_control(app: App, can_edit: bool, seated: usize) -> impl IntoView {
+    let six_seated = seated > GameRules::default().max_players();
     let on_toggle = move |_| {
         let rules = app.games.hanabi.rules.get_untracked();
         let rules = if rules.hanabii {
@@ -153,13 +159,14 @@ fn hanabii_mode_control(app: App, can_edit: bool) -> impl IntoView {
                 <input
                     type="checkbox"
                     prop:checked=move || app.games.hanabi.rules.get().hanabii
-                    disabled=!can_edit
+                    disabled=move || !can_edit || (six_seated && app.games.hanabi.rules.get().hanabii)
                     on:change=on_toggle
                 />
                 <span>"Hanabii mode"</span>
             </label>
+            {move || (six_seated && app.games.hanabi.rules.get().hanabii).then(|| view! { <p class="hint">{SIX_SEATED}</p> })}
             <p class="hint">
-                "The real deal: six colors (red, orange, yellow, green, blue, purple) with six cards each — three 1s, two each of 2 to 5, one 6 — for a max score of 36. Only the primary colors (red, yellow, blue) can be clued, and every other color is mixed from them: orange is red + yellow, green is yellow + blue, purple is red + blue. So a red clue touches every red, orange and purple card. Picking it locks all the other options below."
+                "The real deal: six colors (red, orange, yellow, green, blue, purple) with six cards each — three 1s, two each of 2 to 5, one 6 — for a max score of 36. Only the primary colors (red, yellow, blue) can be clued, and every other color is mixed from them: orange is red + yellow, green is yellow + blue, purple is red + blue. So a red clue touches every red, orange and purple card. Picking it locks all the other options below, and lets a sixth player in (4 cards each)."
             </p>
         </div>
     }
@@ -367,7 +374,7 @@ pub fn lobby_screen(
 
             <div class="rules-picker">
                 <h3>"Game mode"</h3>
-                {hanabii_mode_control(app, is_host).into_any()}
+                {hanabii_mode_control(app, is_host, players.len()).into_any()}
 
                 <h3>"House rules"</h3>
 
@@ -467,6 +474,25 @@ mod tests {
             seats[1].connected = false;
             let html = lobby_screen(app, "WXYZ".into(), seats, 0, true).to_html();
             assert!(html.contains("offline"));
+        });
+    }
+
+    #[test]
+    fn hanabii_stays_on_while_six_are_seated() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            app.games.hanabi.rules.set(GameRules { hanabii: true, ..Default::default() });
+            let six = players(&["A", "B", "C", "D", "E", "F"]);
+            let html = lobby_screen(app, "WXYZ".into(), six, 0, true).to_html();
+            // Every other control is locked by the mode; the mode itself too.
+            assert_eq!(html.matches("disabled").count(), 8, "{html}");
+            assert!(html.contains(SIX_SEATED));
+
+            let five = players(&["A", "B", "C", "D", "E"]);
+            let html = lobby_screen(app, "WXYZ".into(), five, 0, true).to_html();
+            assert_eq!(html.matches("disabled").count(), 7, "{html}");
+            assert!(!html.contains(SIX_SEATED));
         });
     }
 }

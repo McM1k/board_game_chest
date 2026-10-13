@@ -447,6 +447,23 @@ mod tests {
     }
 
     #[test]
+    fn hanabii_seats_a_sixth_player_and_stays_on_while_six_are_seated() {
+        let state = new_state();
+        let (code, mut clients) = lobby(&state, GameKind::Hanabi, 5);
+        let hanabii = GameOptions::Hanabi(hanabi_core::GameRules { hanabii: true, ..Default::default() });
+        let plain = GameOptions::Hanabi(hanabi_core::GameRules::default());
+        assert_eq!(clients[0].send(&state, ClientMsg::SetOptions(hanabii)), None);
+        let _sixth = join(&state, &code, "P5").unwrap();
+        assert_eq!(join(&state, &code, "P6").err().as_deref(), Some("That room is full."));
+        assert_eq!(
+            clients[0].send(&state, ClientMsg::SetOptions(plain)).as_deref(),
+            Some("There are too many players here for that.")
+        );
+        assert_eq!(clients[0].send(&state, ClientMsg::Start), None);
+        assert!(state.lock().unwrap().map[&code].game.is_some());
+    }
+
+    #[test]
     fn only_the_host_can_start_and_only_with_two_players() {
         for game in GameKind::ALL {
             let state = new_state();

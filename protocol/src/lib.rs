@@ -42,7 +42,7 @@ impl GameKind {
     pub fn max_players(self) -> usize {
         match self {
             GameKind::Catan => 4,
-            GameKind::Hanabi => 5,
+            GameKind::Hanabi => 6,
             GameKind::Wonderful => 7,
             GameKind::SmallWorld => smallworld_core::MAX_PLAYERS,
         }
@@ -85,10 +85,12 @@ impl GameOptions {
 
     /// The most players these options allow, when fewer than the game's
     /// maximum (It's a Wonderful World seats 7 only with its expansion,
-    /// Small World 6 only with the Sky Islands).
+    /// Small World 6 only with the Sky Islands, Hanabi 6 only in hanabii
+    /// mode).
     pub fn max_players(&self) -> Option<usize> {
         match self {
-            GameOptions::Catan(_) | GameOptions::Hanabi(_) => None,
+            GameOptions::Catan(_) => None,
+            GameOptions::Hanabi(rules) => Some(rules.max_players()),
             GameOptions::Wonderful(options) => Some(options.max_players()),
             GameOptions::SmallWorld(options) => Some(options.max_players()),
         }
@@ -266,7 +268,7 @@ mod tests {
     #[test]
     fn game_limits() {
         assert_eq!(GameKind::Catan.max_players(), 4);
-        assert_eq!(GameKind::Hanabi.max_players(), 5);
+        assert_eq!(GameKind::Hanabi.max_players(), 6);
         assert_eq!(GameKind::Wonderful.max_players(), 7);
         // Lobby options can lower it: It's a Wonderful World seats 7 only
         // with its expansion.
@@ -276,6 +278,9 @@ mod tests {
         assert_eq!(GameKind::Wonderful.max_players_with(Some(&expanded)), 7);
         let hanabi = GameOptions::Hanabi(GameRules::default());
         assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabi)), 5);
+        // Only the hanabii mode seats a sixth player.
+        let hanabii = GameOptions::Hanabi(GameRules { hanabii: true, ..Default::default() });
+        assert_eq!(GameKind::Hanabi.max_players_with(Some(&hanabii)), 6);
         assert_eq!(GameKind::Catan.max_players_with(None), 4);
         let catan = GameOptions::Catan(catan_core::Options { layout: catan_core::Layout::Beginner });
         assert_eq!(GameKind::Catan.max_players_with(Some(&catan)), 4);

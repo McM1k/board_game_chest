@@ -94,6 +94,16 @@ pub struct GameRules {
 }
 
 impl GameRules {
+    /// The most players these rules seat: 5, or 6 in the hanabii mode,
+    /// which is built around the number 6.
+    pub fn max_players(&self) -> usize {
+        if self.hanabii {
+            6
+        } else {
+            5
+        }
+    }
+
     /// The rules a game is actually played with. For ordinary rules that's
     /// just `self` untouched; with [`GameRules::hanabii`] on, every other
     /// option is overridden by the mode's fixed preset — which is what
@@ -252,6 +262,13 @@ impl GameRules {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_hanabii_seats_six() {
+        assert_eq!(GameRules::default().max_players(), 5);
+        assert_eq!(GameRules { six_cards: true, ..Default::default() }.max_players(), 5);
+        assert_eq!(GameRules { hanabii: true, ..Default::default() }.max_players(), 6);
+    }
 
     #[test]
     fn defaults_to_no_variants() {

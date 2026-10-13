@@ -122,11 +122,11 @@ pub(crate) mod render_tests {
             assert!(html.contains("Pick a game") && html.contains("menu-page"));
             assert!(html.contains("Catan") && html.contains("Hanabi"));
             assert!(shows(&html, "It's a Wonderful World") && html.contains("Small World"));
-            // Catan seats 2-4, Hanabi 2-5, Small World 2-6 (with the Sky
-            // Islands), It's a Wonderful World 2-7 (with its expansion).
+            // Catan seats 2-4, Hanabi 2-6 (in hanabii mode), Small World
+            // 2-6 (with the Sky Islands), It's a Wonderful World 2-7 (with
+            // its expansion).
             assert_eq!(html.matches("2\u{2013}4 players").count(), 1);
-            assert_eq!(html.matches("2\u{2013}5 players").count(), 1);
-            assert_eq!(html.matches("2\u{2013}6 players").count(), 1);
+            assert_eq!(html.matches("2\u{2013}6 players").count(), 2);
             assert_eq!(html.matches("2\u{2013}7 players").count(), 1);
             // One card per game, each with its picture and its sentence.
             assert_eq!(html.matches("class=\"game-card\"").count(), GameKind::ALL.len());
