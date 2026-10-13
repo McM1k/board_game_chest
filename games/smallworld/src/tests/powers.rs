@@ -221,3 +221,204 @@ fn a_copied_behemoth_power_brings_its_behemoths() {
     let a = s.players[0].active.unwrap();
     assert_eq!((a.copied, a.behemoths, s.regions[4].behemoths), (None, 0, 0));
 }
+
+// ----- the base game ---------------------------------------------------------------------------
+
+/// Seat 0's active race goes into decline at the start of its turn.
+fn decline(s: &mut State) {
+    s.current = 0;
+    s.phase = Phase::Conquest { ghouls: false };
+    s.this_turn = Turn { may_decline: true, ..Turn::default() };
+    s.apply(0, Action::Decline).unwrap();
+}
+
+#[test]
+fn in_decline_the_powers_pieces_go_but_fortresses_and_lairs_stay() {
+    let pieces = |s: &State, r: usize| {
+        let x = &s.regions[r];
+        (x.hole, x.hero, x.dragon, x.encampments, x.catapult, x.cannon, x.behemoths)
+    };
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Halflings, Power::Heroic);
+    for r in [6, 4] {
+        s.apply(0, Action::Conquer { region: r }).unwrap();
+    }
+    s.regions[6].hero = true;
+    s.regions[4].hero = true;
+    decline(&mut s);
+    assert_eq!([6, 4].map(|r| pieces(&s, r)), [(false, false, false, 0, false, None, 0); 2]);
+
+    let mut s = packs_game();
+    give(&mut s, 0, Race::Trolls, Power::DragonMaster);
+    s.apply(0, Action::Dragon { region: 7 }).unwrap();
+    assert!(s.regions[7].dragon && s.regions[7].lair);
+    decline(&mut s);
+    assert!(!s.regions[7].dragon && s.regions[7].lair);
+
+    for power in [Power::Catapult, Power::Gunner, Power::Behemoth, Power::Fortified] {
+        let mut s = packs_game();
+        give(&mut s, 0, Race::Ratmen, power);
+        place(&mut s, 7, Race::Ratmen, 1);
+        let r = &mut s.regions[7];
+        (r.catapult, r.cannon, r.behemoths, r.fortress) = (true, Some(true), 1, true);
+        decline(&mut s);
+        assert_eq!(pieces(&s, 7), (false, false, false, 0, false, None, 0), "{power:?}");
+        // The fortress stays and defends, but pays no more.
+        assert!(s.regions[7].fortress);
+        assert_eq!(s.turn_coins(0), 1);
+        give(&mut s, 1, Race::Wizards, Power::Stout);
+        place(&mut s, 6, Race::Wizards, 1);
+        assert_eq!(s.conquest_cost(1, 7), Ok(2 + 1 + 1));
+    }
+}
+
+#[test]
+fn race_and_power_bonuses_stop_in_decline_but_the_dwarves() {
+    let cases: [(Race, Power, &[usize]); 6] = [
+        (Race::Humans, Power::Merchant, &[2, 6]),
+        (Race::Wizards, Power::Alchemist, &[2, 8]),
+        (Race::Ratmen, Power::Forest, &[3, 8]),
+        (Race::Ratmen, Power::Hill, &[7, 10]),
+        (Race::Ratmen, Power::Swamp, &[5, 16]),
+        (Race::Orcs, Power::Pillaging, &[7, 6]),
+    ];
+    for (race, power, regions) in cases {
+        let mut s = empty_game();
+        give(&mut s, 0, race, power);
+        for &r in regions {
+            place(&mut s, r, race, 1);
+        }
+        s.this_turn.plundered = 2;
+        assert!(s.turn_coins(0) > 2, "{race:?} {power:?}");
+        decline(&mut s);
+        assert_eq!(s.turn_coins(0), 2, "{race:?} {power:?}");
+    }
+    // Dwarves still dig.
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Dwarves, Power::Hill);
+    place(&mut s, 1, Race::Dwarves, 1);
+    place(&mut s, 7, Race::Dwarves, 1);
+    decline(&mut s);
+    assert_eq!(s.turn_coins(0), 2 + 1);
+}
+
+#[test]
+fn elves_in_decline_lose_a_token_like_anyone() {
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Elves, Power::Stout);
+    place(&mut s, 6, Race::Elves, 1);
+    place(&mut s, 13, Race::Elves, 1);
+    decline(&mut s);
+    give(&mut s, 1, Race::Ratmen, Power::Stout);
+    place(&mut s, 7, Race::Ratmen, 1);
+    s.apply(1, Action::Conquer { region: 6 }).unwrap();
+    assert_eq!((s.players[0].declined[0].hand, s.on_map(Race::Elves)), (0, 1));
+}
+
+#[test]
+fn skeletons_and_sorcerers_take_only_what_the_box_holds() {
+    let mut s = empty_game();
+    for r in [7, 6, 5, 8] {
+        s.regions[r].lost_tribe = true;
+    }
+    give(&mut s, 0, Race::Skeletons, Power::Commando);
+    for r in [7, 6, 5, 8] {
+        s.apply(0, Action::Conquer { region: r }).unwrap();
+    }
+    // Two for four Lost Tribes, but the box holds 20: 10 out, 9 more on the map.
+    place(&mut s, 13, Race::Skeletons, 9);
+    s.apply(0, Action::EndConquests).unwrap();
+    assert_eq!(s.on_map(Race::Skeletons) + hand(&s, 0), Race::Skeletons.supply());
+    assert!(s.log.contains(&Event::Raised { seat: 0, race: Race::Skeletons, tokens: 1 }));
+
+    let mut s = empty_game();
+    give(&mut s, 1, Race::Humans, Power::Stout);
+    place(&mut s, 6, Race::Humans, 1);
+    give(&mut s, 0, Race::Sorcerers, Power::Merchant);
+    place(&mut s, 7, Race::Sorcerers, 1);
+    s.players[0].active.as_mut().unwrap().hand = Race::Sorcerers.supply() - 1;
+    assert_eq!(s.apply(0, Action::Enchant { region: 6 }), Err(Error::NoneLeft));
+}
+
+#[test]
+fn halflings_land_anywhere_but_the_water() {
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Halflings, Power::Stout);
+    assert_eq!(s.apply(0, Action::Conquer { region: 11 }), Err(Error::Water));
+    s.apply(0, Action::Conquer { region: 14 }).unwrap();
+    // Then next to their regions, like anyone.
+    assert_eq!(s.apply(0, Action::Conquer { region: 7 }), Err(Error::OutOfReach));
+}
+
+#[test]
+fn trolls_lairs_and_fortresses_go_with_the_region() {
+    let mut s = empty_game();
+    give(&mut s, 1, Race::Trolls, Power::Fortified);
+    place(&mut s, 6, Race::Trolls, 1);
+    place(&mut s, 13, Race::Trolls, 1);
+    s.regions[6].lair = true;
+    s.regions[6].fortress = true;
+    s.regions[13].lair = true;
+    give(&mut s, 0, Race::Ratmen, Power::Stout);
+    place(&mut s, 7, Race::Ratmen, 1);
+    s.apply(0, Action::Conquer { region: 6 }).unwrap();
+    assert!(!s.regions[6].lair && !s.regions[6].fortress);
+    // Abandoned: gone too.
+    s.current = 1;
+    s.this_turn = Turn::default();
+    s.apply(1, Action::Abandon { region: 13 }).unwrap();
+    assert!(!s.regions[13].lair);
+}
+
+#[test]
+fn fortresses_one_a_region_six_on_the_map() {
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Ratmen, Power::Fortified);
+    for r in [2, 3, 5, 6, 7, 8, 13] {
+        place(&mut s, r, Race::Ratmen, 1);
+    }
+    s.phase = Phase::Redeploy;
+    s.regions[7].fortress = true;
+    assert_eq!(s.apply(0, Action::Fortify { region: 7 }), Err(Error::NotHere));
+    for r in [2, 3, 5, 6, 8] {
+        s.regions[r].fortress = true;
+    }
+    assert_eq!(s.apply(0, Action::Fortify { region: 13 }), Err(Error::NoneLeft));
+    // A coin each while active.
+    assert_eq!(s.turn_coins(0), 7 + 6);
+}
+
+#[test]
+fn the_dragon_flies_to_a_new_region_each_turn() {
+    let mut s = empty_game();
+    give(&mut s, 0, Race::Ratmen, Power::DragonMaster);
+    s.apply(0, Action::Dragon { region: 7 }).unwrap();
+    end_turn(&mut s, 0);
+    pass(&mut s, 1);
+    // Still there at the start of the next turn; it leaves when it attacks again.
+    assert!(s.regions[7].dragon);
+    s.apply(0, Action::Dragon { region: 6 }).unwrap();
+    assert!(!s.regions[7].dragon && s.regions[6].dragon);
+}
+
+#[test]
+fn encampments_survive_an_attack_and_pitch_again() {
+    let mut s = empty_game();
+    give(&mut s, 1, Race::Ratmen, Power::Bivouacking);
+    place(&mut s, 6, Race::Ratmen, 1);
+    place(&mut s, 13, Race::Ratmen, 1);
+    s.regions[6].encampments = 5;
+    s.players[1].active.as_mut().unwrap().hand = 0;
+    give(&mut s, 0, Race::Giants, Power::Stout);
+    s.players[0].active.as_mut().unwrap().hand = 20;
+    place(&mut s, 7, Race::Giants, 1);
+    s.apply(0, Action::Conquer { region: 6 }).unwrap();
+    // The five come back to the Ratmen for their next redeployment.
+    assert_eq!(s.regions[6].encampments, 0);
+    s.current = 1;
+    s.phase = Phase::Redeploy;
+    for _ in 0..ENCAMPMENTS {
+        s.apply(1, Action::Camp { region: 13 }).unwrap();
+    }
+    assert_eq!(s.regions[13].encampments, ENCAMPMENTS);
+}
