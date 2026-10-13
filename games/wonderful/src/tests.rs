@@ -588,7 +588,7 @@ fn the_science_winner_chooses_the_character() {
 }
 
 #[test]
-fn cubes_come_from_the_pool_and_the_rest_is_lost() {
+fn cubes_come_from_the_pool() {
     let mut s = blank(2);
     // Noram States makes 3 Materials; the Recycling Plant needs 2.
     s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
@@ -627,14 +627,14 @@ fn cubes_come_from_the_pool_and_the_rest_is_lost() {
 }
 
 #[test]
-fn saying_ready_throws_away_the_cubes_left() {
+fn saying_ready_puts_the_cubes_left_on_the_empire() {
     let mut s = blank(2);
     start_production(&mut s);
     assert_eq!(s.players[0].pool, 3);
     s.apply(0, Action::Ready).unwrap();
     s.apply(1, Action::Ready).unwrap();
-    assert_eq!(s.players[0].empire_cubes, 0, "nothing was placed");
-    // Energy now, where only seat 1 makes anything; the Materials cubes are gone.
+    assert_eq!(s.players[0].empire_cubes, 3, "nothing placed, so all on the Empire");
+    // Energy now, where only seat 1 makes anything.
     assert_eq!(s.phase, Phase::Production { step: 1 });
     assert_eq!((s.players[0].produced, s.players[0].pool), (0, 0));
     assert_eq!((s.players[1].produced, s.players[1].pool), (1, 1));
@@ -780,8 +780,9 @@ fn the_round_ends_by_dealing_the_next_one() {
     skip_to(&mut s, WRAP_UP);
     s.apply(0, Action::Ready).unwrap();
     assert_eq!((s.round, s.phase), (2, Phase::Draft));
-    // Unplaced cubes are gone; buildings and Krystallium stay.
-    assert_eq!(s.players[0].empire_cubes, 0);
+    // The round's unplaced cubes (3 Materials, 1 more) went on the Empire;
+    // buildings and Krystallium stay.
+    assert_eq!(s.players[0].empire_cubes, 4);
     assert_eq!(s.players[0].buildings.len(), 1);
     assert_eq!(s.players[0].krystallium, 2);
     // New hands, nobody ready, nothing picked.
@@ -887,11 +888,26 @@ fn a_building_is_built_once_full_and_that_cannot_be_undone() {
     s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
     s.apply(0, Action::Undo).unwrap();
     assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (1, 1));
-    // Done drops the cubes left, and the step still waits for it.
+    // Done puts the cube left on the Empire, and the step still waits for it.
     assert!(!s.players[0].ready);
     s.apply(0, Action::Ready).unwrap();
-    assert_eq!(s.players[0].pool, 0);
+    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (2, 0));
     assert_eq!(s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }), Err(Error::NothingToPlace));
+}
+
+#[test]
+fn done_puts_the_cubes_left_on_the_empire() {
+    let mut s = blank(2);
+    // Noram States makes 3 Materials; nothing to build.
+    s.players[0].empire_cubes = 3;
+    start_production(&mut s);
+    assert_eq!(s.players[0].pool, 3);
+    let krystallium = s.players[0].krystallium;
+    s.apply(0, Action::Ready).unwrap();
+    // Nothing is lost: the five Empire cubes become a Krystallium at once.
+    assert_eq!(s.players[0].pool, 0);
+    assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (1, krystallium + 1));
+    assert_eq!(s.apply(0, Action::Undo), Err(Error::NothingToUndo));
 }
 
 #[test]

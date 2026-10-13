@@ -20,7 +20,7 @@
 //!    player who produced the most (and strictly more than everyone else;
 //!    the two best from six players on, see [`supremacy`]) takes the
 //!    matching character, and the cubes are placed on buildings or the
-//!    Empire; cubes that are not placed are lost. A sixth, **wrap-up** step follows, in which
+//!    Empire; cubes left when the player presses Done go on the Empire. A sixth, **wrap-up** step follows, in which
 //!    Krystallium and characters that are still held can be placed.
 //!    What a player places in a step stays theirs to take back ([`Action::Undo`])
 //!    until they press Done ([`Action::Ready`]), except once a placement has
@@ -745,11 +745,13 @@ impl State {
     }
 
     /// Done with a production step: what was placed is final and the cubes
-    /// left are dropped.
+    /// left go on the Empire, where every five make a Krystallium at once.
     fn finalize(&mut self, seat: usize) {
         let p = &mut self.players[seat];
         p.placed.clear();
+        p.empire_cubes += p.pool;
         p.pool = 0;
+        self.convert_empire_cubes(seat);
     }
 
     /// The building `target` names, if it still has a space `wanted` accepts.
