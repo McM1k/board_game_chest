@@ -1733,6 +1733,37 @@ mod tests {
     }
 
     #[test]
+    fn every_card_has_the_kept_cards_look() {
+        // The hand, the pick, the kept cards, the planned ones and the buildings
+        // all draw the cost as a column down the left, beside the picture, as
+        // the printed card does: the layout is the card's own, not one section's.
+        let css = include_str!("wonderful.css");
+        assert!(!css.contains(".cards.kept .card-cost"), "the cost column is not only for kept cards");
+        for rule in [".wonderful .card .card-cost {", ".wonderful .card .card-cost .sockets {"] {
+            assert!(css.contains(rule), "{rule}");
+        }
+        let card = &css[css.find("/* Every card shows its cost as a column").expect("the shared layout")..];
+        assert!(card[..card.find('}').unwrap()].contains("grid-template-columns: auto minmax(0, 1fr)"));
+        // The picture's shape is one variable, so that it is easy to resize.
+        assert!(css.contains("aspect-ratio: var(--art-ratio"));
+
+        let mut state = State::new(3, 1);
+        let (hand, kept, building) = (id("Secret Society"), id("Neuroscience"), id("Juggernaut"));
+        state.players[0].hand = vec![hand];
+        state.players[0].drafted = vec![kept];
+        state.players[0].buildings = vec![Building { card: building, filled: Cost::default() }];
+        let html = render(&state, 0);
+        // Each card carries its cost between its picture and its rows.
+        for card in [hand, kept, building] {
+            let name = card.def().name;
+            let at = html.find(&format!("class=\"card-name\">{name}</span>")).expect(name);
+            let rest = &html[at..];
+            let cost = rest.find("class=\"card-cost\"").expect(name);
+            assert!(cost < rest.find("class=\"card-rows\"").unwrap(), "{name}");
+        }
+    }
+
+    #[test]
     fn the_empires_show_their_pictures() {
         let mut state = State::new(3, 12);
         state.empires = vec![0, 1, 2];

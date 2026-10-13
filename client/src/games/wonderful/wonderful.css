@@ -852,7 +852,7 @@
   position: relative;
   display: block;
   flex: none;
-  aspect-ratio: 2 / 1;
+  aspect-ratio: var(--art-ratio, 2 / 1);
   margin-top: -0.4rem;
   overflow: hidden;
   background: var(--felt-3);
@@ -878,7 +878,7 @@
    so that a name on two lines still leaves some of it. */
 .wonderful .cards.kept .card-art,
 .wonderful .cards.finished .card-art {
-  aspect-ratio: 8 / 5;
+  --art-ratio: 8 / 5;
 }
 
 .wonderful .cards.kept .card-art .card-name,
@@ -898,38 +898,52 @@
   gap: 0.3rem;
 }
 
-/* A kept card shows its cost as a column down its left side, beside the
-   picture, as the printed card does. */
-.wonderful .cards.kept .card {
+/* Every card shows its cost as a column down its left side, beside the
+   picture, as the printed card does; a card without one (a finished card)
+   gives the column nothing, so its picture and rows take the full width. */
+.wonderful .card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
   column-gap: 0;
 }
 
-.wonderful .cards.kept .card-head {
+.wonderful .card-head,
+.wonderful .card-foot {
   grid-column: 1 / -1;
 }
 
-.wonderful .cards.kept .card-cost {
+.wonderful .card-foot {
+  grid-row: 4;
+}
+
+.wonderful .card .card-cost {
   grid-column: 1;
   grid-row: 2 / span 2;
   margin-top: -0.4rem;
   padding: 0.3rem 0.3rem 0 0.35rem;
 }
 
-.wonderful .cards.kept .card-cost .sockets {
+.wonderful .card .card-cost .sockets {
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 0.22rem;
 }
 
-.wonderful .cards.kept .card-art,
-.wonderful .cards.kept .card-rows {
+.wonderful .card .card-art,
+.wonderful .card .card-rows {
   grid-column: 2;
 }
 
-.wonderful .cards.kept .card-rows {
+.wonderful .card .card-art {
+  grid-row: 2;
+}
+
+.wonderful .card .card-rows {
+  grid-row: 3;
+}
+
+.wonderful .card .card-cost + .card-rows {
   padding-left: 0.45rem;
 }
 
