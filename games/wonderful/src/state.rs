@@ -23,9 +23,10 @@
 //!    Empire; cubes that are not placed are lost. A sixth, **wrap-up** step follows, in which
 //!    Krystallium and characters that are still held can be placed.
 //!    What a player places in a step stays theirs to take back ([`Action::Undo`])
-//!    until they press Done ([`Action::Ready`]); only then are the buildings
-//!    it filled built (and their bonuses paid) and five Empire cubes turned
-//!    into Krystallium. The step ends when everybody has pressed Done.
+//!    until they press Done ([`Action::Ready`]), except once a placement has
+//!    finished a building (built and paid at once) or made five Empire cubes
+//!    into a Krystallium: that one and everything before it are final. The
+//!    step ends when everybody has pressed Done.
 //!
 //! After the fourth round the victory points are counted.
 //!
@@ -605,14 +606,14 @@ impl State {
         self.convert_empire_cubes(seat);
     }
 
-    /// Turns every five Empire cubes into a Krystallium, leaving out the
-    /// cubes placed this step that can still be taken back.
+    /// Turns five Empire cubes into a Krystallium, at once and for good:
+    /// what was placed before can no longer be taken back.
     fn convert_empire_cubes(&mut self, seat: usize) {
         let p = &mut self.players[seat];
-        let movable = p.placed.iter().filter(|x| x.target == Target::Empire).count() as u8;
-        while p.empire_cubes.saturating_sub(movable) >= CUBES_PER_KRYSTALLIUM {
+        while p.empire_cubes >= CUBES_PER_KRYSTALLIUM {
             p.empire_cubes -= CUBES_PER_KRYSTALLIUM;
             p.krystallium += 1;
+            p.placed.clear();
         }
     }
 
@@ -627,6 +628,8 @@ impl State {
             return;
         }
         p.buildings.remove(at);
+        // Built for good: undo stops here.
+        p.placed.clear();
         p.empire.push(id);
         for bonus in id.def().bonus {
             match bonus {
@@ -726,7 +729,7 @@ impl State {
         match target {
             Target::Empire => p.empire_cubes -= 1,
             Target::Card(id) => {
-                // Buildings are only finished at Done, so it is still there.
+                // Finishing it would have emptied the list, so it is still there.
                 if let Some(b) = p.buildings.iter_mut().find(|b| b.card == id) {
                     let f = &mut b.filled;
                     match piece {
@@ -741,17 +744,12 @@ impl State {
         Ok(())
     }
 
-    /// Done with a production step: what was placed is final, the buildings
-    /// it filled are built and the Empire cubes counted.
+    /// Done with a production step: what was placed is final and the cubes
+    /// left are dropped.
     fn finalize(&mut self, seat: usize) {
         let p = &mut self.players[seat];
         p.placed.clear();
         p.pool = 0;
-        let full: Vec<CardId> = p.buildings.iter().filter(|b| b.remaining().is_zero()).map(|b| b.card).collect();
-        for id in full {
-            self.complete_if_done(seat, id);
-        }
-        self.convert_empire_cubes(seat);
     }
 
     /// The building `target` names, if it still has a space `wanted` accepts.
@@ -771,15 +769,12 @@ impl State {
         }
     }
 
-    /// Fills a space of a building. In planning a full building is built at
-    /// once; in production, when its player presses Done (see [`State::finalize`]).
+    /// Fills a space of a building, which is built as soon as it is full.
     fn fill(&mut self, seat: usize, id: CardId, add: impl FnOnce(&mut Cost)) {
         if let Some(b) = self.players[seat].buildings.iter_mut().find(|b| b.card == id) {
             add(&mut b.filled);
         }
-        if self.phase == Phase::Planning {
-            self.complete_if_done(seat, id);
-        }
+        self.complete_if_done(seat, id);
     }
 
     // ----- production --------------------------------------------------

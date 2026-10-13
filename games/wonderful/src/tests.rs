@@ -612,8 +612,9 @@ fn cubes_come_from_the_pool_and_the_rest_is_lost() {
     assert_eq!(s.players[0].pool, 2);
     assert_eq!(s.players[0].buildings[0].filled.res[0], 1);
     s.apply(0, Action::Place { piece: materials, target: plant }).unwrap();
-    assert!(s.players[0].buildings[0].remaining().is_zero(), "the Recycling Plant is full");
-    // It is full now, so the last cube goes to the Empire.
+    assert!(s.players[0].buildings.is_empty(), "the Recycling Plant is built as soon as it is full");
+    assert!(s.players[0].empire.contains(&id("Recycling Plant")));
+    // It is gone now, so the last cube goes to the Empire.
     assert_eq!(s.apply(0, Action::Place { piece: materials, target: plant }), Err(Error::InvalidTarget));
     s.apply(0, Action::Place { piece: materials, target: Target::Empire }).unwrap();
     assert_eq!(s.players[0].empire_cubes, 1);
@@ -621,7 +622,6 @@ fn cubes_come_from_the_pool_and_the_rest_is_lost() {
     s.apply(1, Action::Ready).unwrap();
     assert_eq!(s.phase, Phase::Production { step: 0 }, "seat 0 hasn't pressed Done");
     s.apply(0, Action::Ready).unwrap();
-    assert!(s.players[0].empire.contains(&id("Recycling Plant")), "built at Done");
     assert_eq!(s.phase, Phase::Production { step: 1 });
     assert_eq!(s.players[0].pool, 0, "no Energy, and nothing left over");
 }
@@ -649,15 +649,16 @@ fn five_cubes_on_the_empire_make_krystallium() {
     for _ in 0..5 {
         s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
     }
-    // Still cubes until Done, so they can be taken back.
-    assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (5, 0));
-    s.apply(0, Action::Undo).unwrap();
-    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (4, 3));
-    for _ in 0..3 {
+    // At once, and for good: undo stops there.
+    assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (0, 1));
+    assert_eq!(s.apply(0, Action::Undo), Err(Error::NothingToUndo));
+    assert_eq!(s.players[0].pool, 2);
+    for _ in 0..2 {
         s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
     }
-    s.apply(0, Action::Ready).unwrap();
     assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (2, 1));
+    s.apply(0, Action::Undo).unwrap();
+    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (1, 1));
 }
 
 #[test]
@@ -685,10 +686,9 @@ fn krystallium_stands_in_for_any_cube_but_not_for_characters() {
     }
     assert_eq!(s.players[1].krystallium, 0);
     for _ in 0..2 {
-        assert!(!s.players[1].buildings[0].remaining().is_zero(), "still needs its Generals");
+        assert_eq!(s.players[1].buildings.len(), 1, "still needs its Generals");
         s.apply(1, Action::Place { piece: Piece::General, target: center }).unwrap();
     }
-    s.apply(1, Action::Ready).unwrap();
     assert!(s.players[1].buildings.is_empty());
     assert!(s.players[1].empire.contains(&id("Center of the Earth")));
     assert_eq!(s.players[1].generals, 0);
@@ -865,7 +865,7 @@ fn undo_takes_back_what_was_placed_last() {
 }
 
 #[test]
-fn a_building_filled_in_production_is_built_at_done() {
+fn a_building_is_built_once_full_and_that_cannot_be_undone() {
     let mut s = blank(2);
     let mut filled = id("Industrial Complex").def().cost; // 3 Materials, 1 Energy: a Financier
     filled.res[Res::Materials.index()] -= 1;
@@ -873,21 +873,23 @@ fn a_building_filled_in_production_is_built_at_done() {
     start_production(&mut s);
     let financiers = s.players[0].financiers;
     let complex = Target::Card(id("Industrial Complex"));
+    s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
     s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: complex }).unwrap();
-    // Full, but neither built nor paid while it can still be taken back.
-    assert!(s.players[0].buildings[0].remaining().is_zero());
-    assert!(s.players[0].empire.is_empty());
-    assert_eq!(s.players[0].financiers, financiers);
-    assert!(!s.log.contains(&Event::Completed { seat: 0, card: id("Industrial Complex") }));
-    s.apply(0, Action::Undo).unwrap();
-    assert!(!s.players[0].buildings[0].remaining().is_zero());
-    s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: complex }).unwrap();
-    s.apply(0, Action::Ready).unwrap();
+    // Built and paid at once, as in the published game.
     assert!(s.players[0].buildings.is_empty());
     assert_eq!(s.players[0].empire, vec![id("Industrial Complex")]);
     assert_eq!(s.players[0].financiers, financiers + 1);
     assert!(s.log.contains(&Event::Completed { seat: 0, card: id("Industrial Complex") }));
-    // Done drops the cubes left.
+    // Undo stops there: neither that cube nor the one before can be taken back.
+    assert_eq!(s.apply(0, Action::Undo), Err(Error::NothingToUndo));
+    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (1, 1));
+    // What comes after can.
+    s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
+    s.apply(0, Action::Undo).unwrap();
+    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (1, 1));
+    // Done drops the cubes left, and the step still waits for it.
+    assert!(!s.players[0].ready);
+    s.apply(0, Action::Ready).unwrap();
     assert_eq!(s.players[0].pool, 0);
     assert_eq!(s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }), Err(Error::NothingToPlace));
 }
@@ -912,20 +914,23 @@ fn placing_after_done_reopens_your_step() {
 fn scrapping_a_building_loses_what_was_placed_on_it_this_step() {
     let mut s = blank(2);
     s.players[0].buildings = vec![Building { card: id("Recycling Plant"), filled: Cost::default() }];
-    s.players[0].empire_cubes = 3;
+    s.players[0].empire_cubes = 2;
     start_production(&mut s);
     let plant = Target::Card(id("Recycling Plant"));
     s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
     s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: plant }).unwrap();
-    // Its recycling cube makes five on the Empire, one of them still movable.
+    // Its recycling cube goes on the Empire; the cube on the plant is lost.
     s.apply(0, Action::Scrap { card: id("Recycling Plant") }).unwrap();
     assert_eq!(s.players[0].placed, vec![Placement { piece: Piece::Cube(Res::Materials), target: Target::Empire }]);
-    assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (5, 0));
+    assert_eq!(s.players[0].empire_cubes, 4);
     s.apply(0, Action::Undo).unwrap();
-    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (4, 2));
-    s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
-    s.apply(0, Action::Ready).unwrap();
+    assert_eq!((s.players[0].empire_cubes, s.players[0].pool), (3, 2));
+    // Two more make five: a Krystallium at once, for good.
+    for _ in 0..2 {
+        s.apply(0, Action::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
+    }
     assert_eq!((s.players[0].empire_cubes, s.players[0].krystallium), (0, 1));
+    assert_eq!(s.apply(0, Action::Undo), Err(Error::NothingToUndo));
 }
 
 // ----- scoring -------------------------------------------------------------
