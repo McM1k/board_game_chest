@@ -1693,3 +1693,36 @@ fn whole_games_end_with_the_expansion_for_every_player_count() {
         }
     }
 }
+
+#[test]
+fn krystallium_and_characters_held_are_never_lost() {
+    let mut s = blank(2);
+    // Lunar Base has a Krystallium space, so the wrap-up step waits for seat 0.
+    let base = id("Lunar Base");
+    s.players[0].buildings = vec![Building { card: base, filled: Cost::default() }];
+    s.players[0].krystallium = 2;
+    s.players[0].generals = 1;
+    s.players[0].financiers = 1;
+    start_production(&mut s);
+    // In every step, a Krystallium put on a space and taken back, then Done.
+    loop {
+        let Phase::Production { step } = s.phase else { break };
+        if !s.players[0].ready {
+            s.apply(0, Action::Place { piece: Piece::Krystallium(None), target: Target::Card(base) }).unwrap();
+            s.apply(0, Action::Undo).unwrap();
+            if s.players[0].choose {
+                s.apply(0, Action::Choose { token: Token::General }).unwrap();
+            }
+            s.apply(0, Action::Ready).unwrap();
+        }
+        if s.phase == (Phase::Production { step }) {
+            skip_step(&mut s);
+        }
+        assert_eq!(s.players[0].krystallium, 2, "after step {step}");
+    }
+    assert_eq!((s.round, s.phase), (2, Phase::Draft));
+    let p = &s.players[0];
+    assert_eq!(p.krystallium, 2);
+    assert!(p.generals >= 1 && p.financiers >= 1, "characters kept: {} {}", p.generals, p.financiers);
+    assert_eq!(p.buildings[0].filled, Cost::default());
+}
