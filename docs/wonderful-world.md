@@ -43,11 +43,12 @@ Where the engine fills a gap or picks a convenience:
 
 | Topic | What the engine does | Status |
 |---|---|---|
-| Wrap-up step | A sixth production step after Exploration to place Krystallium and characters still held. Skipped when nobody holds one that fits a free space. | Not in the published game, where these can be placed during any step before you end it. Needed here because a player whose cubes are all placed is done with a step at once. |
+| Wrap-up step | A sixth production step after Exploration to place Krystallium and characters still held. Skipped when nobody holds one that fits a free space. | Not in the published game, where these can be placed during any step before you end it. Needed here because a player who produced nothing is done with a step at once. |
 | Scrap | Allowed in Planning or any production step. Everything on the building is lost, Krystallium and characters included; its recycling cube goes on the Empire. | Follows the rules summaries (Ultraboardgames, BGA). Game Park gives Krystallium and characters back, and treats a card drafted this round as if it were being recycled. |
 | Empires | Side A of the five base Empires (seven with the expansion), each with its production and its end-game bonus, dealt at random. | Side B (the same production for everybody, no bonus) would be another `Options` field beside `ascension`. |
 | New cards producing | Production is counted at the start of each step: a card finished in step *k* first produces in step *k+1*; one finished in Planning produces in Materials the same round. | Confirmed (Game Park). |
-| Ending a step | A player is done when their pool is empty and no choice is pending, or when they press Done (which drops unplaced cubes). A step where nobody has anything to place is skipped. | Pace: nobody waits on an empty step. |
+| Ending a step | A player is done when they press Done (which drops unplaced cubes), or at once if they start the step with nothing produced and no choice pending. Placing again after Done reopens their step. A step where nobody has anything to place is skipped. | Placing the last cube used to end your step by itself, which made a player put the next step's cube by mistake (a player asked, 2026-10-13). |
+| Undo and Done | In production, what you place stays yours to take back (`Action::Undo`, last first) until you press Done. Only then are the buildings it filled built and paid out, and five Empire cubes turned into Krystallium; a building's bonus is therefore first usable in the next step. Scrapping a building drops what was placed on it this step. Planning placements are final at once. | A convenience: the published game builds a card the moment it is full. |
 
 Edge cases:
 
@@ -231,8 +232,8 @@ publisher, La Boîte de Jeu; Game Park's licence covers its code, not the art.
   that still need that cube, plus the Empire. "Done planning" stays disabled until every card
   is decided. Try Scrap on a building (its dialog only confirms: the cube goes to the Empire).
 * Production: the step bar and race list. Click a free space (it lights up when what you hold
-  fits). Pick another piece in the tray first to override. Try "Put on your Empire" and
-  "Done: drop N cubes". A Science win shows "Take a General" / "Take a Financier" and blocks
+  fits). Pick another piece in the tray first to override. Try "Put on your Empire", Undo,
+  and "Done with Materials: drop N cubes"; a full building says "Built when you press Done". A Science win shows "Take a General" / "Take a Financier" and blocks
   Done until you choose. Wrap-up appears only when someone can use it.
 * Reload mid-game: you return to your seat with your own cards.
 * A real phone: the sticky tray, tap targets, stacked standings, fonts.

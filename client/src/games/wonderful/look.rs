@@ -636,21 +636,72 @@ pub fn hint(view: &View, names: &[String]) -> String {
         Phase::Production { .. } if me.choose => {
             "You produced the most Science: choose a General or a Financier.".to_string()
         }
-        Phase::Production { step } if (step as usize) < Res::ALL.len() && !me.ready => {
+        Phase::Production { step } if (step as usize) < Res::ALL.len() && !me.ready && me.pool > 0 => {
             let res = Res::ALL[step as usize];
             format!(
-                "Place your {} {} cube{}: pick a free space on a building, or put them on your Empire. Cubes you don't place are lost.",
+                "Place your {} {} cube{}: pick a free space on a building, or put them on your Empire, then press Done. Until then, Undo takes back what you placed. Cubes you don't place are lost.",
                 me.pool,
                 res.name(),
                 if me.pool == 1 { "" } else { "s" }
             )
         }
+        Phase::Production { step } if (step as usize) < Res::ALL.len() && !me.ready => format!(
+            "Placing {}: press Done when you're finished, or Undo to take back what you placed. Buildings you filled are built when you press Done.",
+            Res::ALL[step as usize].name()
+        ),
         Phase::Production { .. } if !me.ready => {
-            "Last chance this round to place Krystallium or characters you hold. Finish when you're done.".into()
+            "Last chance this round to place Krystallium or characters you hold. Press Done when you're finished.".into()
         }
         Phase::Production { .. } | Phase::Planning => waiting(),
         Phase::Over => "Four rounds played. These are the final scores.".into(),
     }
+}
+
+/// The line by the Done button while you are placing in a production step:
+/// nothing moves on until you press it.
+pub fn placing_cue(view: &View) -> Option<String> {
+    let me = &view.players[view.you];
+    match view.phase {
+        Phase::Production { step } if !me.ready => Some(match Res::ALL.get(step as usize) {
+            Some(res) => format!("Placing {} — press Done when finished", res.name()),
+            None => "Wrap-up — press Done when finished".into(),
+        }),
+        _ => None,
+    }
+}
+
+/// The Done button of a production step: its label, and whether it is off.
+pub fn done_button(view: &View) -> (String, bool) {
+    let me = &view.players[view.you];
+    let Phase::Production { step } = view.phase else {
+        return (String::new(), true);
+    };
+    let what = step_name(step);
+    if me.ready {
+        ("Waiting for the others…".into(), true)
+    } else if me.choose {
+        ("Take a character first".into(), true)
+    } else if me.pool > 0 {
+        (format!("Done with {what}: drop {} cube{}", me.pool, if me.pool == 1 { "" } else { "s" }), false)
+    } else {
+        (format!("Done with {what}"), false)
+    }
+}
+
+/// What Undo would take back: the last thing you placed in this step.
+pub fn undo_title(view: &View) -> Option<String> {
+    let last = view.placed.last()?;
+    let what = match last.piece {
+        Piece::Cube(res) => format!("{} cube", res.name()),
+        Piece::Krystallium(_) => "Krystallium".into(),
+        Piece::General => "General".into(),
+        Piece::Financier => "Financier".into(),
+    };
+    let from = match last.target {
+        Target::Empire => "your Empire".to_string(),
+        Target::Card(id) => id.def().name.to_string(),
+    };
+    Some(format!("Take back the {what} from {from}"))
 }
 
 /// One line of the log.
@@ -1224,8 +1275,24 @@ mod tests {
         assert_eq!(phase_title(&s.view_for(0)), "Production: Materials");
         // Seat 0's Empire (Noram States) makes three Materials.
         let h = hint(&s.view_for(0), &n);
-        assert!(h.contains("Place your 3 Materials cubes:"), "{h}");
+        assert!(h.contains("Place your 3 Materials cubes:") && h.contains("then press Done"), "{h}");
         assert_eq!(s.view_for(0).players[0].pool, 3);
+        let v = s.view_for(0);
+        assert_eq!(placing_cue(&v).as_deref(), Some("Placing Materials — press Done when finished"));
+        assert_eq!(done_button(&v), ("Done with Materials: drop 3 cubes".to_string(), false));
+        assert_eq!(undo_title(&v), None);
+
+        // Every cube placed: the step waits for Done, and Undo is offered.
+        for _ in 0..3 {
+            s.apply(0, A::Place { piece: Piece::Cube(Res::Materials), target: Target::Empire }).unwrap();
+        }
+        let v = s.view_for(0);
+        assert!(hint(&v, &n).starts_with("Placing Materials: press Done"), "{}", hint(&v, &n));
+        assert_eq!(done_button(&v), ("Done with Materials".to_string(), false));
+        assert_eq!(undo_title(&v).as_deref(), Some("Take back the Materials cube from your Empire"));
+        s.apply(0, A::Ready).unwrap();
+        let v = s.view_for(0);
+        assert_eq!((placing_cue(&v), done_button(&v).1), (None, true));
 
         s.players[0].choose = true;
         assert!(hint(&s.view_for(0), &n).contains("choose a General or a Financier"));

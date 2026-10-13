@@ -289,9 +289,10 @@ slowest player. Each round has three phases.
    fill the character spaces of buildings. Five cubes on the Empire make a Krystallium, a
    wildcard cube that stands in for any resource (not for a character), and the only thing
    that fills a card's Krystallium spaces. A last "wrap-up" step is there to place Krystallium
-   and characters; it is skipped when nobody can.
+   and characters; it is skipped when nobody can. In each step you can **undo** what you
+   placed until you press **Done**; the step moves on once everybody has pressed it.
 
-A building with every space filled is finished: from then on it produces every round, and some
+A building with every space filled is finished (in production, when you press Done): from then on it produces every round, and some
 cards hand over a one-off bonus (Krystallium or characters, kept until used). After round 4 you
 score the printed points of your finished cards, the points that depend on the cards of a type
 or the characters you hold (on your cards and on your Empire), and 1 for each General and each

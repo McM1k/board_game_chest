@@ -171,7 +171,8 @@ fn bonus_cube(bonus: Bonus) -> AnyView {
 
 /// `n` of `of` round markers lit, e.g. the cubes on the Empire.
 fn pips(n: u8, of: u8) -> AnyView {
-    let dots = (0..of)
+    // Cubes placed this step can go past the count until Done turns them into Krystallium.
+    let dots = (0..of.max(n))
         .map(|i| view! { <span class={if i < n { "pip on" } else { "pip" }}></span> })
         .collect_view();
     view! { <span class="pips" role="img" aria-label=format!("{n} of {of}")>{dots}</span> }.into_any()
@@ -821,24 +822,26 @@ fn tray(ctx: &Ctx) -> AnyView {
         }
     });
 
+    // What you placed this step stays yours to take back until you press Done.
+    let undo = look::undo_title(view).map(|title| {
+        let ctx2 = ctx.clone();
+        view! {
+            <button class="undo" title=title.clone() aria-label=title on:click=move |_| ctx2.act(Action::Undo)>
+                "Undo"
+            </button>
+        }
+    });
     let done = in_production.then(|| {
         let ctx2 = ctx.clone();
         let click = move |_| ctx2.act(Action::Ready);
-        let (label, disabled) = if me.ready {
-            ("Waiting for the others…".to_string(), true)
-        } else if me.choose {
-            ("Take a character first".to_string(), true)
-        } else if me.pool > 0 {
-            (format!("Done: drop {} cube{}", me.pool, if me.pool == 1 { "" } else { "s" }), false)
-        } else {
-            ("Done".to_string(), false)
-        };
+        let (label, disabled) = look::done_button(view);
         view! {
             <button class="primary" disabled=disabled on:click=click>
                 {label}
             </button>
         }
     });
+    let cue = look::placing_cue(view).map(|cue| view! { <p class="placing-cue">{cue}</p> });
 
     view! {
         <section class="panel tray">
@@ -849,7 +852,7 @@ fn tray(ctx: &Ctx) -> AnyView {
                     pieces.into_any()
                 }}
             </div>
-            <div class="tray-actions">{empire}{done}</div>
+            <div class="tray-actions">{cue}{empire}{undo}{done}</div>
         </section>
     }
     .into_any()
@@ -921,7 +924,13 @@ fn building_card(ctx: &Ctx, building: &Building) -> AnyView {
             <div class=card_class(def, "building") role="group" aria-label=summary.clone() title=summary>
                 {card_body(def, Some(view! { <span class="sockets">{sockets}</span> }.into_any()))}
                 <span class="card-foot">
-                    <span class="progress">{format!("{placed} of {needed} placed")}</span>
+                    <span class="progress">
+                        {if placed == needed {
+                            "Built when you press Done".to_string()
+                        } else {
+                            format!("{placed} of {needed} placed")
+                        }}
+                    </span>
                     <button class="link" on:click=scrap>
                         "Scrap"
                     </button>
@@ -1570,7 +1579,8 @@ mod tests {
         // races, so the prize is looked for in the race itself.)
         assert!(html.contains("Materials produced") && html.contains("race-row lead"));
         assert!(html.contains("class=\"race-prize\">takes a Financier<"));
-        assert!(html.contains("Put on your Empire") && html.contains("Done: drop 3 cubes"));
+        assert!(html.contains("Put on your Empire") && html.contains("Done with Materials: drop 3 cubes")
+            && html.contains("Placing Materials — press Done when finished"));
         assert!(html.contains("piece selected"), "the first piece is the one used");
         assert!(html.contains("Materials cube"));
         assert!(!html.contains("tied: no character"));
@@ -1585,6 +1595,29 @@ mod tests {
         assert!(idle.contains("Nothing to place right now."));
         assert!(idle.contains("Waiting for the others"));
         assert!(!idle.contains("Put on your Empire"));
+    }
+
+    #[test]
+    fn placing_waits_for_done_and_can_be_undone() {
+        let mut state = production_state();
+        let card = id("Recycling Plant"); // 2 Materials
+        state.players[0].buildings = vec![wonderful_core::Building { card, filled: Cost::default() }];
+        state.players[0].pool = 3;
+        state.players[0].ready = false;
+        assert!(!render(&state, 0).contains("class=\"undo\""), "nothing to take back yet");
+        for _ in 0..2 {
+            let to = wonderful_core::Target::Card(card);
+            state.apply(0, Action::Place { piece: wonderful_core::Piece::Cube(Res::Materials), target: to }).unwrap();
+        }
+        let html = render(&state, 0);
+        assert!(html.contains("Take back the Materials cube from Recycling Plant"));
+        assert!(html.contains("Built when you press Done"), "full, but built at Done");
+        assert!(html.contains("Done with Materials: drop 1 cube<"));
+        state.apply(0, Action::Place { piece: wonderful_core::Piece::Cube(Res::Materials), target: wonderful_core::Target::Empire })
+            .unwrap();
+        let html = render(&state, 0);
+        assert!(html.contains("Done with Materials<") && html.contains("Placing Materials — press Done when finished"));
+        assert!(html.contains("Take back the Materials cube from your Empire"));
     }
 
     #[test]
