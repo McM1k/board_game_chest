@@ -614,6 +614,64 @@
   fill: #9a5d00;
 }
 
+/* The printed board: its own spaces show; ours are only there to hover. */
+.barrage .space.printed rect,
+.barrage .space.printed circle {
+  fill: transparent;
+  stroke: none;
+}
+
+.barrage .piece image {
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+}
+
+.barrage .level-tag {
+  font-size: 15px;
+  font-weight: 800;
+  text-anchor: middle;
+  fill: #fff;
+  stroke: #1b1b1b;
+  stroke-width: 3.5px;
+  paint-order: stroke;
+}
+
+.barrage .headstream.printed rect {
+  fill: rgba(16, 26, 38, 0.62);
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.barrage .headstream.printed .hs-name,
+.barrage .headstream.printed .hs-count {
+  fill: #fff;
+}
+
+.barrage .headstream.printed .hs-rounds {
+  fill: #c9d6e2;
+}
+
+.barrage .headstream.printed .hs-rounds .now {
+  fill: #fff;
+}
+
+.barrage .headstream.printed.open rect {
+  fill: rgba(255, 229, 138, 0.85);
+  stroke: #9a7212;
+}
+
+.barrage .headstream.printed.open .hs-name,
+.barrage .headstream.printed.open .hs-count,
+.barrage .headstream.printed.open .hs-rounds .now {
+  fill: #29435d;
+}
+
+.barrage .headstream.printed.open .hs-rounds {
+  fill: #4d5d6c;
+}
+
+.barrage .map-style {
+  margin-top: 0.5rem;
+}
+
 /* What a click can build on: the spot glows and says what it costs. */
 .barrage .target {
   cursor: pointer;
@@ -672,6 +730,11 @@
 .barrage .legend .key {
   width: 1.9rem;
   height: 0.8rem;
+}
+
+.barrage .key-piece {
+  height: 1.1rem;
+  width: auto;
 }
 
 .barrage .key-box {
@@ -1022,6 +1085,31 @@
   margin-top: 0.3rem;
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.barrage .res-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.75rem;
+  margin-right: 0.75rem;
+}
+
+.barrage .res {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.barrage .res img {
+  height: 1.3rem;
+  width: 1.3rem;
+  object-fit: contain;
+}
+
+.barrage .stock .energy {
+  white-space: nowrap;
 }
 
 .barrage .pieces {
