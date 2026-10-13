@@ -373,6 +373,32 @@ pub fn pick_for_space(view: &View, chosen: Option<Held>, space: Space) -> Option
     holds(plain).then_some(plain)
 }
 
+/// The pick after `used` went on a space: Krystallium and characters are
+/// picked for one placement only, so the next click goes back to the plain
+/// piece (the step's cube) instead of quietly spending another one. A cube
+/// stays picked.
+pub fn pick_after_placing(chosen: Option<Held>, used: Held) -> Option<Held> {
+    match used {
+        Held::Cube(_) => chosen,
+        _ => None,
+    }
+}
+
+/// The pick after a click on `held` in the tray: picking it again puts it
+/// back, unpicked.
+pub fn toggle_pick(chosen: Option<Held>, held: Held) -> Option<Held> {
+    (chosen != Some(held)).then_some(held)
+}
+
+/// What the tray says about a Krystallium or character you picked: that the
+/// next click on a space spends it, and how to put it back.
+pub fn pick_cue(view: &View, chosen: Option<Held>) -> Option<String> {
+    let held = chosen.filter(|h| !matches!(h, Held::Cube(_)))?;
+    available(view).iter().any(|(a, _)| *a == held).then(|| {
+        format!("{} picked: your next click on a space uses one. Click it again to keep it.", held.name())
+    })
+}
+
 /// What a click on the Empire places: the cube picked in the tray, or else the
 /// first cube you hold (the current step's resource comes first).
 pub fn pick_for_empire(view: &View, chosen: Option<Held>) -> Option<Held> {
@@ -969,6 +995,34 @@ mod tests {
         // Picked something you no longer have: fall back.
         assert_eq!(effective_held(&view, Some(Held::General)), Some(Held::Krystallium));
         assert_eq!(effective_held(&s.view_for(1), Some(Held::General)), None);
+    }
+
+    #[test]
+    fn a_picked_krystallium_is_spent_once_and_can_be_put_back() {
+        let mut s = planning();
+        s.phase = Phase::Production { step: 0 };
+        s.players[0].pool = 2; // Materials cubes
+        s.players[0].krystallium = 2;
+        let view = s.view_for(0);
+        let mat = Space::Cube(Res::Materials);
+        // Picked, the Krystallium goes on the first space clicked...
+        let chosen = Some(Held::Krystallium);
+        assert_eq!(pick_for_space(&view, chosen, mat), Some(Held::Krystallium));
+        assert!(pick_cue(&view, chosen).unwrap().starts_with("Krystallium picked"));
+        // ...and then the pick is dropped: the next click places a cube.
+        let chosen = pick_after_placing(chosen, Held::Krystallium);
+        assert_eq!(chosen, None);
+        assert_eq!(pick_for_space(&view, chosen, mat), Some(Held::Cube(Res::Materials)));
+        assert_eq!(pick_cue(&view, chosen), None);
+        // Characters too; a picked cube stays picked.
+        assert_eq!(pick_after_placing(Some(Held::General), Held::General), None);
+        let cube = Some(Held::Cube(Res::Materials));
+        assert_eq!(pick_after_placing(cube, Held::Cube(Res::Materials)), cube);
+        assert_eq!(pick_cue(&view, cube), None);
+        // Clicking the picked piece again puts it back.
+        assert_eq!(toggle_pick(None, Held::Krystallium), Some(Held::Krystallium));
+        assert_eq!(toggle_pick(Some(Held::Krystallium), Held::Krystallium), None);
+        assert_eq!(toggle_pick(Some(Held::General), Held::Krystallium), Some(Held::Krystallium));
     }
 
     #[test]

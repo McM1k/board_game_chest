@@ -120,7 +120,9 @@ need not be the host.
 * Placing: clicking a free space uses the plain piece for it (that resource's cube, a
   General, a Financier, Krystallium on a Krystallium space); picking a piece in the tray first
   overrides that. On a resource's space Krystallium is used only when picked, since it fits
-  anything and is easy to waste. Recycle opens a dialog for the cube's target, because the
+  anything and is easy to waste: a picked Krystallium or character is used once, then the pick
+  is dropped (`pick_after_placing`), and the tray says so while it's picked. Clicking the picked
+  piece again, pressing Done, or a new step drops the pick; the piece stays in your reserve. Recycle opens a dialog for the cube's target, because the
   target is part of the move; Scrap's dialog only confirms, its cube always goes on the Empire.
 * `client/src/games/wonderful/wonderful.css` scopes every rule under `.wonderful`; generic element rules sit in
   `:where()` so the prefix adds no specificity. Checked rendered (not clicked) at 1280, 390,

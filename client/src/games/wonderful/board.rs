@@ -772,7 +772,7 @@ fn piece_button(ctx: &Ctx, held: Held, n: u8) -> AnyView {
             class=class
             aria-pressed=move || selected().to_string()
             title=held.name()
-            on:click=move |_| ui.held.set(Some(held))
+            on:click=move |_| ui.held.update(|h| *h = look::toggle_pick(*h, held))
         >
             {held_cube(held)}
             <span class="count">{format!("×{n}")}</span>
@@ -832,7 +832,11 @@ fn tray(ctx: &Ctx) -> AnyView {
     });
     let done = in_production.then(|| {
         let ctx2 = ctx.clone();
-        let click = move |_| ctx2.act(Action::Ready);
+        let click = move |_| {
+            // Nothing picked is spent: it stays in your reserve.
+            ctx2.ui().held.set(None);
+            ctx2.act(Action::Ready)
+        };
         let (label, disabled) = look::done_button(view);
         view! {
             <button class="primary" disabled=disabled on:click=click>
@@ -841,6 +845,10 @@ fn tray(ctx: &Ctx) -> AnyView {
         }
     });
     let cue = look::placing_cue(view).map(|cue| view! { <p class="placing-cue">{cue}</p> });
+    let pick_cue = {
+        let ctx = ctx.clone();
+        move || look::pick_cue(&ctx.view, ctx.ui().held.get()).map(|cue| view! { <p class="pick-cue">{cue}</p> })
+    };
 
     view! {
         <section class="panel tray">
@@ -851,6 +859,7 @@ fn tray(ctx: &Ctx) -> AnyView {
                     pieces.into_any()
                 }}
             </div>
+            {pick_cue}
             <div class="tray-actions">{cue}{empire}{undo}{done}</div>
         </section>
     }
@@ -885,9 +894,9 @@ fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
         let ctx = ctx.clone();
         move |_| {
             let chosen = ctx.ui().held.get_untracked();
-            let action = look::pick_for_space(&ctx.view, chosen, space)
-                .and_then(|held| look::slot_action(held, space, card));
-            if let Some(action) = action {
+            let Some(held) = look::pick_for_space(&ctx.view, chosen, space) else { return };
+            if let Some(action) = look::slot_action(held, space, card) {
+                ctx.ui().held.set(look::pick_after_placing(chosen, held));
                 ctx.act(action);
             }
         }
@@ -1631,6 +1640,7 @@ mod tests {
         assert_eq!(html.matches("socket free res-energy fits").count(), 0);
         assert_eq!(html.matches("socket free res-energy\"").count(), 1);
         assert!(html.contains("Krystallium") && html.contains("piece-name"));
+        assert!(!html.contains("pick-cue"), "nothing picked");
 
         // With the Krystallium picked, it fits every space.
         let html = in_owner(|| {
@@ -1641,6 +1651,7 @@ mod tests {
         assert_eq!(html.matches("socket free res-energy fits").count(), 1);
         assert_eq!(html.matches("socket free res-materials fits").count(), 3);
         assert!(html.contains("aria-pressed=\"true\""));
+        assert!(html.contains("Krystallium picked: your next click on a space uses one."), "{html}");
         // ...but it doesn't go on the Empire.
         assert!(html.contains("Put on your Empire"));
     }

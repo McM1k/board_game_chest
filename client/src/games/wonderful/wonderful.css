@@ -1449,6 +1449,14 @@
   font-weight: 600;
 }
 
+.wonderful .pick-cue {
+  margin: 0;
+  flex-basis: 100%;
+  order: -1;
+  font-weight: 600;
+  color: var(--pop);
+}
+
 .wonderful .empire-target {
   display: inline-flex;
   align-items: center;

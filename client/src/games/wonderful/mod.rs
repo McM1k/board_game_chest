@@ -127,6 +127,11 @@ impl crate::games::Game for Wonderful {
         let wonderful = app.games.wonderful;
         wonderful.names.set(names);
         wonderful.connected.set(connected);
+        // A new step drops the pick: what was picked and not placed stays in
+        // your reserve, and isn't spent by a click in the next step.
+        if wonderful.view.with_untracked(|v| v.as_ref().map(|v| v.phase)) != Some(view.phase) {
+            wonderful.ui.held.set(None);
+        }
         wonderful.view.set(Some(*view));
     }
 
