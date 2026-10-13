@@ -22,6 +22,10 @@
 //!    matching character, and the cubes are placed on buildings or the
 //!    Empire; cubes that are not placed are lost. A sixth, **wrap-up** step follows, in which
 //!    Krystallium and characters that are still held can be placed.
+//!    What a player places in a step stays theirs to take back ([`Action::Undo`])
+//!    until they press Done ([`Action::Ready`]); only then are the buildings
+//!    it filled built (and their bonuses paid) and five Empire cubes turned
+//!    into Krystallium. The step ends when everybody has pressed Done.
 //!
 //! After the fourth round the victory points are counted.
 //!
@@ -83,6 +87,14 @@ pub enum Target {
     Empire,
 }
 
+/// Something placed during the current production step, which its player
+/// can still take back until they press Done.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Placement {
+    pub piece: Piece,
+    pub target: Target,
+}
+
 /// Something a player holds and can place on a building.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Piece {
@@ -106,8 +118,11 @@ pub enum Action {
     /// Planning or production: give up a building. What was placed on it is
     /// lost; its recycling cube goes to the Empire.
     Scrap { card: CardId },
-    /// Planning or production: place something you hold.
+    /// Planning or production: place something you hold. In production it
+    /// can be taken back until you press Done.
     Place { piece: Piece, target: Target },
+    /// Production: take back the last thing you placed in this step.
+    Undo,
     /// Production, Science: pick the character the supremacy bonus gives.
     Choose { token: Token },
     /// Planning: no more to decide. Production: done with this step.
@@ -128,6 +143,7 @@ pub enum Error {
     CardsLeftToPlan,
     MustChoose,
     NothingToChoose,
+    NothingToUndo,
 }
 
 impl Error {
@@ -146,6 +162,7 @@ impl Error {
             Error::CardsLeftToPlan => "Decide what to do with all your drafted cards first.",
             Error::MustChoose => "Choose your General or Financier first.",
             Error::NothingToChoose => "There's nothing to choose.",
+            Error::NothingToUndo => "There's nothing to take back.",
         }
     }
 }
@@ -198,6 +215,9 @@ pub struct PlayerState {
     pub produced: u8,
     /// Planning: done planning. Production: done with this step.
     pub ready: bool,
+    /// Production: what was placed in this step and can still be taken
+    /// back, oldest first. Emptied by Done.
+    pub placed: Vec<Placement>,
     /// Won the Science supremacy and has to pick a character.
     pub choose: bool,
 }
@@ -434,6 +454,7 @@ impl State {
             Action::Scrap { card } => self.scrap(seat, card)?,
             Action::Place { piece, target } => self.place(seat, piece, target)?,
             Action::Choose { token } => self.choose(seat, token)?,
+            Action::Undo => self.undo(seat)?,
             Action::Ready => self.ready(seat)?,
         }
         self.settle();
@@ -543,7 +564,10 @@ impl State {
             .iter()
             .position(|b| b.card == card)
             .ok_or(Error::NotUnderConstruction)?;
-        self.players[seat].buildings.remove(at);
+        let p = &mut self.players[seat];
+        p.buildings.remove(at);
+        // What was placed on it this step is lost with it.
+        p.placed.retain(|x| x.target != Target::Card(card));
         self.discard.push(card);
         self.add_empire_cube(seat);
         Ok(())
@@ -572,19 +596,21 @@ impl State {
     fn place_cube(&mut self, seat: usize, res: Res, to: Target) {
         match to {
             Target::Empire => self.add_empire_cube(seat),
-            Target::Card(id) => {
-                if let Some(b) = self.players[seat].buildings.iter_mut().find(|b| b.card == id) {
-                    b.filled.res[res.index()] += 1;
-                }
-                self.complete_if_done(seat, id);
-            }
+            Target::Card(id) => self.fill(seat, id, |f| f.res[res.index()] += 1),
         }
     }
 
     fn add_empire_cube(&mut self, seat: usize) {
+        self.players[seat].empire_cubes += 1;
+        self.convert_empire_cubes(seat);
+    }
+
+    /// Turns every five Empire cubes into a Krystallium, leaving out the
+    /// cubes placed this step that can still be taken back.
+    fn convert_empire_cubes(&mut self, seat: usize) {
         let p = &mut self.players[seat];
-        p.empire_cubes += 1;
-        if p.empire_cubes >= CUBES_PER_KRYSTALLIUM {
+        let movable = p.placed.iter().filter(|x| x.target == Target::Empire).count() as u8;
+        while p.empire_cubes.saturating_sub(movable) >= CUBES_PER_KRYSTALLIUM {
             p.empire_cubes -= CUBES_PER_KRYSTALLIUM;
             p.krystallium += 1;
         }
@@ -627,12 +653,8 @@ impl State {
                     return Err(Error::NothingToPlace);
                 }
                 self.check_cube_target(seat, res, target)?;
-                let p = &mut self.players[seat];
-                p.pool -= 1;
-                // Everything placed: nothing left to wait for in this step.
-                if p.pool == 0 && !p.choose {
-                    p.ready = true;
-                }
+                self.players[seat].pool -= 1;
+                self.hold_back(seat, piece, target);
                 self.place_cube(seat, res, target);
                 Ok(())
             }
@@ -646,6 +668,7 @@ impl State {
                     return Err(Error::NothingToPlace);
                 }
                 p.krystallium -= 1;
+                self.hold_back(seat, piece, target);
                 match space {
                     Some(res) => self.fill(seat, id, |f| f.res[res.index()] += 1),
                     None => self.fill(seat, id, |f| f.krystallium += 1),
@@ -659,6 +682,7 @@ impl State {
                     return Err(Error::NothingToPlace);
                 }
                 p.generals -= 1;
+                self.hold_back(seat, piece, target);
                 self.fill(seat, id, |f| f.generals += 1);
                 Ok(())
             }
@@ -669,10 +693,65 @@ impl State {
                     return Err(Error::NothingToPlace);
                 }
                 p.financiers -= 1;
+                self.hold_back(seat, piece, target);
                 self.fill(seat, id, |f| f.financiers += 1);
                 Ok(())
             }
         }
+    }
+
+    /// In production, notes a placement as one that can still be taken back:
+    /// the player isn't done with the step until they press Done again.
+    fn hold_back(&mut self, seat: usize, piece: Piece, target: Target) {
+        if matches!(self.phase, Phase::Production { .. }) {
+            let p = &mut self.players[seat];
+            p.placed.push(Placement { piece, target });
+            p.ready = false;
+        }
+    }
+
+    /// Takes back the last placement of this step.
+    fn undo(&mut self, seat: usize) -> Result<(), Error> {
+        if !matches!(self.phase, Phase::Production { .. }) {
+            return Err(Error::WrongPhase);
+        }
+        let p = &mut self.players[seat];
+        let Placement { piece, target } = p.placed.pop().ok_or(Error::NothingToUndo)?;
+        match piece {
+            Piece::Cube(_) => p.pool += 1,
+            Piece::Krystallium(_) => p.krystallium += 1,
+            Piece::General => p.generals += 1,
+            Piece::Financier => p.financiers += 1,
+        }
+        match target {
+            Target::Empire => p.empire_cubes -= 1,
+            Target::Card(id) => {
+                // Buildings are only finished at Done, so it is still there.
+                if let Some(b) = p.buildings.iter_mut().find(|b| b.card == id) {
+                    let f = &mut b.filled;
+                    match piece {
+                        Piece::Cube(res) | Piece::Krystallium(Some(res)) => f.res[res.index()] -= 1,
+                        Piece::Krystallium(None) => f.krystallium -= 1,
+                        Piece::General => f.generals -= 1,
+                        Piece::Financier => f.financiers -= 1,
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Done with a production step: what was placed is final, the buildings
+    /// it filled are built and the Empire cubes counted.
+    fn finalize(&mut self, seat: usize) {
+        let p = &mut self.players[seat];
+        p.placed.clear();
+        p.pool = 0;
+        let full: Vec<CardId> = p.buildings.iter().filter(|b| b.remaining().is_zero()).map(|b| b.card).collect();
+        for id in full {
+            self.complete_if_done(seat, id);
+        }
+        self.convert_empire_cubes(seat);
     }
 
     /// The building `target` names, if it still has a space `wanted` accepts.
@@ -692,11 +771,15 @@ impl State {
         }
     }
 
+    /// Fills a space of a building. In planning a full building is built at
+    /// once; in production, when its player presses Done (see [`State::finalize`]).
     fn fill(&mut self, seat: usize, id: CardId, add: impl FnOnce(&mut Cost)) {
         if let Some(b) = self.players[seat].buildings.iter_mut().find(|b| b.card == id) {
             add(&mut b.filled);
         }
-        self.complete_if_done(seat, id);
+        if self.phase == Phase::Planning {
+            self.complete_if_done(seat, id);
+        }
     }
 
     // ----- production --------------------------------------------------
@@ -713,9 +796,6 @@ impl State {
         match token {
             Token::General => p.generals += 1,
             Token::Financier => p.financiers += 1,
-        }
-        if p.pool == 0 {
-            p.ready = true;
         }
         self.push_event(Event::Chose { seat, token });
         Ok(())
@@ -734,6 +814,7 @@ impl State {
                 if self.players[seat].choose {
                     return Err(Error::MustChoose);
                 }
+                self.finalize(seat);
                 self.players[seat].ready = true;
                 Ok(())
             }
@@ -768,6 +849,7 @@ impl State {
             let res = Res::ALL[step as usize];
             let made: Vec<u8> = (0..n).map(|i| self.production(i, res)).collect();
             for (p, &amount) in self.players.iter_mut().zip(&made) {
+                p.placed.clear();
                 p.produced = amount;
                 p.pool = amount;
                 p.choose = false;
@@ -793,6 +875,7 @@ impl State {
             for i in 0..n {
                 let can_act = self.can_wrap_up(i);
                 let p = &mut self.players[i];
+                p.placed.clear();
                 p.pool = 0;
                 p.produced = 0;
                 p.choose = false;

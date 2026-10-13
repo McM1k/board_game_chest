@@ -6,7 +6,7 @@
 //! The view has no maps, so it survives JSON.
 
 use crate::cards::{CardId, Res};
-use crate::state::{Building, Event, Options, Phase, Score, State};
+use crate::state::{Building, Event, Options, Phase, Placement, Score, State};
 use serde::{Deserialize, Serialize};
 
 /// What everybody can see about one player.
@@ -52,6 +52,10 @@ pub struct View {
     pub picked: Option<CardId>,
     /// Your draft area.
     pub drafted: Vec<CardId>,
+    /// What you placed in this production step and can still take back,
+    /// oldest first.
+    #[serde(default)]
+    pub placed: Vec<Placement>,
     pub deck: usize,
     /// Cards left in the Corruption & Ascension deck.
     pub ascension_deck: usize,
@@ -102,6 +106,7 @@ impl State {
             hand: me.hand.clone(),
             picked: me.picked,
             drafted: me.drafted.clone(),
+            placed: me.placed.clone(),
             deck: self.deck.len(),
             ascension_deck: self.ascension_deck.len(),
             discard: self.discard.len(),
