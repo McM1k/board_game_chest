@@ -1730,14 +1730,13 @@
   color: #6fe3a4;
 }
 
-.wonderful .rival .cube {
+.wonderful .rival .cube:not(.peek .cube) {
   width: 1.2rem;
   height: 1.2rem;
   font-size: 0.62rem;
 }
 
-.wonderful .rival .cube.general,
-.wonderful .rival .cube.financier {
+.wonderful .rival .cube:is(.general, .financier):not(.peek .cube) {
   font-size: 0.42rem;
 }
 
@@ -1796,6 +1795,37 @@
   border-radius: 999px;
   /* A hairline, so a black chip still has an edge on the felt. */
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+/* Hovering (or tapping) one of their cards shows it whole, with its cubes,
+   beside the list; board.rs places it inside the window. */
+.wonderful .peekable {
+  cursor: zoom-in;
+}
+
+.wonderful .peekable:focus-visible {
+  outline: 2px solid var(--pearl);
+  outline-offset: 2px;
+}
+
+.wonderful .peek {
+  display: none;
+  position: fixed;
+  z-index: 50;
+  width: 14rem;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text);
+  white-space: normal;
+  pointer-events: none;
+}
+
+.wonderful .peekable[data-open] > .peek {
+  display: block;
+}
+
+.wonderful .peek .card {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .wonderful .log {
