@@ -1096,18 +1096,123 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
 
 // ----- the other players ---------------------------------------------------------------------------
 
+/// A building of someone else's as its full card, with the cubes already on
+/// it: what the popover over their compact list shows.
+fn peek_building(b: &Building) -> AnyView {
+    let def = b.card.def();
+    let (placed, needed) = look::progress(&def.cost, &b.filled);
+    let sockets = look::slots(&def.cost, &b.filled)
+        .into_iter()
+        .map(|slot| {
+            let space = slot.space;
+            let (state, title) =
+                if slot.filled { ("filled", format!("{} placed", space.name())) } else { ("free", format!("Free {} space", space.name())) };
+            view! {
+                <span class=format!("socket {state} {}", space.class()) title=title>
+                    {face(space.res(), space.token(), space.letter())}
+                </span>
+            }
+        })
+        .collect_view();
+    view! {
+        <div class=card_class(def, "building")>
+            {card_body(def, Some(view! { <span class="sockets">{sockets}</span> }.into_any()))}
+            <span class="card-foot">
+                <span class="progress">{format!("{placed} of {needed} placed")}</span>
+            </span>
+        </div>
+    }
+    .into_any()
+}
+
+/// Places an open popover beside its entry (left of it if it fits, else
+/// right, else under or over it), always inside the window.
+fn place_peek(entry: &web_sys::Element) {
+    use wasm_bindgen::JsCast;
+    let _ = entry.set_attribute("data-open", "");
+    let Some(peek) = entry.query_selector(".peek").ok().flatten() else { return };
+    let Ok(peek) = peek.dyn_into::<web_sys::HtmlElement>() else { return };
+    let Some(window) = web_sys::window() else { return };
+    let vw = window.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let vh = window.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let at = entry.get_bounding_client_rect();
+    let size = peek.get_bounding_client_rect();
+    let (w, h, gap) = (size.width(), size.height(), 8.0);
+    let clamp = |v: f64, max: f64| v.min(max).max(gap);
+    let (left, top) = if at.left() - w - gap >= gap {
+        (at.left() - w - gap, clamp(at.top() + at.height() / 2.0 - h / 2.0, vh - h - gap))
+    } else if at.right() + gap + w <= vw - gap {
+        (at.right() + gap, clamp(at.top() + at.height() / 2.0 - h / 2.0, vh - h - gap))
+    } else {
+        let below = at.bottom() + gap;
+        let top = if below + h <= vh - gap { below } else { clamp(at.top() - gap - h, vh - h - gap) };
+        (clamp(at.left() + at.width() / 2.0 - w / 2.0, vw - w - gap), top)
+    };
+    let style = peek.style();
+    let _ = style.set_property("left", &format!("{left:.0}px"));
+    let _ = style.set_property("top", &format!("{top:.0}px"));
+}
+
+fn close_peek(entry: &web_sys::Element) {
+    let _ = entry.remove_attribute("data-open");
+}
+
+/// An entry of someone else's compact lists that shows its full card in a
+/// popover: on hover with a mouse, on focus from the keyboard or a tap (a
+/// tap elsewhere takes the focus away, and closes it).
+fn peekable(class: String, label: String, entry: AnyView, card: AnyView) -> AnyView {
+    let (enter, leave, focus, blur) = {
+        use wasm_bindgen::JsCast;
+        fn target(ev: &web_sys::Event) -> Option<web_sys::Element> {
+            ev.current_target()?.dyn_into::<web_sys::Element>().ok()
+        }
+        (
+            |ev: web_sys::PointerEvent| {
+                if ev.pointer_type() == "mouse" {
+                    target(&ev).inspect(place_peek);
+                }
+            },
+            |ev: web_sys::PointerEvent| {
+                if ev.pointer_type() == "mouse" {
+                    target(&ev).inspect(close_peek);
+                }
+            },
+            |ev: web_sys::FocusEvent| {
+                target(&ev).inspect(place_peek);
+            },
+            |ev: web_sys::FocusEvent| {
+                target(&ev).inspect(close_peek);
+            },
+        )
+    };
+    view! {
+        <li
+            class=format!("{class} peekable")
+            tabindex="0"
+            aria-label=label
+            on:pointerenter=enter
+            on:pointerleave=leave
+            on:focus=focus
+            on:blur=blur
+        >
+            {entry}
+            <div class="peek" role="tooltip">{card}</div>
+        </li>
+    }
+    .into_any()
+}
+
 fn mini_building(b: &Building) -> AnyView {
     let def = b.card.def();
     let (placed, needed) = look::progress(&def.cost, &b.filled);
     let pct = (placed * 100).checked_div(needed).unwrap_or(100);
-    view! {
-        <li class=format!("mini {}", look::kind_class(def.kind)) title=look::card_summary(def)>
-            <span class="mini-name">{def.name}</span>
-            <span class="mini-progress" style=format!("--done:{pct}%")></span>
-            <span class="mini-count">{format!("{placed}/{needed}")}</span>
-        </li>
+    let entry = view! {
+        <span class="mini-name">{def.name}</span>
+        <span class="mini-progress" style=format!("--done:{pct}%")></span>
+        <span class="mini-count">{format!("{placed}/{needed}")}</span>
     }
-    .into_any()
+    .into_any();
+    peekable(format!("mini {}", look::kind_class(def.kind)), look::card_summary(def), entry, peek_building(b))
 }
 
 fn rival(ctx: &Ctx, seat: usize) -> AnyView {
@@ -1128,7 +1233,12 @@ fn rival(ctx: &Ctx, seat: usize) -> AnyView {
         .iter()
         .map(|id| {
             let def = id.def();
-            view! { <li class=format!("chip {}", look::kind_class(def.kind)) title=look::card_summary(def)>{def.name}</li> }
+            peekable(
+                format!("chip {}", look::kind_class(def.kind)),
+                look::card_summary(def),
+                view! { <span class="chip-name">{def.name}</span> }.into_any(),
+                card_static(def, false, ""),
+            )
         })
         .collect_view();
     view! {
@@ -1673,11 +1783,16 @@ mod tests {
         state.players[0].ready = false;
         state.players[0].krystallium = 1;
 
+        // Only our own buildings: the others' popovers draw their free spaces too.
+        let ours = |html: &str| {
+            let from = html.find("panel buildings").unwrap();
+            html[from..from + html[from..].find("</section>").unwrap()].to_string()
+        };
         let html = in_owner(|| render_with(App::new(), &state, 0));
         // Two cubes of Materials: the Materials spaces are the only ones that fit.
-        assert_eq!(html.matches("socket free res-materials fits").count(), 3, "{html}");
-        assert_eq!(html.matches("socket free res-energy fits").count(), 0);
-        assert_eq!(html.matches("socket free res-energy\"").count(), 1);
+        assert_eq!(ours(&html).matches("socket free res-materials fits").count(), 3, "{html}");
+        assert_eq!(ours(&html).matches("socket free res-energy fits").count(), 0);
+        assert_eq!(ours(&html).matches("socket free res-energy\"").count(), 1);
         assert!(html.contains("Krystallium") && html.contains("piece-name"));
         assert!(!html.contains("pick-cue"), "nothing picked");
 
@@ -1687,8 +1802,8 @@ mod tests {
             app.games.wonderful.ui.held.set(Some(Held::Krystallium));
             render_with(app, &state, 0)
         });
-        assert_eq!(html.matches("socket free res-energy fits").count(), 1);
-        assert_eq!(html.matches("socket free res-materials fits").count(), 3);
+        assert_eq!(ours(&html).matches("socket free res-energy fits").count(), 1);
+        assert_eq!(ours(&html).matches("socket free res-materials fits").count(), 3);
         assert!(html.contains("aria-pressed=\"true\""));
         assert!(html.contains("Krystallium picked: your next click on a space uses one."), "{html}");
         // ...but it doesn't go on the Empire.
@@ -1785,6 +1900,29 @@ mod tests {
         assert!(html.contains("Recycling Plant") && html.contains("Zeppelin") && html.contains("Juggernaut"));
         assert!(html.contains("0/7"), "progress of the Juggernaut");
         assert!(html.contains("deciding"));
+    }
+
+    #[test]
+    fn the_other_players_cards_open_whole_with_their_cubes() {
+        let mut state = State::new(3, 12);
+        let juggernaut = id("Juggernaut");
+        let mut filled = Cost::default();
+        filled.res[0] = 1;
+        state.players[1].buildings = vec![Building { card: juggernaut, filled }];
+        state.players[1].empire = vec![id("Zeppelin")];
+        let html = render(&state, 0);
+        let rivals = &html[html.find("panel rivals").unwrap()..];
+        let rivals = &rivals[..rivals.find("panel log").unwrap()];
+        assert_eq!(rivals.matches("class=\"peek\"").count(), 2, "one per building and built card");
+        assert_eq!(rivals.matches("tabindex=\"0\"").count(), 2, "a tap can open them");
+        let building = &rivals[rivals.find("class=\"peek\"").unwrap()..];
+        let building = &building[..building.find("</li>").unwrap()];
+        assert!(building.contains("card kind-") && building.contains(look::card_art(juggernaut.def()).as_str()));
+        assert_eq!(building.matches("socket filled").count(), 1, "{building}");
+        let (_, needed) = look::progress(&juggernaut.def().cost, &filled);
+        assert_eq!(building.matches("socket free").count(), needed as usize - 1);
+        assert!(building.contains("1 of 7 placed") && !building.contains("Scrap"));
+        assert!(rivals.contains(look::card_art(id("Zeppelin").def()).as_str()));
     }
 
     #[test]

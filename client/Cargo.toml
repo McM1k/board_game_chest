@@ -23,6 +23,8 @@ features = [
   "WebSocket", "MessageEvent", "CloseEvent", "ErrorEvent", "Storage", "Location", "Window", "Document",
   # Hanabi board: drag and drop, and measuring hands for the slide animation.
   "DragEvent", "DataTransfer", "Element", "HtmlElement", "HtmlDivElement", "DomRect", "CssStyleDeclaration",
+  # It's a Wonderful World: the popovers over the other players' cards.
+  "PointerEvent", "FocusEvent",
   # Bug reports: posting them, and saying where the player was.
   "Request", "RequestInit", "Response", "Headers", "Navigator",
 ]
