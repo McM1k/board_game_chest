@@ -471,8 +471,8 @@
   pointer-events: none;
 }
 
-.wonderful .cube:has(> .token-art),
-.wonderful .socket:has(> .token-art) {
+.wonderful .cube.cube:has(> .token-art),
+.wonderful .socket.socket:has(> .token-art) {
   position: relative;
   border-radius: 50%;
   color: transparent;
