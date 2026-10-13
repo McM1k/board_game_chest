@@ -5,14 +5,14 @@ use super::*;
 
 /// A two-player game with every expansion's races and powers but the base
 /// board, and no Lost Tribes.
-fn packs_game() -> State {
+pub(crate) fn packs_game() -> State {
     let options = Options { sky: None, ..Options::all() };
     no_tribes(State::with_options(2, 1, options))
 }
 
 /// Ends seat's turn: done conquering, every token in hand on its first
 /// region, end turn.
-fn end_turn(s: &mut State, seat: usize) {
+pub(crate) fn end_turn(s: &mut State, seat: usize) {
     if matches!(s.phase, Phase::Conquest { .. }) {
         s.apply(seat, Action::EndConquests).unwrap();
     }
@@ -34,7 +34,7 @@ fn end_turn(s: &mut State, seat: usize) {
 
 /// Lets the other seat of a two-player game pass a turn (with no race of
 /// its own, it picks the top combo and does nothing with it).
-fn pass(s: &mut State, seat: usize) {
+pub(crate) fn pass(s: &mut State, seat: usize) {
     while s.phase == Phase::Reinforce {
         let who = s.actor().unwrap();
         let region = s.moves(who).list(RegionMove::Put)[0];

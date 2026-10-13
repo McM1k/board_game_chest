@@ -17,6 +17,7 @@
 use crate::*;
 
 mod expansions;
+mod powers;
 
 /// Seat `seat` plays `race` with `power`, holding all of its tokens, at the
 /// start of its conquests. The combo is taken out of the column and stacks.

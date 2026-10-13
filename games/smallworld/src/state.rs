@@ -1457,6 +1457,12 @@ impl State {
                 if !mountains.iter().any(|&m| self.board.adjacent(m, region)) {
                     return Err(Error::OutOfReach);
                 }
+                // Each Mountain pours its own Lava, next to it.
+                let mut poured: Vec<usize> = (0..self.regions.len()).filter(|&r| self.regions[r].lava == Some(seat)).collect();
+                poured.push(region);
+                if !self.lava_fits(&mountains, &poured) {
+                    return Err(Error::NoneLeft);
+                }
                 let r = &self.regions[region];
                 if r.race() == Some(army.race) {
                     return Err(Error::AlreadyYours);
@@ -1530,6 +1536,26 @@ impl State {
             .into_iter()
             .filter(|&h| self.board.two_away(h, region))
             .min_by_key(|&h| (self.regions[h].tokens.map_or(0, |t| t.count), h))
+    }
+
+    /// Whether each region in `lava` can have its Lava from a different
+    /// Mountain of `mountains` next to it.
+    fn lava_fits(&self, mountains: &[usize], lava: &[usize]) -> bool {
+        // A matching, by augmenting paths: few Mountains, few Lavas.
+        fn assign(s: &State, mountains: &[usize], target: usize, seen: &mut [bool], by: &mut [Option<usize>]) -> bool {
+            for (i, &m) in mountains.iter().enumerate() {
+                if !seen[i] && s.board.adjacent(m, target) {
+                    seen[i] = true;
+                    if by[i].is_none_or(|other| assign(s, mountains, other, seen, by)) {
+                        by[i] = Some(target);
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+        let mut by = vec![None; mountains.len()];
+        lava.iter().all(|&target| assign(self, mountains, target, &mut vec![false; mountains.len()], &mut by))
     }
 
     /// Heroes standing in `seat`'s active race's regions.
