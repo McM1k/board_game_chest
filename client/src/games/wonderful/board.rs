@@ -421,12 +421,23 @@ fn status_band(ctx: &Ctx) -> AnyView {
             }
         })
         .collect_view();
+    // The ring's arrows show which way the hands go this round.
+    let passing = format!(
+        "cards pass to the {} player",
+        if view.passes_to_next { "next" } else { "previous" }
+    );
 
     view! {
         <section class="status" aria-live="polite">
-            <div class="round" aria-label=format!("Round {} of {}", view.round, ROUNDS)>
+            <div class="round" aria-label=format!("Round {} of {}, {}", view.round, ROUNDS, passing)>
                 <span class="round-word">"Round"</span>
-                <span class="round-num">{view.round}</span>
+                <span
+                    class={if view.passes_to_next { "round-ring next" } else { "round-ring previous" }}
+                    title=passing.clone()
+                >
+                    <img class="round-art" src=look::round_art(view.passes_to_next) alt="" onerror="this.remove()" />
+                    <span class="round-num">{view.round}</span>
+                </span>
                 <span class="round-of">{format!("of {ROUNDS}")}</span>
             </div>
             <div class="phase">
@@ -596,6 +607,7 @@ fn production_panel(ctx: &Ctx, step: u8) -> AnyView {
                 <li class=class aria-current={if i == step { "step" } else { "false" }}>
                     {icon}
                     <span class="step-name">{name}</span>
+                    {step_award(ctx, i)}
                 </li>
             }
         })
@@ -629,6 +641,43 @@ fn production_panel(ctx: &Ctx, step: u8) -> AnyView {
         </section>
     }
     .into_any()
+}
+
+/// What producing the most of a step's resource wins, as the production
+/// board prints it above each resource (a General, a Financier, or either
+/// for Science), then who took it once the step is played.
+fn step_award(ctx: &Ctx, step: u8) -> Option<AnyView> {
+    let res = *Res::ALL.get(step as usize)?;
+    let (tokens, prize) = match res.supremacy_token() {
+        Some(token) => (vec![token], format!("a {}", token.name())),
+        None => (vec![Token::General, Token::Financier], "a General or a Financier".to_string()),
+    };
+    let stake = tokens.into_iter().map(token_cube).collect_view();
+    let winners = ctx.view.awards.get(step as usize);
+    let (taken, title) = match winners {
+        None => (None, format!("Most {}: {prize}", res.name())),
+        Some(seats) if seats.is_empty() => {
+            (Some("nobody".to_string()), format!("{prize}: nobody (a tie, or none produced)"))
+        }
+        Some(seats) => {
+            let who = seats.iter().map(|&s| ctx.who(s)).collect::<Vec<_>>().join(" & ");
+            (Some(who.clone()), format!("{prize}: {who}"))
+        }
+    };
+    let class = match winners {
+        None => "step-award",
+        Some(seats) if seats.is_empty() => "step-award nobody",
+        Some(_) => "step-award won",
+    };
+    Some(
+        view! {
+            <span class=class title=title.clone() aria-label=title>
+                <span class="award-tokens">{stake}</span>
+                {taken.map(|who| view! { <span class="award-who">{who}</span> })}
+            </span>
+        }
+        .into_any(),
+    )
 }
 
 /// Who produced how much in this step, and who takes the character.
@@ -1825,6 +1874,45 @@ mod tests {
             // The header says it all: no line at the foot of the card repeats it.
             assert!(!html.contains("Recycles to"));
         }
+    }
+
+    #[test]
+    fn the_round_ring_shows_which_way_the_hands_go() {
+        let mut state = State::new(3, 2);
+        let html = render(&state, 0);
+        assert!(html.contains("class=\"round-ring next\""));
+        assert!(html.contains(&look::round_art(true)));
+        assert!(html.contains("Round 1 of 4, cards pass to the next player"));
+        state.round = 2;
+        let html = render(&state, 0);
+        assert!(html.contains("class=\"round-ring previous\""));
+        assert!(html.contains(&look::round_art(false)) && !html.contains(&look::round_art(true)));
+    }
+
+    #[test]
+    fn the_production_steps_show_the_character_at_stake_then_who_took_it() {
+        let awards = |state: &State| {
+            let html = render(state, 0);
+            let at = |class: &str| html.matches(&format!("class=\"step-award{class}\"")).count();
+            (at(""), at(" won"), at(" nobody"), html)
+        };
+        let mut state = production_state();
+        // Nothing played yet: five resources, each with its character, none taken.
+        state.awards.clear();
+        let (open, won, nobody, html) = awards(&state);
+        assert_eq!((open, won, nobody), (5, 0, 0));
+        assert!(html.contains("title=\"Most Materials: a Financier\""));
+        assert!(html.contains("title=\"Most Energy: a General\""));
+        assert!(html.contains("title=\"Most Science: a General or a Financier\""));
+        assert!(html.contains("title=\"Most Exploration: a General\""));
+        // Three steps played: Materials to us, Energy tied, Science to seats 1 and 2.
+        state.phase = Phase::Production { step: 3 };
+        state.awards = vec![vec![0], vec![], vec![1, 2]];
+        let (open, won, nobody, html) = awards(&state);
+        assert_eq!((open, won, nobody), (2, 2, 1));
+        assert!(html.contains("title=\"a Financier: You\""));
+        assert!(html.contains("<span class=\"award-who\">nobody</span>"));
+        assert!(html.contains("a General or a Financier: Bob &amp; Cy"));
     }
 
     #[test]

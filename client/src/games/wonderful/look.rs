@@ -111,6 +111,13 @@ pub fn token_art(token: Token) -> String {
     format!("{ART}/tokens/{name}.webp")
 }
 
+/// The round tracker's ring of arrows: green when hands pass to the next
+/// seat (rounds 1 and 3), pink when they go to the previous one.
+pub fn round_art(passes_to_next: bool) -> String {
+    let side = if passes_to_next { "next" } else { "previous" };
+    format!("{ART}/round/{side}.webp")
+}
+
 /// The name shown for a seat: "You" for yourself.
 pub fn who(seat: usize, names: &[String], you: usize) -> String {
     if seat == you {
@@ -790,6 +797,11 @@ mod tests {
             assert!(file(token_art(token)).is_file(), "{}", token_art(token));
         }
         assert_eq!(count("tokens"), 2);
+        for next in [true, false] {
+            assert!(file(round_art(next)).is_file(), "{}", round_art(next));
+        }
+        assert_eq!(count("round"), 2);
+        assert_eq!(round_art(false), "/wonderful-art/round/previous.webp");
         assert_eq!(token_art(Token::Financier), "/wonderful-art/tokens/financier.webp");
         assert_eq!(card_art(id("Pandora's Box").def()), "/wonderful-art/cards/pandoras-box.webp");
         assert_eq!(card_art(id("Mega-Drill").def()), "/wonderful-art/cards/mega-drill.webp");

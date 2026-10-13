@@ -141,6 +141,7 @@ from `client/src/games/wonderful/art` (`look::card_art`, `empire_art`, `crest_ar
 | The seven Empires | `empires/<name>-artwork.jpg`: the board's illustration alone, 1920 x 1080 | `art/empires/<slug>.webp`: a 3:1 banner from its middle, 1200 x 400, 30 to 46 KB |
 | Their crests | `empires/<name>-avatar.png`, 100 x 100 | `art/crests/<slug>.webp`, 96 x 96, 2 to 4 KB |
 | The General and Financier tokens | `characters/general.jpg`, `financier.jpg`: the round token on white, 150 x 150 | `art/tokens/general.webp`, `financier.webp`: cut out round, 64 x 64, about 2 KB |
+| The round tracker | `round-tracker-recto.png` (green), `round-tracker-verso.png` (pink): a ring of arrows, 200 x 200 | `art/round/next.webp`, `previous.webp`, 112 x 112, about 5 KB |
 
 A slug is the name in lower case, apostrophes dropped and anything else between words a
 hyphen ("Pandora's Box" is `pandoras-box`). The pictures weigh 1.6 MB in all, but a page
@@ -156,6 +157,7 @@ git -C <gamepark> sparse-checkout set app/src/images/cards/developments/en app/s
 python3 -I cards.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art/cards
 python3 -I empires.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art
 python3 -I tokens.py <gamepark>/app/src/images client/src/games/wonderful/art
+python3 -I round.py <gamepark>/app/src/images client/src/games/wonderful/art
 ```
 
 The printed face has the game's own icons over its illustration, which `cards.py` keeps out:
@@ -184,7 +186,12 @@ the spaces of your buildings, in your hand of things to place, in each player's 
 card's reward or what it scores per) is the printed round token (a player asked, 2026-10-12),
 laid over our coloured sign and its letter: if the picture fails to load it removes itself and
 the sign shows again (the CSS keys on `:has(> .token-art)`). An empty space shows it faded in a
-dashed ring. The pictures belong to the
+dashed ring. The round number sits in the round tracker's ring, green when the hands go to the
+next seat (rounds 1 and 3), pink when they go to the previous one, as Game Park shows it. In
+production, each resource's step shows the character it gives the top producer (both tokens for
+Science), then who took it, or "nobody" after a tie (a player asked, 2026-10-13); the engine keeps
+this round's winners per step in `awards`, since the log only holds the last 24 events. The
+pictures belong to the
 publisher, La Boîte de Jeu; Game Park's licence covers its code, not the art.
 
 ## Known issues

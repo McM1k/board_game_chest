@@ -57,6 +57,10 @@ pub struct View {
     pub ascension_deck: usize,
     pub discard: usize,
     pub log: Vec<Event>,
+    /// Who took the character of each production step played so far this
+    /// round, in production order (empty: nobody, e.g. a tie).
+    #[serde(default)]
+    pub awards: Vec<Vec<usize>>,
     /// Once the game is over: every seat's points.
     pub scores: Vec<Score>,
     pub winners: Vec<usize>,
@@ -102,6 +106,7 @@ impl State {
             ascension_deck: self.ascension_deck.len(),
             discard: self.discard.len(),
             log: self.log.clone(),
+            awards: self.awards.clone(),
             scores: self.scores.clone(),
             winners: self.winners(),
         }

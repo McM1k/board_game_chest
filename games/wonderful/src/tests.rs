@@ -522,6 +522,22 @@ fn each_resource_gives_its_own_character() {
 }
 
 #[test]
+fn the_round_keeps_who_took_each_character_for_the_board() {
+    let mut s = blank(2);
+    s.players[1].empire = vec![id("Blackbeard's Treasure")]; // Gold 1, Exploration 1
+    assert!(s.awards.is_empty());
+    start_production(&mut s);
+    assert_eq!(s.awards, vec![vec![0]], "Materials: decided as the step starts");
+    skip_to(&mut s, 4);
+    // Energy and Science to seat 1, Gold tied, Exploration to seat 1.
+    assert_eq!(s.awards, vec![vec![0], vec![1], vec![1], vec![], vec![1]]);
+    assert_eq!(s.view_for(0).awards, s.awards);
+    finish_round(&mut s);
+    assert_eq!((s.round, s.phase), (2, Phase::Draft));
+    assert!(s.awards.is_empty() && s.view_for(1).awards.is_empty(), "a new round, a new board");
+}
+
+#[test]
 fn a_tie_for_the_most_gives_nobody_a_character() {
     let mut s = blank(2);
     s.players[1].empire = vec![id("Industrial Complex")]; // Materials 2 + 1, like Noram's 3

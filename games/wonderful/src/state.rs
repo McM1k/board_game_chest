@@ -233,6 +233,10 @@ pub struct State {
     pub phase: Phase,
     /// The latest events, oldest first.
     pub log: Vec<Event>,
+    /// Who took the character of each production step played so far this
+    /// round, in production order (empty when nobody did: a tie, or nobody
+    /// produced any). Kept for the round's production board.
+    pub awards: Vec<Vec<usize>>,
     /// Filled in when the game is over: one entry per seat.
     pub scores: Vec<Score>,
 }
@@ -326,6 +330,7 @@ impl State {
             round: 1,
             phase: Phase::Draft,
             log: Vec::new(),
+            awards: Vec::new(),
             scores: Vec::new(),
         };
         state.start_round();
@@ -452,6 +457,7 @@ impl State {
             p.ready = false;
             p.choose = false;
         }
+        self.awards.clear();
         self.push_event(Event::RoundStarted(self.round));
     }
 
@@ -766,8 +772,9 @@ impl State {
                 p.pool = amount;
                 p.choose = false;
             }
-            if made.iter().any(|&m| m > 0) {
-                let winners = supremacy(&made);
+            let anyone = made.iter().any(|&m| m > 0);
+            let winners = if anyone { supremacy(&made) } else { Vec::new() };
+            if anyone {
                 // For Science, each winner chooses their own character.
                 for &w in &winners {
                     match res.supremacy_token() {
@@ -776,8 +783,9 @@ impl State {
                         None => self.players[w].choose = true,
                     }
                 }
-                self.push_event(Event::Supremacy { res, seats: winners });
+                self.push_event(Event::Supremacy { res, seats: winners.clone() });
             }
+            self.awards.push(winners);
             for p in &mut self.players {
                 p.ready = p.pool == 0 && !p.choose;
             }
