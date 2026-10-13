@@ -109,6 +109,9 @@ mod tests {
                 if me.ready {
                     return None;
                 }
+                if me.pool == 0 {
+                    return Some(Action::Ready);
+                }
                 let res = Res::ALL[step as usize];
                 let target = me
                     .buildings
