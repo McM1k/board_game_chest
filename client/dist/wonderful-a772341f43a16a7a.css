@@ -2109,3 +2109,44 @@
     color: var(--muted);
   }
 }
+
+/* ---------- the final screen: every player's Empire, one tab each ---------- */
+
+.wonderful .empires {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.wonderful .empire-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.wonderful .empire-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.8rem 0.3rem 0.3rem;
+  border-radius: 999px;
+}
+
+.wonderful .empire-tab .crest {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.wonderful .empire-tab b {
+  color: var(--muted);
+}
+
+.wonderful .empire-tab.on {
+  background: var(--pearl);
+  border-color: var(--pearl);
+  color: var(--card-ink);
+}
+
+.wonderful .empire-tab.on b {
+  color: var(--card-soft);
+}
