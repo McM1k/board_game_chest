@@ -1442,6 +1442,37 @@
   color: var(--muted);
 }
 
+/* A production step that just started: "<resource> produced", "Placing
+   <resource>" and the round's track light up once, in the resource's colour
+   (a lighter grey for Energy, whose cubes are near black). The page sets a
+   negative delay so a redraw resumes the flash instead of restarting it. */
+.wonderful .fresh {
+  --flash: var(--hi, var(--pop));
+  border-radius: 0.5rem;
+}
+
+.wonderful .fresh.res-energy {
+  --flash: #aab3bd;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wonderful .fresh {
+    animation: wonderful-fresh 1s ease-out;
+  }
+}
+
+@keyframes wonderful-fresh {
+  0%,
+  30% {
+    background-color: color-mix(in srgb, var(--flash) 30%, transparent);
+    box-shadow: 0 0 0 3px var(--flash), 0 0 18px var(--flash);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 3px transparent, 0 0 18px transparent;
+  }
+}
+
 /* "Placing Materials — press Done when finished": your step waits for Done. */
 .wonderful .placing-cue {
   margin: 0;
