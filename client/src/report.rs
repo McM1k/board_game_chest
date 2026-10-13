@@ -385,7 +385,7 @@ fn section(title: &str, empty: &'static str, reports: Vec<PastReport>) -> impl I
 /// One report, folded: its title, when and in which game; unfolded, what
 /// the player wrote and what was done.
 fn item(p: PastReport) -> impl IntoView {
-    let meta = [Some(p.when), p.game].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+    let meta = [Some(p.when), Some(code(&p.file).to_string()), p.game].into_iter().flatten().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
     let meta = (!meta.is_empty()).then(|| view! { <span class="report-meta">{meta}</span> });
     // A status other than the folder's own, such as "in progress".
     let status = (!["open", "done", ""].contains(&p.status.as_str())).then(|| view! { <span class="report-status">{p.status}</span> });
@@ -403,6 +403,13 @@ fn item(p: PastReport) -> impl IntoView {
             </details>
         </li>
     }
+}
+
+/// A report's code: the tag that ends its file's name ("k3f9" in
+/// "2026-10-12T09-41-07Z-k3f9.md").
+fn code(file: &str) -> &str {
+    let stem = file.strip_suffix(".md").unwrap_or(file);
+    stem.rsplit_once('-').map_or(stem, |(_, tag)| tag)
 }
 
 /// A resolution's Markdown, drawn plainly: headings, bullet lists (indented
@@ -542,7 +549,7 @@ mod tests {
             assert!(html.contains("To be addressed (1)") && html.contains("Addressed (1)"), "{html}");
             // What players wrote is shown, never run as markup.
             assert!(html.contains("The &lt;b&gt;board&lt;/b&gt; went blank") && !html.contains("<b>board"), "{html}");
-            assert!(html.contains("2026-10-12 13:00:00 UTC · Hanabi") && html.contains("in progress"));
+            assert!(html.contains("2026-10-12 13:00:00 UTC · abcd · Hanabi") && html.contains("in progress"));
             assert!(html.contains("<h4>Resolution") && html.contains("<p>Done in abc1234."), "{html}");
             assert!(html.contains("<strong>What changed:</strong>") && html.contains("<code>look.rs</code>"));
             assert!(shows(&html, " draws them bigger."), "a bullet over two lines: {html}");
