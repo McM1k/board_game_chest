@@ -2151,7 +2151,7 @@ impl State {
                 if !declined && army.race == Race::Escargots {
                     // Their regions paid at the start of the turn; only what
                     // the power adds comes now.
-                    coins += plus as u32;
+                    coins += plus;
                 } else {
                     coins += (1 + plus as i32 - minus as i32).max(0) as u32;
                 }
