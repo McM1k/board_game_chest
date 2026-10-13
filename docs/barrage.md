@@ -24,6 +24,37 @@ Project expansion and the promo officers are not in.
 * **Company boards**: BoardGameGeek photo 5246940 of the four empty boards (every income).
 * **Management board**: the rulebook's pictures and BoardGameGeek photo 5725788.
 
+## The pictures
+
+The map shows the printed board by default, each space where the board prints it and the
+pieces as the rulebook draws them; a switch under it (kept in the browser as
+`games.pref.barrage.map`) goes back to the drawn map. The pictures are in
+`client/src/games/barrage/art`, served at `/barrage-art/`:
+
+| Picture | Source | Ours |
+|---|---|---|
+| The map board | [BoardGameGeek image 5302816](https://boardgamegeek.com/image/5302816), a flat picture of the board with the twelve basins outlined in white, 997 x 951 | `board.webp`: cut along the gold frame, the white outlines painted over from the pixels around them, 659 x 934, 140 KB |
+| Bases, Elevations, Conduits, Powerhouses and Engineers of the four companies; the neutral Base and Elevation; the water drop, Excavator and Concrete Mixer | the rulebook's component pages (2 and 3), where they are drawn as vectors | `pieces/<company>-<piece>.webp`, `neutral-base.webp`, `drop.webp`...: cut out on transparent ground, 128 pixels on the longer side, 1 to 3 KB |
+| The Credit | the rulebook's page 2, the 1-Credit coin (a photo with its mask), 49 x 49 | `pieces/credit.webp` |
+
+The companies' colours are the box's: France white, Germany black, Italy green, the USA red. The
+neutral pieces are printed three in a heap; the back one is taken, the half the front one hides
+mirrored from its other half. Where each space lies on the picture was read off zoomed crops of
+it (`map.rs`, `DAM_X`, `CONDUIT_X`, `PH_AT`); a test checks that none overlap and that each
+basin's spaces are in the board's order.
+
+To make them again, from `docs/barrage-art/` (Python with Pillow, NumPy and SciPy, Ghostscript and
+Poppler's `pdfimages`):
+
+```sh
+python3 -I board.py <work>/pic5302816.png ../../client/src/games/barrage/art
+python3 -I pieces.py <work>/rules.pdf <work> ../../client/src/games/barrage/art
+```
+
+`<work>/pic5302816.png` is the image's full-size file (BoardGameGeek's
+`https://api.geekdo.com/api/images/5302816` gives its address); `rules.pdf` is the English
+rulebook from boardgame.bg. The art is Cranio Creations'.
+
 ## Rule calls
 
 Where the rulebook or the photos left something open:

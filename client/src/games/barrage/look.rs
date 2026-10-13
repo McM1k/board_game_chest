@@ -3,7 +3,7 @@
 //! map means. Native tests at the bottom.
 
 use barrage_core::{
-    advanced_effect, production_energy, Action, Build, Company, Event, Officer, Phase, Pick, Production,
+    advanced_effect, production_energy, Action, Build, Company, Event, Kind, Officer, Phase, Pick, Production,
     ProductionOption, Reward, Section, Spot, Target, Task, Tile, Todo, View, Why, BASINS, CONDUITS, CONTRACTS,
     POWERHOUSES,
 };
@@ -24,6 +24,35 @@ pub fn seat_colors(view: &View, seat: usize) -> (&'static str, &'static str) {
         Some(c) => company_colors(c),
         None => ("#8a7a5c", "#fff"),
     }
+}
+
+/// The printed map board's picture (see docs/barrage.md, "The pictures").
+pub const BOARD_ART: &str = "/barrage-art/board.webp";
+
+/// A piece's picture, as the rulebook draws it: a company's, or a neutral
+/// Dam's (`None`).
+pub fn piece_art(company: Option<Company>, kind: Kind) -> String {
+    let owner = company.map(company_slug).unwrap_or("neutral");
+    format!("/barrage-art/pieces/{owner}-{}.webp", kind.name().to_lowercase())
+}
+
+/// A company's Engineer figure.
+pub fn engineer_art(company: Company) -> String {
+    format!("/barrage-art/pieces/{}-engineer.webp", company_slug(company))
+}
+
+fn company_slug(company: Company) -> &'static str {
+    match company {
+        Company::Usa => "usa",
+        Company::Germany => "germany",
+        Company::Italy => "italy",
+        Company::France => "france",
+    }
+}
+
+/// A token's picture: `drop`, `credit`, `excavator`, `mixer`.
+pub fn token_art(token: &str) -> String {
+    format!("/barrage-art/pieces/{token}.webp")
 }
 
 /// A neutral dam's wood.
@@ -472,7 +501,7 @@ pub fn toggle_pick(picks: &[Pick], pick: Pick, most: usize) -> Vec<Pick> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use barrage_core::{Dam, Kind, State, Target};
+    use barrage_core::{Dam, State, Target};
 
     fn names() -> Vec<String> {
         ["Ann", "Bob", "Cy", "Di"].iter().map(|s| s.to_string()).collect()
@@ -498,6 +527,16 @@ mod tests {
         assert!(spot_action(Spot::new(Section::Shop, 0, true)).is_some());
         assert_eq!(spot_action(Spot::new(Section::Patent, 2, false)), Some(Action::Patent { slot: 2 }));
         assert_eq!(spot_action(Spot::new(Section::Turbine, 2, false)), None);
+    }
+
+    #[test]
+    fn pieces_have_their_pictures() {
+        assert_eq!(piece_art(Some(Company::Usa), Kind::Base), "/barrage-art/pieces/usa-base.webp");
+        assert_eq!(piece_art(Some(Company::France), Kind::Powerhouse), "/barrage-art/pieces/france-powerhouse.webp");
+        assert_eq!(piece_art(None, Kind::Elevation), "/barrage-art/pieces/neutral-elevation.webp");
+        assert_eq!(token_art("drop"), "/barrage-art/pieces/drop.webp");
+        assert_eq!(engineer_art(Company::Italy), "/barrage-art/pieces/italy-engineer.webp");
+        assert_eq!(BOARD_ART, "/barrage-art/board.webp");
     }
 
     #[test]

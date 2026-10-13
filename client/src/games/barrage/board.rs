@@ -86,7 +86,8 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
     let over = v.phase == Phase::Over;
     let marks = if ctx.acting() { look::targets(v, choice, mixers) } else { Vec::new() };
     let water = if ctx.acting() { look::water_wanted(v, spot) } else { None };
-    let map = map_svg(app, Arc::clone(&ctx.view), &ctx.names, marks, choice, mixers, water, placed);
+    let drawn = ui.drawn.get();
+    let map = map_svg(app, Arc::clone(&ctx.view), &ctx.names, marks, choice, mixers, water, placed, drawn);
 
     view! {
         <div class="game-board">
@@ -95,7 +96,8 @@ pub fn game_screen(app: App, view: View, names: Vec<String>, connected: Vec<bool
             <div class="board-grid">
                 <div class="map-col">
                     <div class="map-frame">{map}</div>
-                    {legend()}
+                    {map_style(&ctx, drawn)}
+                    {legend(drawn)}
                 </div>
                 <aside class="side-col">
                     {over.then(|| results_panel(&ctx))}
@@ -143,7 +145,56 @@ fn status_band(ctx: &Ctx) -> AnyView {
     .into_any()
 }
 
-fn legend() -> AnyView {
+/// The printed board's picture, or the map drawn in flat colours.
+fn map_style(ctx: &Ctx, drawn: bool) -> AnyView {
+    let ui = ctx.ui();
+    let choice = move |label: &'static str, on: bool| {
+        view! {
+            <button class=if on == drawn { "tool on" } else { "tool" } aria-pressed=(on == drawn).to_string() on:click=move |_| ui.set_drawn(on)>
+                {label}
+            </button>
+        }
+    };
+    view! {
+        <div class="tools map-style" role="group" aria-label="Map style">
+            {choice("Printed board", false)}
+            {choice("Drawn map", true)}
+        </div>
+    }
+    .into_any()
+}
+
+/// A token's picture before a count, the count's meaning in words for a
+/// screen reader and on hover.
+/// Without a picture, the word follows the count.
+fn token(src: Option<String>, n: impl std::fmt::Display, what: &str) -> AnyView {
+    let label = format!("{n} {what}");
+    let text = if src.is_some() { n.to_string() } else { label.clone() };
+    view! {
+        <span class="res" title=label.clone() aria-label=label>
+            {src.map(|src| view! { <img src=src alt="" aria-hidden="true" /> })}
+            {text}
+        </span>
+    }
+    .into_any()
+}
+
+/// A seat's Credits, Machineries and Engineers, as tokens.
+fn stock(v: &View, seat: usize) -> AnyView {
+    let p = &v.players[seat];
+    let engineer = p.company.map(look::engineer_art);
+    view! {
+        <span class="res-row">
+            {token(Some(look::token_art("credit")), p.credits, "Credits")}
+            {token(Some(look::token_art("excavator")), p.excavators, "Excavators")}
+            {token(Some(look::token_art("mixer")), p.mixers, "Concrete Mixers")}
+            {token(engineer, p.engineers, "Engineers left")}
+        </span>
+    }
+    .into_any()
+}
+
+fn legend(drawn: bool) -> AnyView {
     let values = (1..=5u8)
         .map(|v| {
             view! {
@@ -160,7 +211,15 @@ fn legend() -> AnyView {
         <ul class="legend" aria-label="Map key">
             {values}
             <li><span class="key-box paid"></span>"Red space: 3 Credits more"</li>
-            <li><span class="key-box neutral"></span>"Neutral Dam"</li>
+            {if drawn {
+                view! { <li><span class="key-box neutral"></span>"Neutral Dam"</li> }.into_any()
+            } else {
+                view! {
+                    <li><img class="key-piece" src=look::piece_art(None, Kind::Base) alt="" />"Neutral Dam"</li>
+                    <li><img class="key-piece" src=look::token_art("drop") alt="" />"Water"</li>
+                }
+                .into_any()
+            }}
             <li>"Water flows down: Headstreams A to D, then from basin to basin; each basin's upper dam fills first."</li>
         </ul>
     }
@@ -561,9 +620,7 @@ fn action_panel(
         let copied = p.copied.map(|o| view! { <p class="note">{format!("Copying {} for this turn.", o.name())}</p> });
         let pass = v.moves.pass.then(|| button(ctx, "Pass", "danger", Action::Pass));
         view! {
-            <p class="in-hand">
-                {format!("{} Engineer{} left \u{b7} {} Credits \u{b7} {} Excavators \u{b7} {} Concrete Mixers", p.engineers, plural(p.engineers), p.credits, p.excavators, p.mixers)}
-            </p>
+            <p class="in-hand">{stock(v, v.you)}</p>
             {copied}
             {spot.map(|s| spot_section(ctx, s, placed))}
             {spot.is_none().then(|| view! {
@@ -836,10 +893,8 @@ fn player_card(ctx: &Ctx, seat: usize) -> AnyView {
             {officer}
             {ability}
             <p class="stock">
-                {format!(
-                    "\u{26a1} {} energy \u{b7} {} Credits \u{b7} {}E {}M \u{b7} {} Engineer{} \u{b7} production {:+}",
-                    p.energy, p.credits, p.excavators, p.mixers, p.engineers, plural(p.engineers), bonus
-                )}
+                {stock(v, seat)}
+                <span class="energy">{format!("\u{26a1} {} energy \u{b7} production {:+}", p.energy, bonus)}</span>
             </p>
             <ul class="pieces">{pieces}</ul>
             <p class="tiles">{format!("Tiles: {}", if tiles.is_empty() { "none (all on the wheel)".to_string() } else { tiles.join(", ") })}</p>
@@ -986,6 +1041,7 @@ mod tests {
         let owner = Owner::new();
         owner.with(|| {
             let app = App::new();
+            app.games.barrage.ui.set_drawn(true);
             let s = State::new(3, 5);
             let html = render(app, &s, 0);
             assert!(html.contains("class=\"map\"") && html.contains("WXYZ"));
@@ -1009,6 +1065,46 @@ mod tests {
             app.games.barrage.ui.contract.set(Some(0));
             let html = render(app, &s, 0);
             assert_eq!(html.matches("class=\"pick on\"").count(), 2);
+        });
+    }
+
+    #[test]
+    fn the_printed_board_shows_the_pieces_as_made() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let app = App::new();
+            let mut s = started(2, 9);
+            let seat = s.actor().unwrap();
+            let company = s.players[seat].company.unwrap();
+            let slug = company.name().to_lowercase();
+            s.dams[1] = Some(Dam { owner: Some(seat), level: 2, water: 3 });
+            s.conduits[0] = Some(seat);
+            s.powerhouses[6] = Some(seat);
+            let html = render(app, &s, seat);
+            // The printed board by default, with the switch.
+            assert!(html.contains("board-art") && html.contains("/barrage-art/board.webp"));
+            assert!(html.contains("Printed board") && html.contains("Drawn map"));
+            assert!(!html.contains("class=\"basin-box\""), "no drawn basins over the picture");
+            // The pieces as the box has them: a Base and an Elevation, the
+            // Conduit, the Powerhouse, the drops, the neutral Dams.
+            for kind in ["base", "elevation", "conduit", "powerhouse"] {
+                assert!(html.contains(&format!("/barrage-art/pieces/{slug}-{kind}.webp")), "{kind}");
+            }
+            assert!(html.contains("/barrage-art/pieces/neutral-base.webp"));
+            assert!(html.matches("/barrage-art/pieces/drop.webp").count() >= 3);
+            // Every space can still be clicked where the board prints it.
+            assert_eq!(html.matches("dam-space").count(), 20);
+            assert_eq!(html.matches("conduit-space").count(), 20);
+            assert_eq!(html.matches("ph-space").count(), 23);
+            // The stock with the tokens' pictures.
+            for token in ["credit", "excavator", "mixer"] {
+                assert!(html.contains(&format!("/barrage-art/pieces/{token}.webp")), "{token}");
+            }
+            // The drawn map, by choice.
+            app.games.barrage.ui.set_drawn(true);
+            let drawn = render(app, &s, seat);
+            assert!(drawn.contains("class=\"basin-box\"") && !drawn.contains("board-art"));
+            assert!(!drawn.contains(&format!("/barrage-art/pieces/{slug}-base.webp")));
         });
     }
 

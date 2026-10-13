@@ -13,7 +13,7 @@ pub mod look;
 pub mod map;
 pub mod screens;
 
-use crate::app::{App, Lobby};
+use crate::app::{load, save, App, Lobby};
 use barrage_core::{Pick, Spot, Tile, View, HEADSTREAMS};
 use leptos::prelude::*;
 use protocol::{GameKind, GameView};
@@ -38,7 +38,13 @@ pub struct Ui {
     /// Setup: the pair and the Starting Contract picked.
     pub pair: RwSignal<Option<usize>>,
     pub contract: RwSignal<Option<usize>>,
+    /// The map drawn in flat colours rather than the printed board's
+    /// picture. A preference, kept by the browser.
+    pub drawn: RwSignal<bool>,
 }
+
+/// Where the map style is kept.
+const KEY_MAP: &str = "games.pref.barrage.map";
 
 impl Ui {
     pub fn new() -> Ui {
@@ -51,7 +57,14 @@ impl Ui {
             bank: RwSignal::new(1),
             pair: RwSignal::new(None),
             contract: RwSignal::new(None),
+            drawn: RwSignal::new(load(KEY_MAP).as_deref() == Some("drawn")),
         }
+    }
+
+    /// Switches between the printed board and the drawn map, and remembers it.
+    pub fn set_drawn(&self, drawn: bool) {
+        self.drawn.set(drawn);
+        save(KEY_MAP, if drawn { "drawn" } else { "printed" });
     }
 
     /// Forget a move half chosen.
