@@ -1670,6 +1670,43 @@
   max-width: 60ch;
 }
 
+/* ---------- resource symbols ---------- */
+
+/* A cube or space of a resource shows the symbol of the card type of its
+   colour (Materials the Structure's, and so on), in the cube's ink. */
+.wonderful .cube > .kind-icon,
+.wonderful .socket > .kind-icon {
+  width: 72%;
+  height: 72%;
+  color: inherit;
+}
+
+/* In the Worth row, a card type is its symbol on a chip of its colour. */
+.wonderful .kind-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 0.3rem;
+  color: var(--band-ink);
+  background: var(--band);
+}
+
+.wonderful .kind-badge > .kind-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.wonderful .worth-body,
+.wonderful .vp-per,
+.wonderful .per-token {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.25rem;
+}
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 960px) {
