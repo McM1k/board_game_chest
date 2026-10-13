@@ -3,8 +3,8 @@
 Every game lives in the same four places, each a folder or a file named after the game, and
 plugs into one short registry per crate. Nothing shared (the rooms, the connection, the menu,
 the routing between screens) names a game, so a new one leaves all of that alone. The steps
-use a made-up game, Nim, as the example; Catan, Hanabi, It's a Wonderful World and Small World
-are the real ones to copy from.
+use a made-up game, Nim, as the example; Catan, Hanabi, It's a Wonderful World, Small World and
+Barrage are the real ones to copy from.
 
 ## 1. Rules: `games/nim/`
 

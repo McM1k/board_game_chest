@@ -8,6 +8,7 @@ catan-core = { workspace = true }
 hanabi-core = { workspace = true }
 wonderful-core = { workspace = true }
 smallworld-core = { workspace = true }
+barrage-core = { workspace = true }
 protocol = { path = "../protocol" }
 leptos = { version = "0.8", features = ["csr"] }
 wasm-bindgen = "0.2"

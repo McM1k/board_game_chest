@@ -20,10 +20,12 @@ pub enum GameKind {
     /// It's a Wonderful World, base game.
     Wonderful,
     SmallWorld,
+    Barrage,
 }
 
 impl GameKind {
-    pub const ALL: [GameKind; 4] = [GameKind::Catan, GameKind::Hanabi, GameKind::Wonderful, GameKind::SmallWorld];
+    pub const ALL: [GameKind; 5] =
+        [GameKind::Catan, GameKind::Hanabi, GameKind::Wonderful, GameKind::SmallWorld, GameKind::Barrage];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -31,6 +33,7 @@ impl GameKind {
             GameKind::Hanabi => "Hanabi",
             GameKind::Wonderful => "It's a Wonderful World",
             GameKind::SmallWorld => "Small World",
+            GameKind::Barrage => "Barrage",
         }
     }
 
@@ -45,6 +48,7 @@ impl GameKind {
             GameKind::Hanabi => 6,
             GameKind::Wonderful => 7,
             GameKind::SmallWorld => smallworld_core::MAX_PLAYERS,
+            GameKind::Barrage => barrage_core::MAX_PLAYERS,
         }
     }
 
@@ -117,6 +121,8 @@ pub enum GameMove {
     /// Checked against whose turn it is, except for the tokens a player who
     /// lost regions puts back after someone else's turn.
     SmallWorld(smallworld_core::Action),
+    /// Checked against whose turn it is, or whose decision is waiting.
+    Barrage(barrage_core::Action),
 }
 
 impl GameMove {
@@ -126,6 +132,7 @@ impl GameMove {
             GameMove::Hanabi(_) => GameKind::Hanabi,
             GameMove::Wonderful(_) => GameKind::Wonderful,
             GameMove::SmallWorld(_) => GameKind::SmallWorld,
+            GameMove::Barrage(_) => GameKind::Barrage,
         }
     }
 }
@@ -137,6 +144,7 @@ pub enum GameView {
     Hanabi(Box<hanabi_core::PlayerView>),
     Wonderful(Box<wonderful_core::View>),
     SmallWorld(Box<smallworld_core::View>),
+    Barrage(Box<barrage_core::View>),
 }
 
 impl GameView {
@@ -146,6 +154,7 @@ impl GameView {
             GameView::Hanabi(_) => GameKind::Hanabi,
             GameView::Wonderful(_) => GameKind::Wonderful,
             GameView::SmallWorld(_) => GameKind::SmallWorld,
+            GameView::Barrage(_) => GameKind::Barrage,
         }
     }
 }
@@ -293,7 +302,8 @@ mod tests {
         assert_eq!(GameKind::SmallWorld.min_players_with(Some(&base)), 2);
         assert_eq!(GameKind::SmallWorld.min_players_with(Some(&sky)), 3);
         assert_eq!(GameKind::Hanabi.min_players_with(Some(&hanabi)), 2);
-        assert_eq!(GameKind::ALL.len(), 4);
+        assert_eq!(GameKind::Barrage.max_players_with(None), 4);
+        assert_eq!(GameKind::ALL.len(), 5);
         for g in GameKind::ALL {
             assert_eq!(g.min_players(), 2);
             assert!(!g.title().is_empty());
@@ -335,6 +345,16 @@ mod tests {
             ClientMsg::Move(GameMove::SmallWorld(smallworld_core::Action::Pact { seat: 2, give: true })),
             ClientMsg::SetOptions(GameOptions::SmallWorld(smallworld_core::Options::all())),
             ClientMsg::SetOptions(GameOptions::Catan(catan_core::Options { layout: catan_core::Layout::Beginner })),
+            ClientMsg::Create { game: GameKind::Barrage, name: "Ed".into() },
+            ClientMsg::Move(GameMove::Barrage(barrage_core::Action::Choose { pair: 1, contract: 2 })),
+            ClientMsg::Move(GameMove::Barrage(barrage_core::Action::Build(barrage_core::Build {
+                tile: Some(barrage_core::Tile::Basic(barrage_core::Kind::Base)),
+                copy: None,
+                target: barrage_core::Target::Base(3),
+                mixers: false,
+                credits: 0,
+            }))),
+            ClientMsg::Move(GameMove::Barrage(barrage_core::Action::Bank { engineers: 3 })),
         ];
         for m in msgs {
             let json = serde_json::to_string(&m).unwrap();
@@ -350,17 +370,20 @@ mod tests {
         let hanabi = GameState::new(2, 1, GameRules::default());
         let wonderful = wonderful_core::State::new(2, 1);
         let small_world = smallworld_core::State::new(2, 1);
+        let barrage = barrage_core::State::new(2, 1);
         let views = [
             GameView::Catan(Box::new(catan.view_for(Some(0)))),
             GameView::Hanabi(Box::new(hanabi.view_for(PlayerId(0)))),
             GameView::Wonderful(Box::new(wonderful.view_for(0))),
             GameView::SmallWorld(Box::new(small_world.view_for(0))),
+            GameView::Barrage(Box::new(barrage.view_for(0))),
         ];
         let moves = [
             GameMove::Catan(catan_core::Action::EndTurn),
             GameMove::Hanabi(hanabi_core::Action::Discard { card_id: hanabi_core::CardId(0) }),
             GameMove::Wonderful(wonderful_core::Action::Ready),
             GameMove::SmallWorld(smallworld_core::Action::EndConquests),
+            GameMove::Barrage(barrage_core::Action::Pass),
         ];
         for ((view, mv), kind) in views.iter().zip(&moves).zip(GameKind::ALL) {
             assert_eq!((view.game(), mv.game()), (kind, kind));
@@ -478,6 +501,25 @@ mod tests {
         };
         assert_eq!(*view, game.view_for(5));
         assert_eq!((view.board, view.access.len(), view.map().len()), (5, 2, 47 + 9));
+    }
+
+    /// The Barrage view: everything on the table, the piles as counts.
+    #[test]
+    fn barrage_state_survives_json() {
+        let mut game = barrage_core::State::new(3, 9);
+        game.apply(0, barrage_core::Action::Choose { pair: 2, contract: 1 }).unwrap();
+        let msg = ServerMsg::Game {
+            view: GameView::Barrage(Box::new(game.view_for(1))),
+            names: vec!["A".into(), "B".into(), "C".into()],
+            connected: vec![true, true, true],
+        };
+        let (GameView::Barrage(view), names, _) = game_through_json(&msg) else {
+            panic!("not a Barrage view");
+        };
+        assert_eq!(*view, game.view_for(1));
+        assert_eq!((view.you, view.players.len(), view.dams.len()), (1, 3, 20));
+        assert!(view.moves.choose, "seat 1 picks next");
+        assert_eq!(names.len(), 3);
     }
 
     #[test]

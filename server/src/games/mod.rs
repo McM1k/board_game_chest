@@ -6,6 +6,7 @@
 //! Adding a game: a module here implementing both traits, and its arm in
 //! [`game`] (see `docs/adding-a-game.md`).
 
+pub mod barrage;
 pub mod catan;
 pub mod hanabi;
 pub mod smallworld;
@@ -55,5 +56,6 @@ pub fn game(kind: GameKind) -> &'static dyn Game {
         GameKind::Hanabi => &hanabi::Hanabi,
         GameKind::Wonderful => &wonderful::Wonderful,
         GameKind::SmallWorld => &smallworld::SmallWorld,
+        GameKind::Barrage => &barrage::Barrage,
     }
 }

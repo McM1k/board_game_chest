@@ -1,11 +1,11 @@
-# Catan + Hanabi + It's a Wonderful World + Small World
+# Catan + Hanabi + It's a Wonderful World + Small World + Barrage
 
-Four multiplayer, browser-based games in Rust, served by one server and played from
+Five multiplayer, browser-based games in Rust, served by one server and played from
 one page: Catan, the Hanabi clone from
 [McM1k/hanabii](https://github.com/McM1k/hanabii) (merged from commit `c2d5fa6`), a
 card-drafting empire builder ("It's a Wonderful World", with its Corruption & Ascension
-expansion), and Small World, the fantasy conquest game, on the box's four boards, with six
-of its expansions.
+expansion), Small World, the fantasy conquest game, on the box's four boards, with six
+of its expansions, and Barrage, the dam-building engine game.
 All use the same rooms: one player creates a room and gets a 4-letter code, the
 others join with it, the host starts the game.
 
@@ -15,6 +15,7 @@ others join with it, the host starts the game.
 | `games/hanabi` (crate `hanabi-core`) | Hanabi rules, imported from the Hanabi repo's `game-core` (variants, "hanabii" mode, redacted per-player view). No I/O. |
 | `games/wonderful` (crate `wonderful-core`) | It's a Wonderful World rules: the card tables (base game and Corruption & Ascension), drafting, planning, production, scoring, redacted per-player view. No I/O. |
 | `games/smallworld` (crate `smallworld-core`) | Small World rules: the four boards and the Sky Islands, the 37 races and 45 powers of the base game and six expansions, conquest, decline, scoring, a view that hides the other players' coins and the Skags' loot. No I/O. |
+| `games/barrage` (crate `barrage-core`) | Barrage rules: the map of twelve basins, water flow, dams, conduits and powerhouses, the construction wheel, the Management board, Contracts, officers, Advanced tiles, scoring. No I/O. |
 | `protocol` | The WebSocket messages: the room flow every game shares (create, join, lobby options, start, leave), and one enum per thing that differs by game (`GameKind`, `GameOptions`, `GameMove`, `GameView`). |
 | `server` | Axum server: the room system (`rooms.rs`, which names no game), each game's server side in `src/games/`, one WebSocket per player; serves the client. |
 | `client` | Leptos (CSR/WASM) front end: a shell (`app.rs`, `menu.rs`, `main.rs`: the menu, the connection, the routing between screens) and each game's screens and stylesheet in `src/games/<name>/`. |
@@ -87,12 +88,13 @@ the game. It now runs on the room system Catan already had:
 * **Names** are trimmed, at most 20 characters, and unique in a room (ignoring case).
 * **Limits.** Catan 2–4 players, Hanabi 2–5, It's a Wonderful World 2–5, or 2–7 with its
   expansion (which can't be switched off once more than five are seated), Small World 2–5,
-  or 3–6 with the Sky Islands (which can't be switched off once six are seated). Joining a running
+  or 3–6 with the Sky Islands (which can't be switched off once six are seated), Barrage 2–4. Joining a running
   game is refused unless you hold its token. A room nobody has connected to for 30 minutes is removed.
 * **Seat order.** Every game shuffles the seats when it starts, so the host doesn't
   always go first. In Catan, Hanabi and Small World seat 1 plays first. It's a
   Wonderful World has no turns, so the seat only decides who passes cards to whom.
-  Its Empires are dealt at random.
+  Its Empires are dealt at random. In Barrage seat 1 picks its company first and so
+  plays last, as the rulebook has it.
 
 Rooms live in memory only; a server restart ends every game.
 
@@ -124,10 +126,21 @@ cargo test --workspace
   tries the powers' moves too: 48 base games on all four boards, 48 with every expansion
   for 2 to 6 players, checked after every move (no token is ever made out of nothing, every
   banner is somewhere once, no more pieces than the box holds).
-* `protocol` (10): every message survives JSON, bug reports included, including each game's view (the Hanabi
+* `barrage-core` (33, plus one ignored): the map (rivers run down and off the map, the spaces
+  the rulebook counts in each basin, conduits to powerhouses elsewhere), the Contracts and
+  tiles, the Energy Track's Credits, incomes, the setup picks and turn order, what building
+  costs in each area and with each officer, the wheel bringing tiles and Machineries back,
+  one Base and one Powerhouse a basin, every kind of Advanced tile effect tried, Anton Krylov's
+  copy, water filling upper dams first, production through somebody's Conduit (paid), the
+  Turbine malus, the USA, Germany, Italy and France abilities, Water Management, closed and
+  taken spaces, the Contract Office and its limit of three, the Patent Office, Mahiri
+  Sekibo, passing, round scoring with its ties and the Bonus tile's sections, the Objectives,
+  JSON, and whole games by a random bot for 2 to 4 players checked after every move. The
+  ignored `game_report` prints what the bots do.
+* `protocol` (11): every message survives JSON, bug reports included, including each game's view (the Hanabi
   maps are keyed by seat and color), every move, view and option names its game, and rule
   payloads from before "hanabii" existed still parse.
-* `server` (47): in `rooms.rs`, the room flows run for every game: starting with a full
+* `server` (56): in `rooms.rs`, the room flows run for every game: starting with a full
   table and a view for every seat, host-only start and options, seat order, fullness,
   reconnecting with a token, stale disconnects, lobby seats kept through a short drop, moves
   for the wrong game or before the start. In `src/games/`, each game's own: Catan's turns,
@@ -135,10 +148,11 @@ cargo test --workspace
   a whole game, It's a Wonderful World's hidden picks, seat checks, its expansion switch (up
   to seven seats) and whole games, one with the expansion at a full table, Small World's
   turns, hidden coins, reconnecting, the Sky Islands' three to six seats, and whole games for
-  2 to 6 players with and without the expansions. In `reports.rs`: a report saved in a file
+  2 to 6 players with and without the expansions, Barrage's setup picks, seat checks,
+  reconnecting and whole games for 2 to 4 players. In `reports.rs`: a report saved in a file
   of its own (UTC time, the message, the state, never the token), the limits, and the
   reporter's room described only to someone holding one of its seats.
-* `client` (112): native render tests that build real games and render every screen to
+* `client` (158): native render tests that build real games and render every screen to
   HTML. In the shell: every game is registered under its own kind and drawn in its own
   frame, and a state from the server puts its board on screen until you leave. In each
   game's folder: all Catan phases, the Hanabi board for every seat, player count and rule
@@ -147,7 +161,9 @@ cargo test --workspace
   player count of a whole game; Small World's board through whole games with and without the
   expansions, the Sky Islands above the board, the cost badges, the die's confirmation, the
   decline button, the Copycat and Trade Pact controls, the expansions' switches in the
-  lobby; the lobbies; the bug report button on every screen, its dialog, and the context a
+  lobby; Barrage's setup picks, Management board, tiles marking where they build, the
+  Turbine's productions, every kind of decision, whole games for 2 to 4 players for every
+  seat, and its map's spaces never overlapping; the lobbies; the bug report button on every screen, its dialog, and the context a
   report carries from each screen and game; and the pure helpers behind what a click means. Animations, drag and drop and the CSS need a browser (see below).
 
 ## What has been run in a browser
@@ -159,8 +175,10 @@ goes back to the menu; the page title throughout. It's a Wonderful World was als
 through its draft, planning and an Energy step (its kept cards also at phone width), and
 joining a room from a second tab was tried by hand. Small World was played to the end by
 script with two players, and with four and every expansion; its first turns with three,
-five and six (the Sky Islands); the opening was also run at phone width. Still to look at
-with people:
+five and six (the Sky Islands); the opening was also run at phone width. Barrage was
+played to the end with two players by a script clicking the interface (setup picks, every
+Management space, building from the map, productions, Contracts, income decisions), and its
+board looked at at phone width. Still to look at with people:
 
 * a whole game of each;
 * Hanabi's hand-slide animation, drag and drop onto the play/discard zones, and the
@@ -432,6 +450,75 @@ Moves are `ClientMsg::Move(GameMove::SmallWorld(..))` and the game arrives as a
 `ServerMsg::Game` holding a `GameView::SmallWorld`, which carries what the seat may do
 right now, so the client never works the rules out for itself.
 
+## Barrage
+
+Run an energy company in the Alps of the 1920s, 2 to 4 players, over five rounds: build dams,
+conduits and powerhouses, hold back the water that runs down from the headstreams, and turn it
+into energy to fulfill contracts. It is the rulebook's full game (Cranio Creations, 2019).
+
+* **Setup.** Each seat in turn picks a Company (USA, Germany, Italy, France) with the
+  Executive Officer dealt to it, and a Starting Contract; whoever picks first plays last.
+* **A round**: water on the four Headstreams (the tiles say how much, rounds 1 to 4) and
+  the incomes the Company boards uncovered; then turns in turn order, each placing Engineers
+  on one action space, until everybody has passed; then the Headstreams' water flows down;
+  then the scoring: 6 and 2 VP to the two best producers, Credits by energy (3 Credits and
+  3 VP lost for none), and the round's Bonus tile from 6 energy (4 VP less for each section
+  of the Energy Track behind the round's).
+* **Building** (the Company board's four spaces: 1, 2, 3, then 3 Engineers and 3 Credits):
+  put a Technology tile and the Machineries on the Construction Wheel, turn it one segment,
+  place the piece. A Base costs 5, 4 or 3 Excavators in the Mountains, Hills or Plains, an
+  Elevation 4, 3 or 2 Concrete Mixers, a Conduit 2 Excavators per production value, a
+  Powerhouse 2 Mixers plus one per Powerhouse built; red spaces cost 3 Credits more. Tiles
+  and Machineries come back when their segment returns to the open one. The 2nd, 4th and
+  5th piece of a row uncover an income; the 2nd and 4th Powerhouses add +1 and +2 to every
+  production, and the 3rd switches on the Company's ability.
+* **Water** runs down the rivers one drop at a time; in each basin it passes the
+  Powerhouses, then fills the upper (red) Dam, then the lower one, then runs on, until it
+  leaves the map at the bottom.
+* **Production** (Turbine Station, +2 to −2): drops from your Dam or a neutral one, through a
+  Conduit (somebody else's costs a Credit a drop, which scores them a VP) to your Powerhouse,
+  make the Conduit's value each; then they flow on from that Powerhouse. One Contract may be
+  fulfilled with the energy of one production (the National ones by whoever gets there
+  first).
+* **The Management board**: Water Management, the Bank (any number of Engineers, a Credit
+  each, never full), the Workshop (turn the wheel), the Machinery Shop, the Contract Office
+  (at most 3 Contracts face up) and the Patent Office (Advanced tiles: a special effect each
+  time they build). Spaces marked 3+ or 4 are closed with fewer players.
+* **The end**, after round 5: the Objective tile (15, 10, 5 VP), 1 VP per 5 Credits and
+  Machineries left, 1 VP per drop in your Dams. The most VP win, then the most energy in the
+  last round.
+
+On screen, the map marks where the tile in hand can build and what it costs (a click builds
+there); the Management board's open spaces are outlined; a space that needs more (which
+production, where the drops go, which Contracts) asks for it in "Your move", as do the
+decisions a reward brings (Machineries of your choice, drops on Headstreams, a free
+building, a Contract to fulfill or discard, a second production).
+
+### Where the rules come from
+
+The 2019 English rulebook, and photographs of the map, the Company boards, the Management
+board and every Contract. `docs/barrage.md` lists the sources and the rule calls made where
+they were silent or unreadable (the Energy Track's Credits among them).
+
+### What isn't in it
+
+The introductory setup, the solo Automa, the expansions (The Leeghwater Project and later) and the promo
+officers.
+
+### Where it lives
+
+Rules in `games/barrage` (`barrage-core`, pure and deterministic: the shuffles come from the
+seed the server gives): `map.rs` for the basins, rivers and spaces, `data.rs` for the printed
+components, `state.rs` for the rules, `view.rs` for what a seat sees and may do; server side in
+`server/src/games/barrage.rs`; screens in `client/src/games/barrage/` (`screens.rs` for the
+page, create/join and the waiting room, `board.rs` for the game, `map.rs` for the map,
+`look.rs` for the texts and what a click means, `mod.rs` for the state kept between redraws);
+styles in `barrage.css` beside them, all scoped under `.barrage`.
+
+Moves are `ClientMsg::Move(GameMove::Barrage(..))` and the game arrives as a
+`ServerMsg::Game` holding a `GameView::Barrage`, which carries what the seat may do right
+now (the constructions with their costs, the productions, the open spaces).
+
 ## Known gaps
 
 * Rooms live in memory only; a server restart ends all games.
@@ -442,3 +529,5 @@ right now, so the client never works the rules out for itself.
   expansions (see its section above).
 * Small World plays on boards traced from photographs, and without the expansions that
   change the board or the turn (see its section above).
+* Barrage is the base game's full game only, and a few printed numbers were inferred (see
+  `docs/barrage.md`).

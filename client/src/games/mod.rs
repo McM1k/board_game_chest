@@ -9,6 +9,7 @@
 //! implementing [`Game`], its arm in [`game`], its signals in [`Games`] and
 //! its stylesheet in `index.html` (see `docs/adding-a-game.md`).
 
+pub mod barrage;
 pub mod catan;
 pub mod hanabi;
 pub mod smallworld;
@@ -75,6 +76,7 @@ pub fn game(kind: GameKind) -> &'static dyn Game {
         GameKind::Hanabi => &hanabi::Hanabi,
         GameKind::Wonderful => &wonderful::Wonderful,
         GameKind::SmallWorld => &smallworld::SmallWorld,
+        GameKind::Barrage => &barrage::Barrage,
     }
 }
 
@@ -86,6 +88,7 @@ pub struct Games {
     pub hanabi: hanabi::Signals,
     pub wonderful: wonderful::Signals,
     pub smallworld: smallworld::Signals,
+    pub barrage: barrage::Signals,
 }
 
 impl Games {
@@ -95,6 +98,7 @@ impl Games {
             hanabi: hanabi::Signals::new(),
             wonderful: wonderful::Signals::new(),
             smallworld: smallworld::Signals::new(),
+            barrage: barrage::Signals::new(),
         }
     }
 }

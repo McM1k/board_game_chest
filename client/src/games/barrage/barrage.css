@@ -1,0 +1,1146 @@
+/* Barrage. Everything is scoped under .barrage, so it can't leak into the
+   other games (which reuse names like .panel, .hint and .tag), and the
+   custom properties live on .barrage too.
+
+   The idea: an engineering office of the 1920s. Blued steel walls, brass
+   fittings, panels of drafting paper with dark ink, and the companies'
+   colours only on their pieces. */
+
+.barrage {
+  --steel: #1f252c;
+  --steel-2: #2b333c;
+  --paper: #f3ecdc;
+  --paper-2: #e8dec6;
+  --paper-3: #d8c9a6;
+  --ink: #23201b;
+  --ink-soft: #625a4c;
+  --line: #c3b08a;
+  --brass: #b98b3c;
+  --brass-hi: #d3a453;
+  --brass-ink: #1d1609;
+  --water: #3f86c6;
+  --water-hi: #8cc2ee;
+  --target: #ffe58a;
+  --danger: #9b2b20;
+
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(120% 60% at 50% -10%, #3a4654 0%, rgba(58, 70, 84, 0) 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 24px),
+    var(--steel);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.barrage,
+.barrage * {
+  box-sizing: border-box;
+}
+
+.barrage .app {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 1rem 1rem 4rem;
+}
+
+.barrage h1,
+.barrage h2,
+.barrage h3 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  margin: 0;
+}
+
+.barrage h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.6rem;
+}
+
+.barrage h3 {
+  font-size: 0.95rem;
+  margin: 0.5rem 0 0.35rem;
+}
+
+.barrage p {
+  margin: 0;
+}
+
+.barrage ul,
+.barrage ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barrage .hint,
+.barrage .note,
+.barrage .caption {
+  color: var(--ink-soft);
+}
+
+.barrage .note,
+.barrage .caption {
+  font-size: 0.85rem;
+}
+
+/* ---------- buttons and fields: :where() keeps their specificity at zero,
+   so every special button below simply wins. ---------- */
+
+.barrage :where(button) {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.barrage :where(button:hover:not(:disabled)) {
+  border-color: var(--ink-soft);
+}
+
+.barrage :where(button:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.barrage :where(button.primary) {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--brass-ink);
+}
+
+.barrage :where(button.primary:hover:not(:disabled)) {
+  background: var(--brass-hi);
+  border-color: var(--brass-hi);
+}
+
+.barrage :where(button.danger) {
+  background: none;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.barrage :where(button.link) {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-weight: 500;
+  text-decoration: underline;
+  padding: 0.25rem;
+}
+
+.barrage :focus-visible {
+  outline: 3px solid var(--brass-hi);
+  outline-offset: 2px;
+}
+
+.barrage :where(input[type="text"]) {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: #fffdf6;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+}
+
+.barrage .code-input {
+  text-align: center;
+  font-size: 1.5rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+.barrage .tag {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.02rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-3);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.barrage .tag-off {
+  color: #fff3ee;
+  background: #7d3a2c;
+}
+
+.barrage .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.barrage .row:empty {
+  display: none;
+}
+
+.barrage .tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.barrage :where(button.tool) {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.85rem;
+  background: #fffaf0;
+}
+
+.barrage :where(button.tool.on) {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--brass-ink);
+}
+
+.barrage .option-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.barrage .option-toggle input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--brass);
+}
+
+/* ---------- panels ---------- */
+
+.barrage .panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- the entry screens ---------- */
+
+.barrage .entry {
+  max-width: 28rem;
+  margin: 5vh auto 0;
+  text-align: center;
+  color: var(--paper);
+}
+
+.barrage .entry .mark svg {
+  width: 5rem;
+  height: 5rem;
+}
+
+.barrage .game-title {
+  font-size: clamp(2rem, 7vw, 2.9rem);
+  line-height: 1.05;
+  margin-top: 0.4rem;
+  letter-spacing: 0.04em;
+}
+
+.barrage .lede {
+  max-width: 40ch;
+  margin: 0.8rem auto 1.4rem;
+  color: var(--paper-3);
+}
+
+.barrage .game-title + .panel {
+  margin-top: 1.4rem;
+}
+
+.barrage .entry .panel {
+  text-align: left;
+  color: var(--ink);
+}
+
+.barrage .join-form label {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.barrage .join-form button,
+.barrage .entry .panel > button {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.barrage .join-form button.link,
+.barrage .entry .panel > button.link {
+  width: auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.barrage .join-form .hint {
+  margin: 1rem 0 0.6rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.barrage .room-code {
+  margin: 0.2rem 0 1rem;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 3.2rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-align: center;
+  color: var(--brass);
+}
+
+.barrage .roster {
+  margin: 0 0 1rem;
+}
+
+.barrage .roster li {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.barrage .entry .panel > .hint {
+  margin-bottom: 0.4rem;
+}
+
+.barrage .entry .panel > button + .hint {
+  margin-top: 0.6rem;
+}
+
+/* ---------- the game screen ---------- */
+
+.barrage .top-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--paper);
+  margin-bottom: 0.7rem;
+}
+
+.barrage .top-bar .brand {
+  font-size: 1.35rem;
+  letter-spacing: 0.06em;
+}
+
+.barrage .top-bar .room {
+  margin-left: auto;
+  color: var(--paper-3);
+}
+
+.barrage .top-bar .room-tag {
+  letter-spacing: 0.15em;
+  color: var(--paper);
+}
+
+.barrage .top-bar button.link {
+  color: var(--paper-3);
+}
+
+.barrage .status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--brass);
+  border-radius: 0.8rem;
+}
+
+.barrage .turn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.6rem;
+  padding-right: 1rem;
+  border-right: 1px solid var(--line);
+  line-height: 1.1;
+}
+
+.barrage .turn-word,
+.barrage .turn-of {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+.barrage .turn-num {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+
+.barrage .status h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.barrage .board-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.barrage .map-col {
+  position: sticky;
+  top: 0.5rem;
+}
+
+.barrage .side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* One column on narrow screens, with your move above the map. */
+@media (max-width: 1000px) {
+  .barrage .board-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .barrage .map-col {
+    position: static;
+    min-width: 0;
+  }
+
+  .barrage .side-col {
+    display: contents;
+  }
+
+  .barrage .side-col > .panel {
+    order: 1;
+  }
+
+  .barrage .side-col > .actions,
+  .barrage .side-col > .results {
+    order: -1;
+  }
+}
+
+/* ---------- the map ---------- */
+
+.barrage .map-frame {
+  padding: 0.5rem;
+  background: #11161c;
+  border: 1px solid #3b4652;
+  border-radius: 0.8rem;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.barrage .map {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100vh - 2rem);
+  border-radius: 0.45rem;
+  background: linear-gradient(180deg, #d9dde2 0%, #c8bd9b 38%, #a9b88a 62%, #8fa977 100%);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.barrage .river {
+  fill: none;
+  stroke: var(--water);
+  stroke-width: 10;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.barrage .pipe {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.5;
+  stroke-dasharray: 10 7;
+}
+
+.barrage .pipe.built {
+  opacity: 0.95;
+  stroke-width: 7;
+  stroke-dasharray: none;
+}
+
+.barrage .basin-box {
+  stroke: rgba(30, 30, 30, 0.35);
+  stroke-width: 2;
+}
+
+.barrage .basin.mountains .basin-box {
+  fill: rgba(236, 239, 243, 0.82);
+}
+
+.barrage .basin.hills .basin-box {
+  fill: rgba(222, 202, 150, 0.82);
+}
+
+.barrage .basin.plains .basin-box {
+  fill: rgba(176, 205, 140, 0.82);
+}
+
+.barrage .lake {
+  fill: #6aa6dc;
+  opacity: 0.55;
+}
+
+.barrage .basin-name {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  fill: #3a3529;
+}
+
+.barrage .space rect {
+  fill: rgba(255, 253, 246, 0.85);
+  stroke: #6a6253;
+  stroke-width: 2;
+}
+
+.barrage .space.paid rect {
+  stroke: #c0392b;
+  stroke-width: 3;
+}
+
+.barrage .conduit-space circle {
+  stroke-width: 4;
+}
+
+.barrage .conduit-space.built circle {
+  stroke: #1b1b1b;
+  stroke-width: 2.5;
+}
+
+.barrage .conduit-space text {
+  font-size: 17px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.barrage .space .fee {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #c0392b;
+}
+
+.barrage .piece rect {
+  stroke: #1b1b1b;
+  stroke-width: 2;
+}
+
+.barrage .piece .band {
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.barrage .piece .level {
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.barrage .drop {
+  fill: var(--water);
+  stroke: #1d4f80;
+  stroke-width: 1;
+}
+
+.barrage .headstream rect {
+  fill: rgba(225, 238, 248, 0.92);
+  stroke: #4a6f93;
+  stroke-width: 2;
+}
+
+.barrage .headstream.open {
+  cursor: pointer;
+}
+
+.barrage .headstream.open rect {
+  fill: var(--target);
+  stroke: #9a7212;
+  stroke-width: 3;
+}
+
+.barrage .hs-name {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+  fill: #29435d;
+}
+
+.barrage .hs-rounds {
+  font-size: 13px;
+  text-anchor: end;
+  fill: #6b7c8c;
+}
+
+.barrage .hs-rounds .now {
+  font-weight: 800;
+  fill: #1d4f80;
+}
+
+.barrage .hs-count,
+.barrage .hs-added {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #1d4f80;
+}
+
+.barrage .hs-added {
+  fill: #9a5d00;
+}
+
+/* What a click can build on: the spot glows and says what it costs. */
+.barrage .target {
+  cursor: pointer;
+}
+
+.barrage .target > rect {
+  fill: rgba(255, 229, 138, 0.35);
+  stroke: #e0a800;
+  stroke-width: 3;
+  animation: barrage-glow 1.6s ease-in-out infinite;
+}
+
+.barrage .target:hover > rect,
+.barrage .target:focus-visible > rect {
+  fill: rgba(255, 229, 138, 0.7);
+}
+
+.barrage .target .cost rect {
+  fill: #2b2a2e;
+}
+
+.barrage .target .cost text {
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--target);
+  text-anchor: middle;
+}
+
+@keyframes barrage-glow {
+  50% {
+    stroke: #fff2bf;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barrage .target > rect {
+    animation: none;
+  }
+}
+
+.barrage .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--paper-3);
+}
+
+.barrage .legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.barrage .legend .key {
+  width: 1.9rem;
+  height: 0.8rem;
+}
+
+.barrage .key-box {
+  display: inline-block;
+  width: 1.2rem;
+  height: 0.75rem;
+  border: 2px solid #6a6253;
+  border-radius: 3px;
+  background: #fffdf6;
+}
+
+.barrage .key-box.paid {
+  border-color: #c0392b;
+}
+
+.barrage .key-box.neutral {
+  background: #c9a46a;
+  border-color: #1b1b1b;
+}
+
+/* ---------- your move ---------- */
+
+.barrage .actions.you-act {
+  border: 2px solid var(--brass);
+  box-shadow: 0 0 0 4px rgba(185, 139, 60, 0.25), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.barrage .actions > * + * {
+  margin-top: 0.5rem;
+}
+
+.barrage .in-hand {
+  font-weight: 600;
+}
+
+.barrage .picks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.barrage :where(button.pick) {
+  width: 100%;
+  text-align: left;
+  font-weight: 500;
+  background: #fffaf0;
+}
+
+.barrage :where(button.pick.on) {
+  border: 2px solid var(--brass);
+  background: #fff2cf;
+}
+
+.barrage .pick-line {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.barrage .swatch {
+  display: inline-block;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-right: 0.4rem;
+  border: 1px solid #1b1b1b;
+  border-radius: 3px;
+  vertical-align: -0.12rem;
+}
+
+.barrage .productions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.barrage .production {
+  padding: 0.4rem 0.5rem;
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.barrage .production.none {
+  opacity: 0.55;
+}
+
+.barrage .spot-move {
+  padding: 0.5rem 0.6rem;
+  background: #fff6de;
+  border: 1px dashed var(--brass);
+  border-radius: 0.6rem;
+}
+
+.barrage .bank {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.barrage .bank .count {
+  min-width: 1.6rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.barrage .contract-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+/* ---------- Contracts ---------- */
+
+.barrage .contract {
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+  border-radius: 0.35rem;
+  border-left: 6px solid;
+  background: #fffaf0;
+}
+
+.barrage .contract.starting {
+  border-color: #b49a6a;
+}
+
+.barrage .contract.green {
+  border-color: #3fae4a;
+}
+
+.barrage .contract.yellow {
+  border-color: #e3c429;
+}
+
+.barrage .contract.red {
+  border-color: #d4312c;
+}
+
+.barrage .contract.national {
+  border-color: #8b4fb3;
+  background: #f6eefb;
+}
+
+.barrage .tiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.barrage .cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.barrage .cards .empty {
+  color: var(--ink-soft);
+}
+
+.barrage :where(button.card) {
+  width: 100%;
+  padding: 0.15rem;
+  text-align: left;
+  background: none;
+  border: 2px solid transparent;
+}
+
+.barrage :where(button.card:disabled) {
+  opacity: 1;
+  cursor: default;
+}
+
+.barrage :where(button.card.on) {
+  border-color: var(--brass);
+  background: #fff2cf;
+}
+
+.barrage .contracts-panel :where(button.card:not(:disabled)) .contract {
+  box-shadow: 0 0 0 2px var(--target);
+}
+
+.barrage .nationals {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+/* ---------- the Management board ---------- */
+
+.barrage .management .sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem 0.8rem;
+}
+
+@media (max-width: 520px) {
+  .barrage .management .sections,
+  .barrage .tiers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.barrage .section h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.barrage .mrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0;
+  border-bottom: 1px dotted var(--line);
+}
+
+.barrage .mlabel {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.barrage .tile-effect {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.barrage :where(button.space-btn) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 2.2rem;
+  min-height: 1.9rem;
+  padding: 0.15rem 0.35rem;
+  background: #2b333c;
+  border: 2px solid #59626c;
+  border-radius: 0.4rem;
+}
+
+.barrage :where(button.space-btn.fee) {
+  border-color: #c0392b;
+}
+
+.barrage :where(button.space-btn.open) {
+  background: #3d4a57;
+  box-shadow: 0 0 0 2px var(--target);
+}
+
+.barrage :where(button.space-btn.on) {
+  background: var(--brass);
+}
+
+.barrage :where(button.space-btn:disabled) {
+  opacity: 1;
+  cursor: default;
+}
+
+.barrage :where(button.space-btn.closed) {
+  opacity: 0.35;
+}
+
+.barrage .eng {
+  width: 0.62rem;
+  height: 0.86rem;
+  fill: #eef0f2;
+}
+
+.barrage .fee-tag {
+  margin-left: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ffb4a8;
+}
+
+.barrage .occupant {
+  position: absolute;
+  inset: -2px;
+  border-radius: 0.4rem;
+  border: 2px solid #1b1b1b;
+  opacity: 0.92;
+}
+
+/* ---------- companies ---------- */
+
+.barrage .players {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.barrage .player {
+  padding: 0.55rem 0.6rem;
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.barrage .player.current {
+  border: 2px solid var(--brass);
+}
+
+.barrage .player-head {
+  display: flex;
+  align-items: center;
+}
+
+.barrage .player-name {
+  font-weight: 700;
+}
+
+.barrage .vp {
+  margin-left: auto;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+}
+
+.barrage .company {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.barrage .officer,
+.barrage .ability {
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.barrage .ability {
+  color: var(--ink-soft);
+}
+
+.barrage .ability.on {
+  color: #1f6f3a;
+  font-weight: 600;
+}
+
+.barrage .stock {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.barrage .pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+}
+
+.barrage .tiles {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+}
+
+.barrage .wheel {
+  display: flex;
+  gap: 0.2rem;
+  margin: 0.35rem 0;
+}
+
+.barrage .seg {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  background: #ece3cd;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+}
+
+.barrage .seg.empty {
+  opacity: 0.55;
+}
+
+.barrage .seg-turns {
+  display: block;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.barrage .seg-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barrage .cards.mine {
+  margin-top: 0.3rem;
+}
+
+/* ---------- scoring, log, results ---------- */
+
+.barrage .bonuses {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.barrage .bonus {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+}
+
+.barrage .bonus.now {
+  border: 2px solid var(--brass);
+  background: #fff2cf;
+}
+
+.barrage .bonus.past {
+  opacity: 0.45;
+}
+
+.barrage .bonus-round {
+  font-weight: 700;
+}
+
+.barrage .bonus-need {
+  color: var(--ink-soft);
+}
+
+.barrage .log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+}
+
+.barrage .log li {
+  padding-bottom: 0.2rem;
+  border-bottom: 1px dotted var(--line);
+}
+
+.barrage .results table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.barrage .results th,
+.barrage .results td {
+  padding: 0.35rem 0.4rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.barrage .results .num {
+  text-align: right;
+}
+
+.barrage .results tr.won td {
+  font-weight: 700;
+}

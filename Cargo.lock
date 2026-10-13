@@ -147,6 +147,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "barrage-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "base16"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -211,6 +219,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "any_spawner",
+ "barrage-core",
  "catan-core",
  "console_error_panic_hook",
  "hanabi-core",
@@ -1304,6 +1313,7 @@ dependencies = [
 name = "protocol"
 version = "0.1.0"
 dependencies = [
+ "barrage-core",
  "catan-core",
  "hanabi-core",
  "rand 0.8.8",
@@ -1668,6 +1678,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "barrage-core",
  "catan-core",
  "futures-util",
  "hanabi-core",

@@ -13,3 +13,4 @@ catan-core = { path = "games/catan" }
 hanabi-core = { path = "games/hanabi" }
 wonderful-core = { path = "games/wonderful" }
 smallworld-core = { path = "games/smallworld" }
+barrage-core = { path = "games/barrage" }

@@ -1,0 +1,11 @@
+[package]
+name = "barrage-core"
+version = "0.1.0"
+edition = "2021"
+description = "Barrage rules: the Alps map, dams, conduits and powerhouses, water flow, the construction wheel, contracts, scoring"
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

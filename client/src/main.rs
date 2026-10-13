@@ -94,6 +94,7 @@ pub(crate) mod render_tests {
             GameKind::Hanabi => "class=\"hanabi\"",
             GameKind::Wonderful => "class=\"wonderful\"",
             GameKind::SmallWorld => "class=\"smallworld\"",
+            GameKind::Barrage => "class=\"barrage\"",
         }
     }
 
@@ -109,6 +110,7 @@ pub(crate) mod render_tests {
             GameKind::Hanabi => GameView::Hanabi(Box::new(GameState::new(3, 5, GameRules::default()).view_for(PlayerId(1)))),
             GameKind::Wonderful => GameView::Wonderful(Box::new(wonderful_core::State::new(3, 7).view_for(1))),
             GameKind::SmallWorld => GameView::SmallWorld(Box::new(smallworld_core::State::new(3, 7).view_for(1))),
+            GameKind::Barrage => GameView::Barrage(Box::new(barrage_core::State::new(3, 7).view_for(1))),
         }
     }
 
@@ -121,11 +123,11 @@ pub(crate) mod render_tests {
             let html = current_screen(app).to_html();
             assert!(html.contains("Pick a game") && html.contains("menu-page"));
             assert!(html.contains("Catan") && html.contains("Hanabi"));
-            assert!(shows(&html, "It's a Wonderful World") && html.contains("Small World"));
-            // Catan seats 2-4, Hanabi 2-6 (in hanabii mode), Small World
-            // 2-6 (with the Sky Islands), It's a Wonderful World 2-7 (with
-            // its expansion).
-            assert_eq!(html.matches("2\u{2013}4 players").count(), 1);
+            assert!(shows(&html, "It's a Wonderful World") && html.contains("Small World") && html.contains("Barrage"));
+            // Catan and Barrage seat 2-4, Hanabi 2-6 (in hanabii mode), Small
+            // World 2-6 (with the Sky Islands), It's a Wonderful World 2-7
+            // (with its expansion).
+            assert_eq!(html.matches("2\u{2013}4 players").count(), 2);
             assert_eq!(html.matches("2\u{2013}6 players").count(), 2);
             assert_eq!(html.matches("2\u{2013}7 players").count(), 1);
             // One card per game, each with its picture and its sentence.
@@ -245,6 +247,7 @@ pub(crate) mod render_tests {
                 assert!(games.hanabi.view.get_untracked().is_none());
                 assert!(games.wonderful.view.get_untracked().is_none());
                 assert!(games.smallworld.view.get_untracked().is_none());
+                assert!(games.barrage.view.get_untracked().is_none());
                 assert!(app.room.get_untracked().is_empty());
             }
         });
