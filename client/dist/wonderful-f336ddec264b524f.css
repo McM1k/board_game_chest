@@ -540,8 +540,42 @@
   display: grid;
   grid-template-columns: auto auto;
   grid-template-areas: "word word" "num of";
-  align-items: baseline;
+  align-items: end;
   column-gap: 0.4rem;
+}
+
+/* The round number inside the round tracker's ring of arrows: green when
+   the hands go to the next player, pink when they come back. If the
+   picture fails, it removes itself and a plain ring of that colour shows. */
+.wonderful .round-ring {
+  grid-area: num;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border: 0.3rem solid var(--ring);
+  border-radius: 50%;
+}
+
+.wonderful .round-ring.next {
+  --ring: #3f9a62;
+}
+
+.wonderful .round-ring.previous {
+  --ring: #a8379f;
+}
+
+.wonderful .round-ring:has(> .round-art) {
+  border-color: transparent;
+}
+
+.wonderful .round-art {
+  position: absolute;
+  inset: -0.3rem;
+  width: calc(100% + 0.6rem);
+  height: calc(100% + 0.6rem);
+  pointer-events: none;
 }
 
 .wonderful .round-word {
@@ -551,11 +585,13 @@
 }
 
 .wonderful .round-num {
-  grid-area: num;
+  position: relative;
   font-family: "Fraunces", Georgia, serif;
-  font-size: 3.4rem;
+  font-size: 1.9rem;
   font-weight: 600;
-  line-height: 0.9;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 0.2em #000, 0 0 0.2em #000;
 }
 
 .wonderful .round-of {
@@ -1135,7 +1171,44 @@
 }
 
 .wonderful .step.done {
+  opacity: 0.75;
+}
+
+/* What producing the most wins, as the production board prints it, then
+   who took it. */
+.wonderful .step-award {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.1rem;
+  font-weight: 600;
+}
+
+.wonderful .award-tokens {
+  display: inline-flex;
+}
+
+.wonderful .award-tokens > .cube {
+  width: 1.3rem;
+  height: 1.3rem;
+  font-size: 0.55rem;
+}
+
+.wonderful .award-tokens > .cube + .cube {
+  margin-left: -0.45rem;
+}
+
+.wonderful .step-award.won .award-who {
+  color: var(--text);
+}
+
+.wonderful .step-award.nobody .award-tokens {
   opacity: 0.4;
+}
+
+.wonderful .step-award.nobody .award-who {
+  font-weight: 400;
+  font-style: italic;
 }
 
 .wonderful .step.now {
@@ -1775,8 +1848,13 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .wonderful .round-ring {
+    width: 3rem;
+    height: 3rem;
+  }
+
   .wonderful .round-num {
-    font-size: 2.6rem;
+    font-size: 1.6rem;
   }
 
   .wonderful .piece-name {
