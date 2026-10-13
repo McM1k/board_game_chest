@@ -171,8 +171,7 @@ fn bonus_cube(bonus: Bonus) -> AnyView {
 
 /// `n` of `of` round markers lit, e.g. the cubes on the Empire.
 fn pips(n: u8, of: u8) -> AnyView {
-    // Cubes placed this step can go past the count until Done turns them into Krystallium.
-    let dots = (0..of.max(n))
+    let dots = (0..of)
         .map(|i| view! { <span class={if i < n { "pip on" } else { "pip" }}></span> })
         .collect_view();
     view! { <span class="pips" role="img" aria-label=format!("{n} of {of}")>{dots}</span> }.into_any()
@@ -924,13 +923,7 @@ fn building_card(ctx: &Ctx, building: &Building) -> AnyView {
             <div class=card_class(def, "building") role="group" aria-label=summary.clone() title=summary>
                 {card_body(def, Some(view! { <span class="sockets">{sockets}</span> }.into_any()))}
                 <span class="card-foot">
-                    <span class="progress">
-                        {if placed == needed {
-                            "Built when you press Done".to_string()
-                        } else {
-                            format!("{placed} of {needed} placed")
-                        }}
-                    </span>
+                    <span class="progress">{format!("{placed} of {needed} placed")}</span>
                     <button class="link" on:click=scrap>
                         "Scrap"
                     </button>
@@ -1605,13 +1598,15 @@ mod tests {
         state.players[0].pool = 3;
         state.players[0].ready = false;
         assert!(!render(&state, 0).contains("class=\"undo\""), "nothing to take back yet");
-        for _ in 0..2 {
-            let to = wonderful_core::Target::Card(card);
-            state.apply(0, Action::Place { piece: wonderful_core::Piece::Cube(Res::Materials), target: to }).unwrap();
-        }
+        let cube = wonderful_core::Piece::Cube(Res::Materials);
+        let to = wonderful_core::Target::Card(card);
+        state.apply(0, Action::Place { piece: cube, target: to }).unwrap();
         let html = render(&state, 0);
         assert!(html.contains("Take back the Materials cube from Recycling Plant"));
-        assert!(html.contains("Built when you press Done"), "full, but built at Done");
+        // Full: built at once, and undo stops there.
+        state.apply(0, Action::Place { piece: cube, target: to }).unwrap();
+        let html = render(&state, 0);
+        assert!(!html.contains("class=\"undo\""));
         assert!(html.contains("Done with Materials: drop 1 cube<"));
         state.apply(0, Action::Place { piece: wonderful_core::Piece::Cube(Res::Materials), target: wonderful_core::Target::Empire })
             .unwrap();

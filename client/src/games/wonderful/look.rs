@@ -646,7 +646,7 @@ pub fn hint(view: &View, names: &[String]) -> String {
             )
         }
         Phase::Production { step } if (step as usize) < Res::ALL.len() && !me.ready => format!(
-            "Placing {}: press Done when you're finished, or Undo to take back what you placed. Buildings you filled are built when you press Done.",
+            "Placing {}: press Done when you're finished, or Undo to take back what you placed.",
             Res::ALL[step as usize].name()
         ),
         Phase::Production { .. } if !me.ready => {

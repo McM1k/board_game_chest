@@ -48,7 +48,7 @@ Where the engine fills a gap or picks a convenience:
 | Empires | Side A of the five base Empires (seven with the expansion), each with its production and its end-game bonus, dealt at random. | Side B (the same production for everybody, no bonus) would be another `Options` field beside `ascension`. |
 | New cards producing | Production is counted at the start of each step: a card finished in step *k* first produces in step *k+1*; one finished in Planning produces in Materials the same round. | Confirmed (Game Park). |
 | Ending a step | A player is done when they press Done (which drops unplaced cubes), or at once if they start the step with nothing produced and no choice pending. Placing again after Done reopens their step. A step where nobody has anything to place is skipped. | Placing the last cube used to end your step by itself, which made a player put the next step's cube by mistake (a player asked, 2026-10-13). |
-| Undo and Done | In production, what you place stays yours to take back (`Action::Undo`, last first) until you press Done. Only then are the buildings it filled built and paid out, and five Empire cubes turned into Krystallium; a building's bonus is therefore first usable in the next step. Scrapping a building drops what was placed on it this step. Planning placements are final at once. | A convenience: the published game builds a card the moment it is full. |
+| Undo and Done | In production, what you place stays yours to take back (`Action::Undo`, last first) until you press Done, except that a building is built and paid the moment it is full, and five Empire cubes become a Krystallium at once, as in the published game: that placement and everything before it are then final (undo stops there). Scrapping a building drops what was placed on it this step. Planning placements are final at once. | A convenience on top of the published rules; the timing of building and Krystallium is the published one. |
 
 Edge cases:
 
@@ -233,7 +233,7 @@ publisher, La Boîte de Jeu; Game Park's licence covers its code, not the art.
   is decided. Try Scrap on a building (its dialog only confirms: the cube goes to the Empire).
 * Production: the step bar and race list. Click a free space (it lights up when what you hold
   fits). Pick another piece in the tray first to override. Try "Put on your Empire", Undo,
-  and "Done with Materials: drop N cubes"; a full building says "Built when you press Done". A Science win shows "Take a General" / "Take a Financier" and blocks
+  and "Done with Materials: drop N cubes"; Undo disappears once a placement finishes a building. A Science win shows "Take a General" / "Take a Financier" and blocks
   Done until you choose. Wrap-up appears only when someone can use it.
 * Reload mid-game: you return to your seat with your own cards.
 * A real phone: the sticky tray, tap targets, stacked standings, fonts.
