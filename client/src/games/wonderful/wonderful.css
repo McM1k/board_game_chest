@@ -600,6 +600,94 @@
   color: var(--muted);
 }
 
+/* The round ring, then the round's track beside it. */
+.wonderful .turn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  min-width: 0;
+}
+
+/* The round's steps in order, a cursor over the one being played. */
+.wonderful .track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  --link: 0.3rem;
+  gap: 0.6rem var(--link);
+  min-width: 0;
+  padding-top: 0.7rem;
+  list-style: none;
+}
+
+.wonderful .track-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 1.9rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.wonderful .track-step.done {
+  opacity: 0.8;
+}
+
+.wonderful .track-step.now {
+  color: var(--text);
+  opacity: 1;
+}
+
+/* The line linking each step to the next. */
+.wonderful .track-step + .track-step::after {
+  content: "";
+  position: absolute;
+  top: 0.8rem;
+  right: 100%;
+  width: var(--link);
+  border-top: 2px solid var(--line);
+}
+
+.wonderful .track-mark {
+  display: grid;
+  place-items: center;
+  height: 1.6rem;
+  border-radius: 0.5rem;
+}
+
+.wonderful .track-mark > .cube {
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.75rem;
+}
+
+.wonderful .track-mark.word {
+  padding: 0 0.45rem;
+  font-weight: 600;
+  background: var(--felt-2);
+  border: 1px solid var(--line);
+}
+
+.wonderful .track-step.now .track-mark {
+  box-shadow: 0 0 0 2px var(--pop);
+}
+
+/* The cursor: a small arrow pointing down at the step being played. */
+.wonderful .track-step.now::before {
+  content: "";
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0.32rem solid transparent;
+  border-top: 0.42rem solid var(--pop);
+  border-bottom: 0;
+}
+
 .wonderful .phase h2 {
   margin-bottom: 0.2rem;
 }
@@ -1188,36 +1276,13 @@
 
 /* ---------- production ---------- */
 
-.wonderful .steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.wonderful .step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-  background: var(--felt-2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  opacity: 0.6;
-}
-
-.wonderful .step.done {
-  opacity: 0.75;
-}
-
 /* What producing the most wins, as the production board prints it, then
-   who took it. */
+   who took it, under each production step of the round's track. */
 .wonderful .step-award {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  margin-left: 0.1rem;
+  gap: 0.1rem;
   font-weight: 600;
 }
 
@@ -1226,13 +1291,22 @@
 }
 
 .wonderful .award-tokens > .cube {
-  width: 1.3rem;
-  height: 1.3rem;
-  font-size: 0.55rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  font-size: 0.5rem;
 }
 
 .wonderful .award-tokens > .cube + .cube {
-  margin-left: -0.45rem;
+  margin-left: -0.4rem;
+}
+
+.wonderful .award-who {
+  max-width: 3.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  line-height: 1.1;
 }
 
 .wonderful .step-award.won .award-who {
@@ -1246,14 +1320,6 @@
 .wonderful .step-award.nobody .award-who {
   font-weight: 400;
   font-style: italic;
-}
-
-.wonderful .step.now {
-  color: var(--text);
-  font-weight: 600;
-  opacity: 1;
-  border-color: var(--pop);
-  box-shadow: 0 0 0 2px rgba(255, 107, 139, 0.3);
 }
 
 .wonderful .race {
@@ -1883,6 +1949,15 @@
   .wonderful .cards.kept,
   .wonderful .cards.finished {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wonderful .status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wonderful .track {
+    --link: 0.2rem;
+    row-gap: 0.5rem;
   }
 
   .wonderful .round-ring {

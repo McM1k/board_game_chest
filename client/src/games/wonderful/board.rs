@@ -429,6 +429,7 @@ fn status_band(ctx: &Ctx) -> AnyView {
 
     view! {
         <section class="status" aria-live="polite">
+            <div class="turn">
             <div class="round" aria-label=format!("Round {} of {}, {}", view.round, ROUNDS, passing)>
                 <span class="round-word">"Round"</span>
                 <span
@@ -439,6 +440,8 @@ fn status_band(ctx: &Ctx) -> AnyView {
                     <span class="round-num">{view.round}</span>
                 </span>
                 <span class="round-of">{format!("of {ROUNDS}")}</span>
+            </div>
+            {turn_track(ctx)}
             </div>
             <div class="phase">
                 <h2>{look::phase_title(view)}</h2>
@@ -590,29 +593,6 @@ fn planning_panel(ctx: &Ctx) -> AnyView {
 
 fn production_panel(ctx: &Ctx, step: u8) -> AnyView {
     let me = ctx.me();
-    let steps = (0..=WRAP_UP)
-        .map(|i| {
-            let class = if i < step {
-                "step done"
-            } else if i == step {
-                "step now"
-            } else {
-                "step"
-            };
-            let (icon, name) = match Res::ALL.get(i as usize) {
-                Some(&res) => (res_cube(res), res.name()),
-                None => (cube("wrap", "+"), "Wrap-up"),
-            };
-            view! {
-                <li class=class aria-current={if i == step { "step" } else { "false" }}>
-                    {icon}
-                    <span class="step-name">{name}</span>
-                    {step_award(ctx, i)}
-                </li>
-            }
-        })
-        .collect_view();
-
     let choose = me.choose.then(|| {
         let take = |token: Token| {
             let ctx = ctx.clone();
@@ -635,10 +615,59 @@ fn production_panel(ctx: &Ctx, step: u8) -> AnyView {
 
     view! {
         <section class="panel production">
-            <ol class="steps">{steps}</ol>
             {race(ctx, step)}
             {choose}
         </section>
+    }
+    .into_any()
+}
+
+/// The round's progression, beside the round ring: the draft, the planning,
+/// then each production step with its resource, the character at stake and,
+/// once played, who took it. A cursor marks where the round is.
+fn turn_track(ctx: &Ctx) -> AnyView {
+    // Draft 0, Planning 1, then production step n at 2 + n.
+    let now = match ctx.view.phase {
+        Phase::Draft => 0,
+        Phase::Planning => 1,
+        Phase::Production { step } => 2 + usize::from(step),
+        Phase::Over => usize::MAX,
+    };
+    let at = |i: usize| match i.cmp(&now) {
+        std::cmp::Ordering::Less => "track-step done",
+        std::cmp::Ordering::Equal => "track-step now",
+        std::cmp::Ordering::Greater => "track-step",
+    };
+    let word = |i: usize, name: &'static str, short: &'static str| {
+        view! {
+            <li class=at(i) aria-current={if i == now { "step" } else { "false" }} title=name>
+                <span class="track-mark word" aria-hidden="true">{short}</span>
+                <span class="sr">{name}</span>
+            </li>
+        }
+    };
+    let production = (0..=WRAP_UP)
+        .map(|step| {
+            let i = 2 + usize::from(step);
+            let (icon, name) = match Res::ALL.get(step as usize) {
+                Some(&res) => (res_cube(res), res.name()),
+                None => (cube("wrap", "+"), "Wrap-up"),
+            };
+            view! {
+                <li class=at(i) aria-current={if i == now { "step" } else { "false" }} title=format!("Production: {name}")>
+                    <span class="track-mark">{icon}</span>
+                    <span class="sr">{format!("Production: {name}")}</span>
+                    {step_award(ctx, step)}
+                </li>
+            }
+        })
+        .collect_view();
+    view! {
+        <ol class="track" aria-label="This round">
+            {word(0, "Draft", "Draft")}
+            {word(1, "Planning", "Plan")}
+            {production}
+        </ol>
     }
     .into_any()
 }
@@ -1534,7 +1563,7 @@ mod tests {
         for step in ["Materials", "Energy", "Science", "Gold", "Exploration", "Wrap-up"] {
             assert!(html.contains(step), "{step}");
         }
-        assert!(html.contains("step now") && html.contains("aria-current=\"step\""));
+        assert!(html.contains("track-step now") && html.contains("aria-current=\"step\""));
         // Seat 0 (Noram States) makes three Materials cubes and nobody else
         // does: it leads the race and takes a Financier.
         // (The log may say "...tied: nobody takes a Financier" for earlier
@@ -1899,8 +1928,8 @@ mod tests {
         let space = html.find("socket req financier\"").expect("a Financier space");
         let space = &html[space..space + html[space..].find("</span>").unwrap()];
         assert!(space.contains("Fin") && space.contains(&img(Token::Financier)), "{space}");
-        // Every player's tally of Generals and Financiers.
-        assert_eq!(html.matches(&img(Token::General)).count(), 2, "{html}");
+        // Every player's tally of Generals, and the three at stake on the round's track.
+        assert_eq!(html.matches(&img(Token::General)).count(), 2 + 3, "{html}");
     }
 
     #[test]
@@ -1941,6 +1970,34 @@ mod tests {
         let html = render(&state, 0);
         assert!(html.contains("class=\"round-ring previous\""));
         assert!(html.contains(&look::round_art(false)) && !html.contains(&look::round_art(true)));
+    }
+
+    #[test]
+    fn the_rounds_track_sits_beside_the_ring_with_a_cursor_on_the_step_played() {
+        let current = |state: &State| {
+            let html = render(state, 0);
+            let track = &html[html.find("class=\"track\"").expect("a track")..];
+            let track = &track[..track.find("</ol>").unwrap()];
+            assert!(html.find("class=\"round\"").unwrap() < html.find("class=\"track\"").unwrap());
+            assert!(html.find("class=\"track\"").unwrap() < html.find("class=\"phase\"").unwrap());
+            assert_eq!(track.matches("class=\"track-step").count(), 8, "{track}");
+            assert_eq!(track.matches("aria-current=\"step\"").count(), 1, "{track}");
+            let now = track.find("track-step now").expect("a cursor");
+            (track.matches("track-step done").count(), track[now..].split("</li>").next().unwrap().to_string(), html)
+        };
+        let mut state = production_state();
+        state.phase = Phase::Draft;
+        let (done, now, _) = current(&state);
+        assert_eq!(done, 0);
+        assert!(now.contains(">Draft<"), "{now}");
+        state.phase = Phase::Planning;
+        assert!(current(&state).1.contains(">Planning<"));
+        state.phase = Phase::Production { step: 3 };
+        let (done, now, html) = current(&state);
+        assert_eq!(done, 5);
+        assert!(now.contains("res-gold") && now.contains("Most Gold: a Financier"), "{now}");
+        // The production panel no longer lists the steps a second time.
+        assert!(!html.contains("class=\"steps\"") && !html.contains("class=\"step "));
     }
 
     #[test]
