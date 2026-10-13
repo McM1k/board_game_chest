@@ -1027,15 +1027,60 @@ fn points(p: &PlayerView) -> AnyView {
     .into_any()
 }
 
+/// Your Empire; once the game is over, anyone's, picked from tabs in
+/// standings order (everything is public by then).
 fn empire_panel(ctx: &Ctx) -> AnyView {
-    let me = ctx.me();
-    let counts = look::kind_counts(&me.empire);
+    if ctx.view.phase != Phase::Over {
+        return empire_of(ctx, ctx.view.you);
+    }
+    let shown = ctx.ui().shown;
+    let you = ctx.view.you;
+    let current = move || shown.get().unwrap_or(you);
+    let tabs = look::results(&ctx.view, &ctx.names)
+        .into_iter()
+        .map(|r| {
+            let seat = r.seat;
+            let empire = ctx.view.players[seat].empire_card;
+            let label = if seat == you { "You".to_string() } else { r.name };
+            view! {
+                <button
+                    class="empire-tab"
+                    class:on=move || current() == seat
+                    role="tab"
+                    aria-selected=move || (current() == seat).to_string()
+                    on:click=move |_| shown.set(Some(seat))
+                >
+                    {crest(empire, "")}
+                    <span>{label}</span>
+                    <b>{r.score.total}</b>
+                </button>
+            }
+        })
+        .collect_view();
+    let ctx = ctx.clone();
+    view! {
+        <div class="empires">
+            <div class="empire-tabs" role="tablist" aria-label="Empires">{tabs}</div>
+            {move || empire_of(&ctx, current())}
+        </div>
+    }
+    .into_any()
+}
+
+/// The Empire of one seat: its board, what it produces and holds, its
+/// finished cards by type and, once the game is over, its score.
+fn empire_of(ctx: &Ctx, seat: usize) -> AnyView {
+    let p = &ctx.view.players[seat];
+    let mine = seat == ctx.view.you;
+    let title = if mine { "Your Empire".to_string() } else { format!("{}'s Empire", ctx.name(seat)) };
+    let score = (ctx.view.phase == Phase::Over).then(|| ctx.view.scores.get(seat).copied()).flatten();
+    let counts = look::kind_counts(&p.empire);
     let columns = Kind::ALL
         .iter()
         .zip(counts)
         .filter(|(_, n)| *n > 0)
         .map(|(&kind, n)| {
-            let cards = me
+            let cards = p
                 .empire
                 .iter()
                 .filter(|id| id.def().kind == kind)
@@ -1055,11 +1100,11 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
         .collect_view();
 
     view! {
-        <section class="panel empire">
+        <section class="panel empire" role=score.map(|_| "tabpanel")>
             <div class="empire-head">
                 <img
                     class="empire-art"
-                    src=look::empire_art(me.empire_card)
+                    src=look::empire_art(p.empire_card)
                     alt=""
                     width="1200"
                     height="400"
@@ -1067,23 +1112,35 @@ fn empire_panel(ctx: &Ctx) -> AnyView {
                     decoding="async"
                 />
                 <div>
-                    <div class="empire-title">{crest(me.empire_card, "")}<h2>"Your Empire"</h2></div>
-                    <p class="empire-name">{look::empire_name(me.empire_card)}</p>
-                    <p class="empire-points">{look::empire_points(me.empire_card)}</p>
+                    <div class="empire-title">{crest(p.empire_card, "")}<h2>{title}</h2></div>
+                    <p class="empire-name">{look::empire_name(p.empire_card)}</p>
+                    <p class="empire-points">{look::empire_points(p.empire_card)}</p>
                 </div>
-                {points(me)}
+                {points(p)}
             </div>
             <div class="empire-stats">
                 <div class="stat-block">
                     <span class="row-label">"Produces each round"</span>
-                    {production_line(me.production)}
+                    {production_line(p.production)}
                 </div>
                 <div class="stat-block">
-                    <span class="row-label">"You hold"</span>
-                    {stock_line(me)}
+                    <span class="row-label">{if mine { "You hold" } else { "Holds" }}</span>
+                    {stock_line(p)}
                 </div>
+                {score.map(|s| view! {
+                    <div class="stat-block">
+                        <span class="row-label">"Score"</span>
+                        <span class="stats score-line">
+                            <span class="stat">"Card points "<b>{s.gross}</b></span>
+                            <span class="stat">"Bonuses "<b>{s.combo}</b></span>
+                            <span class="stat">"Generals "<b>{s.generals}</b></span>
+                            <span class="stat">"Financiers "<b>{s.financiers}</b></span>
+                            <span class="stat">"Total "<b>{s.total}</b></span>
+                        </span>
+                    </div>
+                })}
             </div>
-            {if me.empire.is_empty() {
+            {if p.empire.is_empty() {
                 view! { <p class="empty">"No finished cards yet. Fill every space of a building to finish it."</p> }
                     .into_any()
             } else {
@@ -1581,6 +1638,38 @@ mod tests {
             assert!(!html.contains("Under construction"));
             assert!(html.contains("Leave room"));
         }
+    }
+
+    #[test]
+    fn the_final_screen_shows_every_players_empire() {
+        let mut state = State::new(3, 9);
+        play_and_draw(&mut state, true, |_, _, _| {});
+        let view = state.view_for(0);
+        in_owner(|| {
+            let app = App::new();
+            // One tab per player, in standings order, yours shown first.
+            let html = render_with(app, &state, 0);
+            let tabs = &html[html.find("empire-tabs").unwrap()..];
+            let tabs = &tabs[..tabs.find("</div>").unwrap()];
+            assert_eq!(tabs.matches("role=\"tab\"").count(), 3);
+            let at = |s: usize| tabs.find(&format!("src=\"{}\"", look::crest_art(state.empires[s]))).unwrap();
+            let order: Vec<usize> = look::results(&view, &names(3)).iter().map(|r| at(r.seat)).collect();
+            assert!(order.windows(2).all(|w| w[0] < w[1]), "standings order");
+            assert!(html.contains("Your Empire"));
+            // Picking a rival's tab shows their Empire, cards and score.
+            for (seat, name) in NAMES.iter().enumerate().take(3).skip(1) {
+                app.games.wonderful.ui.shown.set(Some(seat));
+                let html = render_with(app, &state, 0);
+                assert!(html.contains(&format!("<h2>{name}'s Empire</h2>")), "seat {seat}");
+                assert!(!html.contains("Your Empire"));
+                let panel = &html[html.find("class=\"panel empire\"").unwrap()..];
+                assert!(panel.contains(look::empire_name(state.empires[seat])));
+                for id in &state.players[seat].empire {
+                    assert!(panel.contains(&look::card_art(id.def())), "{}", id.def().name);
+                }
+                assert!(panel.contains(&format!("Total <b>{}</b>", state.scores[seat].total)));
+            }
+        });
     }
 
     #[test]

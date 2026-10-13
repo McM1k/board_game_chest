@@ -28,11 +28,18 @@ pub struct Ui {
     /// When the production step being played started (`now_ms()`), if it
     /// started while we watched: its areas flash for a moment.
     pub step_at: RwSignal<Option<f64>>,
+    /// Whose Empire the final screen shows (None: our own).
+    pub shown: RwSignal<Option<usize>>,
 }
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { held: RwSignal::new(None), cube_from: RwSignal::new(None), step_at: RwSignal::new(None) }
+        Ui {
+            held: RwSignal::new(None),
+            cube_from: RwSignal::new(None),
+            step_at: RwSignal::new(None),
+            shown: RwSignal::new(None),
+        }
     }
 
     /// Forget everything, e.g. when leaving the room.
@@ -40,6 +47,7 @@ impl Ui {
         self.held.set(None);
         self.cube_from.set(None);
         self.step_at.set(None);
+        self.shown.set(None);
     }
 }
 
