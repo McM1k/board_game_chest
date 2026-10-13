@@ -417,7 +417,7 @@ fn code(file: &str) -> &str {
 }
 
 /// A resolution's Markdown, drawn plainly: headings, bullet lists (indented
-/// as written), paragraphs and code blocks, with `code` and **bold** inside.
+/// as written), paragraphs, tables and code blocks, with `code` and **bold** inside.
 fn markdown(text: &str) -> impl IntoView {
     let mut views = Vec::new();
     let mut bullets: Vec<(usize, String)> = Vec::new();
@@ -438,7 +438,15 @@ fn markdown(text: &str) -> impl IntoView {
     while let Some(line) = lines.next() {
         let trimmed = line.trim_start();
         let indent = line.len() - trimmed.len();
-        if trimmed.starts_with("```") {
+        if trimmed.starts_with('|') {
+            flush(&mut views, &mut bullets, &mut paragraph);
+            let mut rows = vec![cells(trimmed)];
+            while let Some(row) = lines.clone().next().map(str::trim).filter(|l| l.starts_with('|')) {
+                lines.next();
+                rows.push(cells(row));
+            }
+            views.push(table(rows).into_any());
+        } else if trimmed.starts_with("```") {
             flush(&mut views, &mut bullets, &mut paragraph);
             let fence = &trimmed[..trimmed.len() - trimmed.trim_start_matches('`').len()];
             let code: Vec<&str> = lines.by_ref().take_while(|l| l.trim() != fence).collect();
@@ -467,6 +475,35 @@ fn markdown(text: &str) -> impl IntoView {
     }
     flush(&mut views, &mut bullets, &mut paragraph);
     views
+}
+
+/// A table row's cells: `| a | b |` gives "a" and "b"; `\\|` is a `|` inside a cell.
+fn cells(row: &str) -> Vec<String> {
+    let row = row.trim();
+    let row = row.strip_prefix('|').unwrap_or(row);
+    let row = if row.ends_with('|') && !row.ends_with("\\|") { &row[..row.len() - 1] } else { row };
+    let mut cells = vec![String::new()];
+    let mut chars = row.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if chars.peek() == Some(&'|') => cells.last_mut().unwrap().push(chars.next().unwrap()),
+            '|' => cells.push(String::new()),
+            c => cells.last_mut().unwrap().push(c),
+        }
+    }
+    cells.iter().map(|c| c.trim().to_string()).collect()
+}
+
+/// A table's rows; a second row of dashes (`|---|:--:|`) makes the first its header.
+fn table(mut rows: Vec<Vec<String>>) -> impl IntoView {
+    let is_separator = |row: &Vec<String>| row.iter().all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':')));
+    let head = (rows.len() > 1 && is_separator(&rows[1])).then(|| {
+        rows.remove(1);
+        let head = rows.remove(0).iter().map(|c| view! { <th>{inline(c)}</th> }).collect_view();
+        view! { <thead><tr>{head}</tr></thead> }
+    });
+    let body = rows.iter().map(|row| view! { <tr>{row.iter().map(|c| view! { <td>{inline(c)}</td> }).collect_view()}</tr> }).collect_view();
+    view! { <div class="report-table"><table>{head}<tbody>{body}</tbody></table></div> }
 }
 
 /// A line's `code` and **bold**.
@@ -575,6 +612,25 @@ mod tests {
             toggle(app);
             toggle(app);
             assert_eq!(app.report.past.get_untracked(), None);
+        });
+    }
+
+    #[test]
+    fn a_resolution_draws_its_tables_lists_and_paragraphs() {
+        let owner = Owner::new();
+        owner.with(|| {
+            let text = "Before the table\ngoes on.\n\n| Card | Cost |\n|:-----|-----:|\n| `Zeppelin` | **3** |\n| <b>Lab</b> | 2 \\| 4 |\n\n- one\n- two\n\nAfter.";
+            let html = view! { <div>{markdown(text)}</div> }.to_html().replace("<!>", "");
+            assert!(html.contains("<p>Before the table goes on.</p>"), "{html}");
+            assert!(html.contains("<table>") && html.contains("<th>Card</th>") && html.contains("<th>Cost</th>"), "{html}");
+            assert!(html.contains("<td><code>Zeppelin</code></td><td><strong>3</strong></td>"), "{html}");
+            // What a table holds is shown, never run as markup, and `\|` stays in its cell.
+            assert!(html.contains("<td>&lt;b&gt;Lab&lt;/b&gt;</td><td>2 | 4</td>") && !html.contains("<b>Lab"), "{html}");
+            assert!(!html.contains("|-----"), "the separator row isn't drawn: {html}");
+            assert!(html.contains("<ul>") && html.contains("one</li>") && html.contains("<p>After.</p>"), "{html}");
+            // A table without a separator row has no header.
+            let html = view! { <div>{markdown("| a | b |\n| c | d |")}</div> }.to_html().replace("<!>", "");
+            assert!(html.contains("<td>a</td><td>b</td>") && !html.contains("<th>"), "{html}");
         });
     }
 
