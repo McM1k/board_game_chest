@@ -14,7 +14,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use protocol::{ClientMsg, GameMove};
 use wonderful_core::{
-    Action, Bonus, Building, Card, CardId, Cost, Kind, Phase, PlayerView, Res, Token, View, DRAFT_PICKS, ROUNDS,
+    Action, Bonus, Building, Card, CardId, Cost, Kind, Per, Phase, PlayerView, Res, Token, View, DRAFT_PICKS, ROUNDS,
     WRAP_UP,
 };
 
@@ -98,12 +98,49 @@ fn cube(class: &'static str, letter: &'static str) -> AnyView {
     view! { <span class=format!("cube {class}") aria-hidden="true">{letter}</span> }.into_any()
 }
 
+/// What a token or space shows: a resource's card-type symbol (Materials
+/// wear the Structure's, and so on), or else its letter.
+fn face(res: Option<Res>, letter: &'static str) -> AnyView {
+    match res {
+        Some(res) => kind_icon(look::res_kind(res)),
+        None => letter.into_any(),
+    }
+}
+
 fn res_cube(res: Res) -> AnyView {
-    cube(look::res_class(res), look::res_letter(res))
+    view! { <span class=format!("cube {}", look::res_class(res)) aria-hidden="true">{face(Some(res), "")}</span> }
+        .into_any()
 }
 
 fn held_cube(held: Held) -> AnyView {
-    cube(held.class(), held.letter())
+    match held.res() {
+        Some(res) => res_cube(res),
+        None => cube(held.class(), held.letter()),
+    }
+}
+
+/// A card type's symbol on a chip of its colour, named for a tooltip and a
+/// screen reader: it stands in for the word.
+fn kind_badge(kind: Kind) -> AnyView {
+    view! {
+        <span class=format!("kind-badge {}", look::kind_class(kind)) role="img" aria-label=kind.name() title=kind.name()>
+            {kind_icon(kind)}
+        </span>
+    }
+    .into_any()
+}
+
+/// What a card scores per: a card type's symbol, or a character token.
+fn per_badge(per: Per) -> AnyView {
+    match per {
+        Per::Kind(kind) => kind_badge(kind),
+        Per::Token(token) => token_badge(token),
+    }
+}
+
+fn token_badge(token: Token) -> AnyView {
+    view! { <span class="per-token" role="img" aria-label=token.name() title=token.name()>{bonus_cube(Bonus::Token(token))}</span> }
+        .into_any()
 }
 
 fn bonus_cube(bonus: Bonus) -> AnyView {
@@ -122,7 +159,7 @@ fn pips(n: u8, of: u8) -> AnyView {
     view! { <span class="pips" role="img" aria-label=format!("{n} of {of}")>{dots}</span> }.into_any()
 }
 
-fn kind_icon(kind: Kind) -> AnyView {
+pub(super) fn kind_icon(kind: Kind) -> AnyView {
     let path = match kind {
         Kind::Structure => "M2 14V6l6-4 6 4v8H9.5v-4h-3v4z",
         Kind::Vehicle => "M8 1c3 2 4.5 5 3.5 9h-7C3.5 6 5 3 8 1zm-3 10-2.5 4 3.5-1zm6 0 2.5 4-3.5-1z",
@@ -169,7 +206,7 @@ fn requirement_sockets(cost: &Cost) -> AnyView {
         .map(|slot| {
             view! {
                 <span class=format!("socket req {}", slot.space.class()) title=slot.space.name()>
-                    {slot.space.letter()}
+                    {face(slot.space.res(), slot.space.letter())}
                 </span>
             }
         })
@@ -191,7 +228,7 @@ fn row(class: &'static str, label: &'static str, body: AnyView) -> AnyView {
 fn corrupt_cube(res: Res) -> AnyView {
     view! {
         <span class=format!("cube corrupt {}", look::res_class(res)) title=format!("{} corrupted", res.name()) aria-hidden="true">
-            {look::res_letter(res)}
+            {face(Some(res), "")}
         </span>
     }
     .into_any()
@@ -213,7 +250,8 @@ fn makes_row(card: &'static Card) -> Option<AnyView> {
         view! {
             <span class="per">
                 {res_cube(res)}
-                <span class="per-text">{format!("per {}", kind.name())}</span>
+                <span class="per-text">"per"</span>
+                {kind_badge(kind)}
             </span>
         }
     });
@@ -223,12 +261,45 @@ fn makes_row(card: &'static Card) -> Option<AnyView> {
     Some(row("makes", "Makes", view! { {icons}{per} }.into_any()))
 }
 
+/// The points, with card types and characters drawn as their symbols; the
+/// row's tooltip spells them out.
 fn worth_row(card: &'static Card) -> Option<AnyView> {
-    let parts = look::points_parts(card);
-    if parts.is_empty() {
+    let text = look::points_parts(card);
+    if text.is_empty() {
         return None;
     }
-    Some(row("worth", "Worth", view! { <span class="vp">{parts.join(" + ")}</span> }.into_any()))
+    let mut parts: Vec<AnyView> = Vec::new();
+    if card.vp > 0 {
+        parts.push(view! { <span class="vp">{format!("{} VP", card.vp)}</span> }.into_any());
+    }
+    let per = |points: u8, of: Vec<AnyView>| {
+        view! {
+            <span class="vp-per">
+                <span class="vp">{format!("{points} VP")}</span>
+                <span class="per-text">"per"</span>
+                {of}
+            </span>
+        }
+        .into_any()
+    };
+    if let Some((kind, points)) = card.combo {
+        parts.push(per(points, vec![kind_badge(kind)]));
+    }
+    if let Some((token, points)) = card.per_token {
+        parts.push(per(points, vec![token_badge(token)]));
+    }
+    if let Some((a, b, points)) = card.duo {
+        parts.push(per(points, vec![per_badge(a), view! { <span class="vp">"+"</span> }.into_any(), per_badge(b)]));
+    }
+    let parts: Vec<AnyView> = parts
+        .into_iter()
+        .enumerate()
+        .flat_map(|(i, part)| {
+            let plus = (i > 0).then(|| view! { <span class="vp">"+"</span> }.into_any());
+            plus.into_iter().chain([part])
+        })
+        .collect();
+    Some(row("worth", "Worth", view! { <span class="worth-body" title=text.join(" + ")>{parts}</span> }.into_any()))
 }
 
 fn built_row(card: &'static Card) -> Option<AnyView> {
@@ -696,7 +767,7 @@ fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
     if slot.filled {
         return view! {
             <span class=format!("socket filled {}", space.class()) title=format!("{} placed", space.name())>
-                {space.letter()}
+                {face(space.res(), space.letter())}
             </span>
         }
         .into_any();
@@ -730,7 +801,7 @@ fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
             on:click=click
             aria-label=format!("Free {} space on {}", space.name(), card.def().name)
         >
-            {space.letter()}
+            {face(space.res(), space.letter())}
         </button>
     }
     .into_any()
@@ -1676,6 +1747,25 @@ mod tests {
         // Border Patrol makes a Gold and corrupts an Exploration.
         assert!(html.contains("cube corrupt res-exploration"));
         assert!(html.contains("9 VP per Research + Project"));
+    }
+
+    #[test]
+    fn cubes_and_worth_show_the_card_type_symbols() {
+        let mut state = State::with_options(3, 1, wonderful_core::Options { ascension: true });
+        state.players[0].hand = vec![id("Border Patrol"), id("Immortality")];
+        let html = render(&state, 0);
+        // Resource cubes carry the symbol of the card type of their colour, no letter.
+        let gold = html.find("cube res-gold\"").expect("a Gold cube");
+        let gold = &html[gold..gold + html[gold..].find("</span>").unwrap()];
+        assert!(gold.contains("kind-icon"), "{gold}");
+        assert!(!gold.contains(">G<"), "{gold}");
+        // Worth draws the types as named symbols, with the words in its tooltip.
+        let worth = html.find("title=\"9 VP per Research + Project\" class=\"worth-body\"").expect("Immortality's worth");
+        let worth = &html[worth..worth + html[worth..].find("class=\"row-label\"").unwrap_or(html.len() - worth)];
+        for kind in [Kind::Research, Kind::Project] {
+            assert!(worth.contains(&format!("aria-label=\"{}\"", kind.name())), "{worth}");
+            assert!(worth.contains(&format!("kind-badge {}", look::kind_class(kind))), "{worth}");
+        }
     }
 
     #[test]

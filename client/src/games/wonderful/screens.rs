@@ -22,7 +22,7 @@ fn mark() -> impl IntoView {
     let cubes = Res::ALL
         .iter()
         .map(|&res| {
-            view! { <span class=format!("cube {}", look::res_class(res))>{look::res_letter(res)}</span> }
+            view! { <span class=format!("cube {}", look::res_class(res))>{super::board::kind_icon(look::res_kind(res))}</span> }
         })
         .collect_view();
     view! { <div class="mark" aria-hidden="true">{cubes}</div> }

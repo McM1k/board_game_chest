@@ -25,6 +25,19 @@ pub fn res_letter(res: Res) -> &'static str {
     }
 }
 
+/// The card type that shares a resource's colour and symbol: Materials and
+/// Structures are grey, Energy and Vehicles black, Science and Research green,
+/// Gold and Projects yellow, Exploration and Discoveries blue.
+pub fn res_kind(res: Res) -> Kind {
+    match res {
+        Res::Materials => Kind::Structure,
+        Res::Energy => Kind::Vehicle,
+        Res::Science => Kind::Research,
+        Res::Gold => Kind::Project,
+        Res::Exploration => Kind::Discovery,
+    }
+}
+
 pub fn kind_class(kind: Kind) -> &'static str {
     match kind {
         Kind::Structure => "kind-structure",
@@ -132,6 +145,14 @@ impl Space {
         }
     }
 
+    /// The resource of a cube space, drawn with its symbol rather than a letter.
+    pub fn res(self) -> Option<Res> {
+        match self {
+            Space::Cube(res) => Some(res),
+            _ => None,
+        }
+    }
+
     pub fn letter(self) -> &'static str {
         match self {
             Space::Cube(res) => res_letter(res),
@@ -200,6 +221,14 @@ impl Held {
             Held::Krystallium => "krystallium",
             Held::General => "general",
             Held::Financier => "financier",
+        }
+    }
+
+    /// The resource of a cube, drawn with its symbol rather than a letter.
+    pub fn res(self) -> Option<Res> {
+        match self {
+            Held::Cube(res) => Some(res),
+            _ => None,
         }
     }
 
