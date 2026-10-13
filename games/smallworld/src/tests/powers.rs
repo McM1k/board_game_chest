@@ -155,3 +155,50 @@ fn a_sorcerers_enchantment_is_a_conquest() {
     assert_eq!(s.players[0].coins, coins + 3);
     assert_eq!(s.loot[6], None);
 }
+
+/// Seat 0's Ghouls in decline hold region 7, ready to conquer with
+/// `hand`; seat 0's active race is `race` with `power`.
+fn ghouls_in_decline(race: Race, power: Power, hand: u8) -> State {
+    let mut s = packs_game();
+    give(&mut s, 0, Race::Ghouls, Power::Stout);
+    place(&mut s, 7, Race::Ghouls, 1);
+    s.players[0].active.as_mut().unwrap().hand = 0;
+    s.this_turn.may_decline = true;
+    s.apply(0, Action::Decline).unwrap();
+    give(&mut s, 0, race, power);
+    s.phase = Phase::Conquest { ghouls: true };
+    s.players[0].declined[0].hand = hand;
+    s
+}
+
+#[test]
+fn ghouls_in_decline_pay_corrupt_and_scarecrows_but_break_no_peace() {
+    let mut s = ghouls_in_decline(Race::Ratmen, Power::PeaceLoving, 3);
+    give(&mut s, 1, Race::Scarecrows, Power::Corrupt);
+    place(&mut s, 6, Race::Scarecrows, 1);
+    s.players[1].active.as_mut().unwrap().hand = 0;
+    s.current = 0;
+    s.phase = Phase::Conquest { ghouls: true };
+    s.players[0].coins = 10;
+    s.players[1].coins = 10;
+    s.apply(0, Action::Conquer { region: 6 }).unwrap();
+    assert!(s.regions[6].tokens.is_some_and(|t| t.race == Race::Ghouls));
+    // The Scarecrows' coin and Corrupt's, whoever conquers.
+    assert_eq!((s.players[0].coins, s.players[1].coins), (10 + 1 - 1, 10 + 1));
+    // The Peace-Loving race attacked nobody.
+    s.apply(0, Action::EndConquests).unwrap();
+    assert_eq!(s.turn_coins(0), 1 + 1 + PEACE_COINS);
+
+    // Nor did a Diplomat whose Ghouls in decline attacked.
+    let mut s = ghouls_in_decline(Race::Ratmen, Power::Diplomat, 3);
+    give(&mut s, 1, Race::Humans, Power::Stout);
+    place(&mut s, 6, Race::Humans, 1);
+    place(&mut s, 13, Race::Humans, 1);
+    s.players[1].active.as_mut().unwrap().hand = 0;
+    s.current = 0;
+    s.phase = Phase::Conquest { ghouls: true };
+    s.apply(0, Action::Conquer { region: 6 }).unwrap();
+    s.apply(0, Action::EndConquests).unwrap();
+    s.apply(0, Action::EndConquests).unwrap();
+    assert_eq!(s.moves(0).allies, vec![1]);
+}

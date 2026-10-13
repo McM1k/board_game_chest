@@ -1742,27 +1742,30 @@ impl State {
             }
             self.lose(owner, t.race, owner_declined, lost);
             if owner != seat {
-                if !owner_declined && !self.this_turn.attacked.contains(&owner) {
+                // Only the active race's attacks count against Diplomat
+                // and Peace-Loving, whose "you" is the active race.
+                if !declined && !owner_declined && !self.this_turn.attacked.contains(&owner) {
                     self.this_turn.attacked.push(owner);
                 }
                 if !self.this_turn.victims.contains(&t.race) {
                     self.this_turn.victims.push(t.race);
                 }
-                if !declined {
-                    let me = self.players[seat].active.unwrap();
-                    if !owner_declined {
-                        if self.active_has(owner, Power::Corrupt) {
-                            self.pay(Some(seat), owner, 1, Why::Corrupt);
-                        }
-                        if me.has(Power::Ransacking) {
-                            self.pay(Some(owner), seat, 1, Why::Ransacking);
-                        }
-                        if t.race == Race::Scarecrows {
-                            self.pay(None, seat, 1, Why::Scarecrows);
-                        }
-                        if me.race == Race::Fauns {
-                            self.this_turn.fauns.push(owner);
-                        }
+                if !owner_declined {
+                    // Corrupt and the Scarecrows charge whoever conquers,
+                    // Ghouls in decline too; Ransacking and the Fauns are
+                    // the active race's own.
+                    let me = self.players[seat].active.filter(|_| !declined);
+                    if self.active_has(owner, Power::Corrupt) {
+                        self.pay(Some(seat), owner, 1, Why::Corrupt);
+                    }
+                    if me.is_some_and(|me| me.has(Power::Ransacking)) {
+                        self.pay(Some(owner), seat, 1, Why::Ransacking);
+                    }
+                    if t.race == Race::Scarecrows {
+                        self.pay(None, seat, 1, Why::Scarecrows);
+                    }
+                    if me.is_some_and(|me| me.race == Race::Fauns) {
+                        self.this_turn.fauns.push(owner);
                     }
                 }
             }
