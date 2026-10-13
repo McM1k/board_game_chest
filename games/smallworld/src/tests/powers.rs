@@ -95,3 +95,63 @@ fn pygmies_breed_whatever_takes_a_pygmy() {
     }
     assert!(wendigos > 0 && skags > 0 && zeppelins > 0, "{wendigos} {skags} {zeppelins}");
 }
+
+#[test]
+fn a_sorcerers_enchantment_is_a_conquest() {
+    let mut s = packs_game();
+    give(&mut s, 1, Race::Scarecrows, Power::Corrupt);
+    place(&mut s, 6, Race::Scarecrows, 1);
+    s.regions[6].fortress = true;
+    s.players[1].active.as_mut().unwrap().hand = 0;
+    give(&mut s, 0, Race::Sorcerers, Power::Ransacking);
+    place(&mut s, 7, Race::Sorcerers, 1);
+    // Nothing in hand: the Sorcerer comes from the box.
+    s.players[0].active.as_mut().unwrap().hand = 0;
+    s.players[0].coins = 10;
+    s.players[1].coins = 10;
+    s.apply(0, Action::Enchant { region: 6 }).unwrap();
+    assert_eq!(s.regions[6].tokens.map(|t| (t.race, t.count)), Some((Race::Sorcerers, 1)));
+    assert!(!s.regions[6].fortress);
+    // Corrupt, Ransacking and the Scarecrows, as for any conquest.
+    let paid: Vec<Why> = s.log.iter().filter_map(|e| if let Event::Paid { why, .. } = e { Some(*why) } else { None }).collect();
+    assert_eq!(paid, [Why::Corrupt, Why::Ransacking, Why::Scarecrows]);
+    assert_eq!((s.players[0].coins, s.players[1].coins), (10 - 1 + 1 + 1, 10 + 1 - 1));
+    assert_eq!(s.this_turn.attacked, [1]);
+
+    // An Elf replaced is lost; a Pygmy breeds; the Loot is the Sorcerers'.
+    let mut s = packs_game();
+    give(&mut s, 1, Race::Elves, Power::Stout);
+    place(&mut s, 6, Race::Elves, 1);
+    s.players[1].active.as_mut().unwrap().hand = 0;
+    give(&mut s, 0, Race::Sorcerers, Power::Stout);
+    place(&mut s, 7, Race::Sorcerers, 1);
+    s.apply(0, Action::Enchant { region: 6 }).unwrap();
+    assert_eq!((hand(&s, 1), s.on_map(Race::Elves)), (0, 0));
+
+    let mut bred = 0;
+    for seed in 0..20 {
+        let mut s = packs_seed(seed);
+        give(&mut s, 1, Race::Pygmies, Power::Stout);
+        place(&mut s, 6, Race::Pygmies, 1);
+        place(&mut s, 13, Race::Pygmies, 1);
+        s.players[1].active.as_mut().unwrap().hand = 0;
+        give(&mut s, 0, Race::Sorcerers, Power::Stout);
+        place(&mut s, 7, Race::Sorcerers, 1);
+        s.apply(0, Action::Enchant { region: 6 }).unwrap();
+        assert_eq!(hand(&s, 1), raised(&s, Race::Pygmies));
+        bred += hand(&s, 1);
+    }
+    assert!(bred > 0);
+
+    let mut s = packs_game();
+    give(&mut s, 1, Race::Skags, Power::Stout);
+    place(&mut s, 6, Race::Skags, 1);
+    s.regions[6].loot = true;
+    s.loot[6] = Some(Loot::Coins(3));
+    give(&mut s, 0, Race::Sorcerers, Power::Stout);
+    place(&mut s, 7, Race::Sorcerers, 1);
+    let coins = s.players[0].coins;
+    s.apply(0, Action::Enchant { region: 6 }).unwrap();
+    assert_eq!(s.players[0].coins, coins + 3);
+    assert_eq!(s.loot[6], None);
+}

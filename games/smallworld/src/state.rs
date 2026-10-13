@@ -1619,9 +1619,7 @@ impl State {
         if !self.next_to(army, false, region) {
             return Err(Error::OutOfReach);
         }
-        if army.hand == 0 {
-            return Err(Error::NoTokens);
-        }
+        // The Sorcerer comes from the box, not from the hand.
         if self.available(Race::Sorcerers) == 0 {
             return Err(Error::NoneLeft);
         }
@@ -1700,6 +1698,19 @@ impl State {
     /// with what the races and powers on either side do about it. Returns
     /// who it was, and the race in decline the Scavengers keep there.
     fn clear_defenders(&mut self, seat: usize, race: Race, declined: bool, region: usize) -> (Option<Foe>, Option<Race>) {
+        self.clear_region(seat, race, declined, region, false)
+    }
+
+    /// The same; `enchanted` when a Sorcerer replaces the lone token, which
+    /// is lost even if it is an Elf.
+    fn clear_region(
+        &mut self,
+        seat: usize,
+        race: Race,
+        declined: bool,
+        region: usize,
+        enchanted: bool,
+    ) -> (Option<Foe>, Option<Race>) {
         let r = self.regions[region];
         // Off the map now, so that the box counts them right.
         self.regions[region].tokens = None;
@@ -1717,7 +1728,7 @@ impl State {
         }
         if let Some(t) = r.tokens {
             let (owner, owner_declined) = self.owner(t.race).expect("tokens on the map have an owner");
-            let elves = t.race == Race::Elves && !owner_declined;
+            let elves = t.race == Race::Elves && !owner_declined && !enchanted;
             let mut lost = if elves { 0 } else { 1 };
             if scavenging && owner_declined && lost == 1 {
                 captive = Some(t.race);
@@ -3011,26 +3022,17 @@ impl State {
         let t = self.regions[region].tokens.unwrap();
         let (victim, _) = self.owner(t.race).unwrap();
         let before = self.regions[region];
-        if before.pot {
-            if let Some(a) = self.army_mut(victim, t.race) {
-                a.pots += 1;
-            }
-            self.pay(None, seat, 1, Why::Pot);
-        }
+        // A conquest: the victim's token is lost, and what the races and
+        // powers do about a conquest happens (Corrupt, Ransacking, Pots of
+        // Gold, Loot...).
+        self.clear_region(seat, army.race, false, region, true);
         self.regions[region] = RegionState {
             tokens: Some(Tokens { race: Race::Sorcerers, count: 1, declined: false }),
             winter: before.winter,
             ..RegionState::default()
         };
         self.loot[region] = None;
-        self.lost_in_conquest(1);
         self.this_turn.enchanted.push(victim);
-        if !self.this_turn.attacked.contains(&victim) {
-            self.this_turn.attacked.push(victim);
-        }
-        if !self.this_turn.victims.contains(&t.race) {
-            self.this_turn.victims.push(t.race);
-        }
         self.this_turn.plundered += 1;
         self.this_turn.conquered.push(region);
         self.this_turn.berserk = None;

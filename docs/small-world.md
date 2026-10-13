@@ -244,7 +244,7 @@ the combo is hovered, or focused from the keyboard or by a tap.
 | Ghouls in decline | Conquer first, before the active race; their own tokens are readied the same way and put back if they don't conquer. They also redeploy on their own turn. |
 | Amazons | Four tokens are set aside after redeploying (fewer if they can't spare them without emptying a region) and come back when readying. |
 | Halflings | The Holes-in-the-Ground go in the first two regions they ever conquer; abandoning one loses it for good. |
-| Sorcerers | Only a lone active token with nothing else defending it (an encampment protects it; a lair, a fortress or a Mountain don't, as the rulebook says). |
+| Sorcerers | Only a lone active token with nothing else defending it (an encampment protects it; a lair, a fortress or a Mountain don't, as the rulebook says). Replacing a token is a conquest (Corrupt, Ransacking, Scarecrows, Pygmies, Pots of Gold and Loot apply); the Sorcerer comes from the box, so none is needed in hand. |
 | Diplomat | Peace lasts until the Diplomat's next turn and protects only the active race. |
 | The die | Rolled only for a region within 3 tokens; the region is picked first, and a failed roll ends the conquests. Berserk rolls before any conquest instead, one roll per conquest. |
 | Tokens from the box | A race's tokens are capped by what the box holds (e.g. 20 Skeletons, 18 Sorcerers). |
