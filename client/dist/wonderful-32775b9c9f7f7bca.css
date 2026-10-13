@@ -827,6 +827,41 @@
   gap: 0.3rem;
 }
 
+/* A kept card shows its cost as a column down its left side, beside the
+   picture, as the printed card does. */
+.wonderful .cards.kept .card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  column-gap: 0;
+}
+
+.wonderful .cards.kept .card-head {
+  grid-column: 1 / -1;
+}
+
+.wonderful .cards.kept .card-cost {
+  grid-column: 1;
+  grid-row: 2 / span 2;
+  margin-top: -0.4rem;
+  padding: 0.3rem 0.3rem 0 0.35rem;
+}
+
+.wonderful .cards.kept .card-cost .sockets {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.22rem;
+}
+
+.wonderful .cards.kept .card-art,
+.wonderful .cards.kept .card-rows {
+  grid-column: 2;
+}
+
+.wonderful .cards.kept .card-rows {
+  padding-left: 0.45rem;
+}
+
 .wonderful .card-rows {
   display: flex;
   flex-direction: column;
