@@ -99,23 +99,42 @@ fn cube(class: &'static str, letter: &'static str) -> AnyView {
 }
 
 /// What a token or space shows: a resource's card-type symbol (Materials
-/// wear the Structure's, and so on), or else its letter.
-fn face(res: Option<Res>, letter: &'static str) -> AnyView {
-    match res {
-        Some(res) => kind_icon(look::res_kind(res)),
-        None => letter.into_any(),
+/// wear the Structure's, and so on), a character token's picture, or else
+/// its letter.
+fn face(res: Option<Res>, token: Option<Token>, letter: &'static str) -> AnyView {
+    match (res, token) {
+        (Some(res), _) => kind_icon(look::res_kind(res)),
+        (None, Some(token)) => token_face(token, letter),
+        (None, None) => letter.into_any(),
     }
 }
 
+/// A General's or Financier's printed picture over its letter. A picture
+/// that fails to load removes itself, which brings back the letter and the
+/// coloured shape (the CSS keys on `:has(> .token-art)`).
+fn token_face(token: Token, letter: &'static str) -> AnyView {
+    view! { {letter}<img class="token-art" src=look::token_art(token) alt="" onerror="this.remove()" /> }.into_any()
+}
+
+/// A General or Financier token.
+fn token_cube(token: Token) -> AnyView {
+    let (class, letter) = match token {
+        Token::General => ("general", "Gen"),
+        Token::Financier => ("financier", "Fin"),
+    };
+    view! { <span class=format!("cube {class}") aria-hidden="true">{token_face(token, letter)}</span> }.into_any()
+}
+
 fn res_cube(res: Res) -> AnyView {
-    view! { <span class=format!("cube {}", look::res_class(res)) aria-hidden="true">{face(Some(res), "")}</span> }
+    view! { <span class=format!("cube {}", look::res_class(res)) aria-hidden="true">{face(Some(res), None, "")}</span> }
         .into_any()
 }
 
 fn held_cube(held: Held) -> AnyView {
-    match held.res() {
-        Some(res) => res_cube(res),
-        None => cube(held.class(), held.letter()),
+    match (held.res(), held.token()) {
+        (Some(res), _) => res_cube(res),
+        (None, Some(token)) => token_cube(token),
+        (None, None) => cube(held.class(), held.letter()),
     }
 }
 
@@ -146,8 +165,7 @@ fn token_badge(token: Token) -> AnyView {
 fn bonus_cube(bonus: Bonus) -> AnyView {
     match bonus {
         Bonus::Krystallium => cube("krystallium", "K"),
-        Bonus::Token(Token::General) => cube("general", "Gen"),
-        Bonus::Token(Token::Financier) => cube("financier", "Fin"),
+        Bonus::Token(token) => token_cube(token),
     }
 }
 
@@ -206,7 +224,7 @@ fn requirement_sockets(cost: &Cost) -> AnyView {
         .map(|slot| {
             view! {
                 <span class=format!("socket req {}", slot.space.class()) title=slot.space.name()>
-                    {face(slot.space.res(), slot.space.letter())}
+                    {face(slot.space.res(), slot.space.token(), slot.space.letter())}
                 </span>
             }
         })
@@ -228,7 +246,7 @@ fn row(class: &'static str, label: &'static str, body: AnyView) -> AnyView {
 fn corrupt_cube(res: Res) -> AnyView {
     view! {
         <span class=format!("cube corrupt {}", look::res_class(res)) title=format!("{} corrupted", res.name()) aria-hidden="true">
-            {face(Some(res), "")}
+            {face(Some(res), None, "")}
         </span>
     }
     .into_any()
@@ -767,7 +785,7 @@ fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
     if slot.filled {
         return view! {
             <span class=format!("socket filled {}", space.class()) title=format!("{} placed", space.name())>
-                {face(space.res(), space.letter())}
+                {face(space.res(), space.token(), space.letter())}
             </span>
         }
         .into_any();
@@ -801,7 +819,7 @@ fn live_socket(ctx: &Ctx, card: CardId, slot: Slot) -> AnyView {
             on:click=click
             aria-label=format!("Free {} space on {}", space.name(), card.def().name)
         >
-            {face(space.res(), space.letter())}
+            {face(space.res(), space.token(), space.letter())}
         </button>
     }
     .into_any()
@@ -871,11 +889,11 @@ fn stock_line(p: &PlayerView) -> AnyView {
                 <b>{p.krystallium}</b>
             </span>
             <span class="stat" title="Generals">
-                {cube("general", "Gen")}
+                {token_cube(Token::General)}
                 <b>{p.generals}</b>
             </span>
             <span class="stat" title="Financiers">
-                {cube("financier", "Fin")}
+                {token_cube(Token::Financier)}
                 <b>{p.financiers}</b>
             </span>
         </span>
@@ -1766,6 +1784,20 @@ mod tests {
             assert!(worth.contains(&format!("aria-label=\"{}\"", kind.name())), "{worth}");
             assert!(worth.contains(&format!("kind-badge {}", look::kind_class(kind))), "{worth}");
         }
+    }
+
+    #[test]
+    fn generals_and_financiers_wear_the_printed_token_over_their_letter() {
+        let mut state = State::new(2, 1);
+        state.players[0].hand = vec![id("Giant Tower")]; // 1 Financier among its costs
+        let html = render(&state, 0);
+        let img = |token| format!("<img src=\"{}\" alt=\"\" onerror=\"this.remove()\" class=\"token-art\">", look::token_art(token));
+        // The cost's space: the letter stays underneath, for when the picture fails.
+        let space = html.find("socket req financier\"").expect("a Financier space");
+        let space = &html[space..space + html[space..].find("</span>").unwrap()];
+        assert!(space.contains("Fin") && space.contains(&img(Token::Financier)), "{space}");
+        // Every player's tally of Generals and Financiers.
+        assert_eq!(html.matches(&img(Token::General)).count(), 2, "{html}");
     }
 
     #[test]

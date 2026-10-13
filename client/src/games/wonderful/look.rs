@@ -1,7 +1,9 @@
 //! What the Wonderful World screens show and what a click means, as plain
 //! functions with native tests: the browser-only code stays thin.
 
-use wonderful_core::{Action, Card, CardId, Cost, Event, Kind, Phase, Piece, Res, Score, Target, View, EMPIRES, ROUNDS};
+use wonderful_core::{
+    Action, Card, CardId, Cost, Event, Kind, Phase, Piece, Res, Score, Target, Token, View, EMPIRES, ROUNDS,
+};
 
 // ----- names and colours ----------------------------------------------------
 
@@ -100,6 +102,15 @@ pub fn crest_art(empire: usize) -> String {
     format!("{ART}/crests/{}.webp", art_slug(empire_name(empire)))
 }
 
+/// A General's or Financier's round token, as the game prints it.
+pub fn token_art(token: Token) -> String {
+    let name = match token {
+        Token::General => "general",
+        Token::Financier => "financier",
+    };
+    format!("{ART}/tokens/{name}.webp")
+}
+
 /// The name shown for a seat: "You" for yourself.
 pub fn who(seat: usize, names: &[String], you: usize) -> String {
     if seat == you {
@@ -149,6 +160,15 @@ impl Space {
     pub fn res(self) -> Option<Res> {
         match self {
             Space::Cube(res) => Some(res),
+            _ => None,
+        }
+    }
+
+    /// The character token of a General's or Financier's space, drawn with its picture.
+    pub fn token(self) -> Option<Token> {
+        match self {
+            Space::General => Some(Token::General),
+            Space::Financier => Some(Token::Financier),
             _ => None,
         }
     }
@@ -228,6 +248,15 @@ impl Held {
     pub fn res(self) -> Option<Res> {
         match self {
             Held::Cube(res) => Some(res),
+            _ => None,
+        }
+    }
+
+    /// The character token, drawn with its picture.
+    pub fn token(self) -> Option<Token> {
+        match self {
+            Held::General => Some(Token::General),
+            Held::Financier => Some(Token::Financier),
             _ => None,
         }
     }
@@ -743,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn every_card_and_empire_has_its_picture() {
+    fn every_card_empire_and_token_has_its_picture() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/games/wonderful/art");
         let file = |url: String| dir.join(url.strip_prefix(&format!("{ART}/")).unwrap());
         for card in catalogue() {
@@ -757,6 +786,11 @@ mod tests {
         let count = |sub: &str| std::fs::read_dir(dir.join(sub)).map_or(0, |d| d.count());
         assert_eq!(count("cards"), catalogue().len());
         assert_eq!((count("empires"), count("crests")), (EMPIRES.len(), EMPIRES.len()));
+        for token in [Token::General, Token::Financier] {
+            assert!(file(token_art(token)).is_file(), "{}", token_art(token));
+        }
+        assert_eq!(count("tokens"), 2);
+        assert_eq!(token_art(Token::Financier), "/wonderful-art/tokens/financier.webp");
         assert_eq!(card_art(id("Pandora's Box").def()), "/wonderful-art/cards/pandoras-box.webp");
         assert_eq!(card_art(id("Mega-Drill").def()), "/wonderful-art/cards/mega-drill.webp");
         assert_eq!(empire_art(0), "/wonderful-art/empires/noram-states.webp");

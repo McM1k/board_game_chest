@@ -132,27 +132,30 @@ need not be the host.
 Every card shows its printed illustration, and your Empire its board's (a player asked for
 the original game's look, 2026-10-12). They come from Game Park's online version, the same
 repository as the numbers (commit `3627484`, 2026-09-27), and are served at `/wonderful-art/`
-from `client/src/games/wonderful/art` (`look::card_art`, `empire_art`, `crest_art`):
+from `client/src/games/wonderful/art` (`look::card_art`, `empire_art`, `crest_art`,
+`token_art`):
 
 | Pictures | Source in `app/src/images` | Ours |
 |---|---|---|
 | The cards, all 116 designs (78 base, 38 Corruption & Ascension) | `cards/developments/en/<Type>_<n>_EN_<Name>.jpg`: each printed face, 650 x 1000 | `art/cards/<slug>.webp`: a 2:1 band, 480 x 240, about 11 KB |
 | The seven Empires | `empires/<name>-artwork.jpg`: the board's illustration alone, 1920 x 1080 | `art/empires/<slug>.webp`: a 3:1 banner from its middle, 1200 x 400, 30 to 46 KB |
 | Their crests | `empires/<name>-avatar.png`, 100 x 100 | `art/crests/<slug>.webp`, 96 x 96, 2 to 4 KB |
+| The General and Financier tokens | `characters/general.jpg`, `financier.jpg`: the round token on white, 150 x 150 | `art/tokens/general.webp`, `financier.webp`: cut out round, 64 x 64, about 2 KB |
 
 A slug is the name in lower case, apostrophes dropped and anything else between words a
 hyphen ("Pandora's Box" is `pandoras-box`). The pictures weigh 1.6 MB in all, but a page
 only loads what it shows (a hand is 80 to 130 KB the first time) and the card pictures are
-`loading="lazy"`. A test (`every_card_and_empire_has_its_picture`) checks there is one per
-design and per Empire, and nothing else.
+`loading="lazy"`. A test (`every_card_empire_and_token_has_its_picture`) checks there is one
+per design, per Empire and per token, and nothing else.
 
 How to make them again, from `docs/wonderful-world-art/`:
 
 ```sh
 git clone --depth 1 --filter=blob:none --sparse https://github.com/gamepark/its-a-wonderful-world <gamepark>
-git -C <gamepark> sparse-checkout set app/src/images/cards/developments/en app/src/images/empires
+git -C <gamepark> sparse-checkout set app/src/images/cards/developments/en app/src/images/empires app/src/images/characters
 python3 -I cards.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art/cards
 python3 -I empires.py <gamepark>/app/src/images games/wonderful/src/cards.rs client/src/games/wonderful/art
+python3 -I tokens.py <gamepark>/app/src/images client/src/games/wonderful/art
 ```
 
 The printed face has the game's own icons over its illustration, which `cards.py` keeps out:
@@ -176,7 +179,12 @@ smaller name. Your Empire's heading lies across its banner, darkened behind the 
 left and the points on the right; the crest stands by your Empire's title, by each rival's
 name, and by each name in the final standings (with the Empire's name as its text). The
 columns of your Empire's types no longer stretch to fill the panel (`auto-fill`), so that a
-lone finished card's picture stays the size of a card. The pictures belong to the
+lone finished card's picture stays the size of a card. Every General and Financier (on a card's cost and
+the spaces of your buildings, in your hand of things to place, in each player's tally, as a
+card's reward or what it scores per) is the printed round token (a player asked, 2026-10-12),
+laid over our coloured sign and its letter: if the picture fails to load it removes itself and
+the sign shows again (the CSS keys on `:has(> .token-art)`). An empty space shows it faded in a
+dashed ring. The pictures belong to the
 publisher, La Boîte de Jeu; Game Park's licence covers its code, not the art.
 
 ## Known issues
