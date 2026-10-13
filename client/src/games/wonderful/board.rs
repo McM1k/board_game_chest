@@ -622,6 +622,15 @@ fn production_panel(ctx: &Ctx, step: u8) -> AnyView {
     .into_any()
 }
 
+/// A production step that just started lights up its areas for a moment, in
+/// its resource's colour: the classes to add (after a space) and the style
+/// that keeps the flash going across redraws, while it lasts.
+fn fresh(ctx: &Ctx, step: u8) -> Option<(String, String)> {
+    let style = look::flash_style(ctx.ui().step_at.get_untracked(), crate::games::catan::look::now_ms())?;
+    let res = Res::ALL.get(step as usize).map_or(String::new(), |&res| format!(" {}", look::res_class(res)));
+    Some((format!(" fresh{res}"), style))
+}
+
 /// The round's progression, beside the round ring: the draft, the planning,
 /// then each production step with its resource, the character at stake and,
 /// once played, who took it. A cursor marks where the round is.
@@ -649,12 +658,14 @@ fn turn_track(ctx: &Ctx) -> AnyView {
     let production = (0..=WRAP_UP)
         .map(|step| {
             let i = 2 + usize::from(step);
+            let (flash, style) = if i == now { fresh(ctx, step).unzip() } else { (None, None) };
+            let class = format!("{}{}", at(i), flash.unwrap_or_default());
             let (icon, name) = match Res::ALL.get(step as usize) {
                 Some(&res) => (res_cube(res), res.name()),
                 None => (cube("wrap", "+"), "Wrap-up"),
             };
             view! {
-                <li class=at(i) aria-current={if i == now { "step" } else { "false" }} title=format!("Production: {name}")>
+                <li class=class style=style aria-current={if i == now { "step" } else { "false" }} title=format!("Production: {name}")>
                     <span class="track-mark">{icon}</span>
                     <span class="sr">{format!("Production: {name}")}</span>
                     {step_award(ctx, step)}
@@ -740,9 +751,10 @@ fn race(ctx: &Ctx, step: u8) -> Option<AnyView> {
         })
         .collect_view();
     let tied = leaders.is_empty();
+    let (flash, style) = fresh(ctx, step).unzip();
     Some(
         view! {
-            <div class="race">
+            <div class=format!("race{}", flash.unwrap_or_default()) style=style>
                 <h3 class="subhead">
                     {res_cube(res)}
                     {format!("{} produced", res.name())}
@@ -844,7 +856,14 @@ fn tray(ctx: &Ctx) -> AnyView {
             </button>
         }
     });
-    let cue = look::placing_cue(view).map(|cue| view! { <p class="placing-cue">{cue}</p> });
+    let cue = look::placing_cue(view).map(|cue| {
+        let flash = match view.phase {
+            Phase::Production { step } => fresh(ctx, step),
+            _ => None,
+        };
+        let (flash, style) = flash.unzip();
+        view! { <p class=format!("placing-cue{}", flash.unwrap_or_default()) style=style>{cue}</p> }
+    });
     let pick_cue = {
         let ctx = ctx.clone();
         move || look::pick_cue(&ctx.view, ctx.ui().held.get()).map(|cue| view! { <p class="pick-cue">{cue}</p> })
@@ -1586,6 +1605,26 @@ mod tests {
         assert!(html.contains("piece selected"), "the first piece is the one used");
         assert!(html.contains("Materials cube"));
         assert!(!html.contains("tied: no character"));
+
+        assert!(!html.contains("fresh"), "no flash unless the step just started");
+
+        // A step that just started lights up the race, the cue and the track,
+        // in its colour, resuming where it is across redraws; a second on,
+        // it's over.
+        let at = |ago: f64| {
+            in_owner(|| {
+                let app = App::new();
+                app.games.wonderful.ui.step_at.set(Some(crate::games::catan::look::now_ms() - ago));
+                render_with(app, &state, 0)
+            })
+        };
+        let html = at(300.0);
+        assert_eq!(html.matches(" fresh res-materials").count(), 3, "{html}");
+        assert!(html.contains("class=\"race fresh res-materials\"")
+            && html.contains("class=\"placing-cue fresh res-materials\"")
+            && html.contains("class=\"track-step now fresh res-materials\""));
+        assert!(html.contains("animation-delay:-3"), "{html}");
+        assert!(!at(1500.0).contains("fresh"));
 
         // Level with someone else: nobody takes the character.
         state.players[2].produced = state.players[0].produced;

@@ -25,17 +25,21 @@ pub struct Ui {
     /// given a place. Shown as a dialog until a place is picked or it's
     /// cancelled.
     pub cube_from: RwSignal<Option<look::CubeFrom>>,
+    /// When the production step being played started (`now_ms()`), if it
+    /// started while we watched: its areas flash for a moment.
+    pub step_at: RwSignal<Option<f64>>,
 }
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { held: RwSignal::new(None), cube_from: RwSignal::new(None) }
+        Ui { held: RwSignal::new(None), cube_from: RwSignal::new(None), step_at: RwSignal::new(None) }
     }
 
     /// Forget everything, e.g. when leaving the room.
     pub fn reset(&self) {
         self.held.set(None);
         self.cube_from.set(None);
+        self.step_at.set(None);
     }
 }
 
@@ -129,8 +133,12 @@ impl crate::games::Game for Wonderful {
         wonderful.connected.set(connected);
         // A new step drops the pick: what was picked and not placed stays in
         // your reserve, and isn't spent by a click in the next step.
-        if wonderful.view.with_untracked(|v| v.as_ref().map(|v| v.phase)) != Some(view.phase) {
+        let prev = wonderful.view.with_untracked(|v| v.as_ref().map(|v| v.phase));
+        if prev != Some(view.phase) {
             wonderful.ui.held.set(None);
+        }
+        if look::starts_step(prev, view.phase) {
+            wonderful.ui.step_at.set(Some(crate::games::catan::look::now_ms()));
         }
         wonderful.view.set(Some(*view));
     }

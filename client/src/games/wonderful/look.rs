@@ -683,6 +683,23 @@ pub fn hint(view: &View, names: &[String]) -> String {
     }
 }
 
+/// How long a new production step's areas flash, in ms: the length of the
+/// `wonderful-fresh` animation in `wonderful.css`.
+pub const FLASH_MS: f64 = 1000.0;
+
+/// Whether the game moving from phase `prev` to `next` starts a production
+/// step worth a flash. The first view (a reload, joining) doesn't.
+pub fn starts_step(prev: Option<Phase>, next: Phase) -> bool {
+    matches!(next, Phase::Production { .. }) && prev.is_some_and(|p| p != next)
+}
+
+/// While the flash of a step started at `at` lasts, the style that resumes
+/// it where it is, so a redraw in the middle doesn't start it again.
+pub fn flash_style(at: Option<f64>, now: f64) -> Option<String> {
+    let age = (now - at?).max(0.0);
+    (age < FLASH_MS).then(|| format!("animation-delay:-{age:.0}ms"))
+}
+
 /// The line by the Done button while you are placing in a production step:
 /// nothing moves on until you press it.
 pub fn placing_cue(view: &View) -> Option<String> {
@@ -1314,6 +1331,21 @@ mod tests {
         assert!(hint(&s.view_for(0), &n).contains("Done with your cards"));
         s.apply(0, A::Ready).unwrap();
         assert_eq!(hint(&s.view_for(0), &n), "Waiting for Bob and Cy…");
+    }
+
+    #[test]
+    fn a_new_production_step_flashes_once_for_a_second() {
+        let step = |step| Phase::Production { step };
+        assert!(starts_step(Some(Phase::Planning), step(0)));
+        assert!(starts_step(Some(step(0)), step(1)));
+        assert!(!starts_step(Some(step(1)), step(1)), "the same step, redrawn");
+        assert!(!starts_step(None, step(1)), "a reload or joining mid-step");
+        assert!(!starts_step(Some(step(5)), Phase::Draft));
+
+        assert_eq!(flash_style(Some(1000.0), 1000.0).as_deref(), Some("animation-delay:-0ms"));
+        assert_eq!(flash_style(Some(1000.0), 1400.0).as_deref(), Some("animation-delay:-400ms"));
+        assert_eq!(flash_style(Some(1000.0), 2000.0), None);
+        assert_eq!(flash_style(None, 1000.0), None);
     }
 
     #[test]
